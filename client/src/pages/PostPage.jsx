@@ -7,9 +7,11 @@ function PostPage() {
   const [scope, setScope] = useState('classroom'); // 기본: 학급 게시판
   const [myClassrooms, setMyClassrooms] = useState([]);
   const [selectedClassroomId, setSelectedClassroomId] = useState(null);
+  const [posts, setPosts] = useState([]);
 
   const token = localStorage.getItem('token');
 
+  // ✅ 학급 목록 가져오기
   useEffect(() => {
     const fetchClassrooms = async () => {
       try {
@@ -29,6 +31,25 @@ function PostPage() {
 
     fetchClassrooms();
   }, [token]);
+
+  // ✅ 게시글 목록 불러오기
+  const fetchPosts = async () => {
+    try {
+      const res = await fetch('http://localhost:3001/api/posts', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+      setPosts(data.posts || []);
+    } catch (err) {
+      console.error('게시글 목록 불러오기 실패:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchPosts();
+  }, []);
 
   const handlePost = async () => {
     let postData = {
@@ -66,6 +87,7 @@ function PostPage() {
         if (myClassrooms.length > 0) {
           setSelectedClassroomId(myClassrooms[0].classroom_id);
         }
+        fetchPosts(); // ✅ 글 작성 후 목록 갱신
       } else {
         alert(data.error || '작성 실패');
       }
@@ -152,7 +174,25 @@ function PostPage() {
         </select>
       )}
 
-      <button onClick={handlePost}>글 작성하기</button>
+      <button onClick={handlePost} style={{ marginBottom: '2rem' }}>
+        글 작성하기
+      </button>
+
+      <h2>게시글 목록</h2>
+      {posts.length === 0 ? (
+        <p>작성된 게시글이 없습니다.</p>
+      ) : (
+        <ul>
+          {posts.map(post => (
+            <li key={post.post_id} style={{ marginBottom: '1rem' }}>
+              <strong>{post.title}</strong> ({post.category})<br />
+              <small>{new Date(post.created_at).toLocaleString()}</small>
+              <p>{post.content}</p>
+              <hr />
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

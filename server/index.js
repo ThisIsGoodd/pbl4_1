@@ -1,3 +1,8 @@
+const { OAuth2Client } = require('google-auth-library'); //oauth 로그인
+const client = new OAuth2Client('701008683168-eoqi92nqvhp6qk5mfr927hrbrpeujup0.apps.googleusercontent.com');
+
+const passport = require('passport');
+
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
@@ -12,8 +17,8 @@ const crypto = require('crypto');  // 👈 초대코드 생성용 추가
 const jwt = require('jsonwebtoken');  // JWT 토큰
 require('dotenv').config();
 
-const { OAuth2Client } = require('google-auth-library'); //oauth 로그인
-const client = new OAuth2Client('701008683168-vdtgcfkssnh9joq1fjkjk4utlm3ln9ug.apps.googleusercontent.com');
+require('./config/passport'); // passport 설정 파일 불러오기
+app.use(passport.initialize());
 
 app.use(cors());
 app.use(express.json());
@@ -304,34 +309,47 @@ app.post('/api/posts', authenticateToken, async (req, res) => {
 
 // 게시글 조회 API
 app.get('/api/posts', authenticateToken, async (req, res) => {
-    const { user_id } = req.user;
-  
-    try {
-      // 현재 사용자의 학급 정보 가져오기
-      const [userRows] = await db.query(
-        'SELECT classroom_id FROM users WHERE user_id = ?',
-        [user_id]
-      );
-  
-      if (userRows.length === 0 || !userRows[0].classroom_id) {
-        return res.status(400).json({ error: '학급에 가입되어 있지 않습니다.' });
-      }
-  
-      const classroom_id = userRows[0].classroom_id;
-  
-      // 학급에 해당하는 게시글 가져오기 (또는 school_wide 공개된 글도 같이)
-      const [postRows] = await db.query(
-        'SELECT * FROM posts WHERE classroom_id = ? OR school_wide = TRUE ORDER BY created_at DESC',
-        [classroom_id]
-      );
-  
-      res.json({ posts: postRows });
-  
-    } catch (err) {
-      console.error('🔥 게시글 조회 오류:', err);
-      res.status(500).json({ error: '서버 오류', details: err.message });
+  const { user_id } = req.user;
+
+  try {
+    // 1. 내가 만든 학급 목록 (teacher_id 기준)
+    const [created] = await db.query(
+      'SELECT classroom_id FROM classrooms WHERE teacher_id = ?',
+      [user_id]
+    );
+
+    const createdClassroomIds = created.map(c => c.classroom_id);
+
+    // 2. 내가 가입한 학급 (users.classroom_id)
+    const [userRows] = await db.query(
+      'SELECT classroom_id FROM users WHERE user_id = ?',
+      [user_id]
+    );
+    const joinedClassroomId = userRows[0]?.classroom_id;
+
+    if (!joinedClassroomId && createdClassroomIds.length === 0) {
+      return res.status(400).json({ error: '학급에 가입되어 있지 않습니다.' });
     }
-  });
+
+    // 3. 조회할 classroom_id 목록 구성
+    const allVisibleClassroomIds = [...createdClassroomIds];
+    if (joinedClassroomId) allVisibleClassroomIds.push(joinedClassroomId);
+
+    // 4. 게시글 불러오기
+    const [postRows] = await db.query(
+      `SELECT * FROM posts 
+       WHERE classroom_id IN (?) OR school_wide = TRUE 
+       ORDER BY created_at DESC`,
+      [allVisibleClassroomIds]
+    );
+
+    res.json({ posts: postRows });
+
+  } catch (err) {
+    console.error('🔥 게시글 조회 오류:', err);
+    res.status(500).json({ error: '서버 오류', details: err.message });
+  }
+});
 
 // 일정 추가 API
 app.post('/api/schedules', authenticateToken, async (req, res) => {

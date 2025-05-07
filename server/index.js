@@ -21,6 +21,9 @@ require('./config/passport'); // passport 설정 파일 불러오기
 app.use(passport.initialize());
 
 app.use(cors());
+const path = require('path');
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 app.use(express.json());
 
 app.get('/', (req, res) => {
@@ -104,13 +107,89 @@ app.post('/api/login', async (req, res) => {
     }
   });
 
-// 로그인한 사용자만 접근 가능한 예제 API
-app.get('/api/profile', authenticateToken, (req, res) => {
-    res.json({
-      message: '프로필 데이터 반환',
-      user: req.user
-    });
+  app.get('/api/profile', authenticateToken, async (req, res) => {
+    const user_id = req.user.user_id;
+  
+    try {
+      const [rows] = await db.query(`
+        SELECT 
+          u.user_id, u.name, u.email, u.role, u.profile_picture,
+          c.school, c.grade, c.class_number
+        FROM users u
+        LEFT JOIN classrooms c ON u.classroom_id = c.classroom_id
+        WHERE u.user_id = ?
+      `, [user_id]);
+  
+      if (rows.length === 0) {
+        return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
+      }
+  
+      res.json({
+        message: '프로필 데이터 반환',
+        user: rows[0]
+      });
+    } catch (err) {
+      console.error('🔥 프로필 조회 오류:', err);
+      res.status(500).json({ error: '서버 오류', details: err.message });
+    }
   });
+  
+  const multer = require('multer');
+  app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+  
+  const storage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, 'uploads/'),
+    filename: (req, file, cb) => cb(null, `${Date.now()}_${file.originalname}`)
+  });
+  const upload = multer({ storage });
+
+  app.patch('/api/profile', authenticateToken, upload.single('profile_picture'), async (req, res) => {
+    const { name } = req.body;
+    const user_id = req.user.user_id;
+    const profile_picture = req.file ? `/uploads/${req.file.filename}` : null;
+  
+    try {
+      const updateQuery = profile_picture
+        ? 'UPDATE users SET name = ?, profile_picture = ? WHERE user_id = ?'
+        : 'UPDATE users SET name = ? WHERE user_id = ?';
+  
+      const updateParams = profile_picture
+        ? [name, profile_picture, user_id]
+        : [name, user_id];
+  
+      await db.query(updateQuery, updateParams);
+      res.json({ message: '프로필 수정 완료' });
+    } catch (err) {
+      console.error('🔥 프로필 수정 오류:', err);
+      res.status(500).json({ error: '서버 오류', details: err.message });
+    }
+  });
+  
+  
+// 역할 변경 API
+app.patch('/api/role', authenticateToken, async (req, res) => {
+  const { role } = req.body;
+  const user_id = req.user.user_id;
+
+  console.log('🎯 역할 변경 요청 들어옴:', { user_id, role });
+
+  // 허용된 역할인지 검사
+  if (!['student', 'teacher'].includes(role)) {
+    console.log('❌ 유효하지 않은 역할:', role);
+    return res.status(400).json({ error: '유효하지 않은 역할입니다.' });
+  }
+
+  try {
+    const [result] = await db.query('UPDATE users SET role = ? WHERE user_id = ?', [role, user_id]);
+
+    console.log('✅ 역할 변경 완료:', result);
+
+    res.json({ message: '역할이 성공적으로 변경되었습니다.' });
+  } catch (err) {
+    console.error('🔥 역할 변경 오류:', err);
+    res.status(500).json({ error: '서버 오류', details: err.message });
+  }
+});
 
 // 학급 생성 API
 app.post('/api/classrooms', authenticateToken, async (req, res) => {
@@ -141,7 +220,7 @@ app.post('/api/classrooms', authenticateToken, async (req, res) => {
     // 새 학급 생성
     const invite_code = crypto.randomBytes(4).toString('hex');
 
-    await db.query(
+    const [result] = await db.query(
       'INSERT INTO classrooms (grade, class_number, invite_code, school, teacher_id, created_at) VALUES (?, ?, ?, ?, ?, NOW())',
       [grade, class_number, invite_code, school, teacher_id]
     );
@@ -175,13 +254,14 @@ app.get('/api/my-classrooms', authenticateToken, async (req, res) => {
     res.status(500).json({ error: '서버 오류', details: err.message });
   }
 });
-//학급 삭제 api
+
+// 학급 삭제 API
 app.delete('/api/classrooms/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   const teacher_id = req.user.user_id;
 
   try {
-    // 먼저 해당 학급이 본인 소유인지 확인
+    // 1. 해당 학급이 요청자의 소유인지 확인
     const [classroom] = await db.query(
       'SELECT * FROM classrooms WHERE classroom_id = ? AND teacher_id = ?',
       [id, teacher_id]
@@ -191,7 +271,13 @@ app.delete('/api/classrooms/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: '권한이 없습니다.' });
     }
 
-    // 학급 삭제
+    // 2. 학급에 소속된 유저들의 classroom_id를 NULL로 초기화
+    await db.query(
+      'UPDATE users SET classroom_id = NULL WHERE classroom_id = ?',
+      [id]
+    );
+
+    // 3. 학급 삭제
     await db.query(
       'DELETE FROM classrooms WHERE classroom_id = ?',
       [id]
@@ -204,6 +290,7 @@ app.delete('/api/classrooms/:id', authenticateToken, async (req, res) => {
     res.status(500).json({ error: '서버 오류', details: err.message });
   }
 });
+
 
 
 // 학급 초대코드로 가입하는 API
@@ -472,3 +559,4 @@ app.post('/api/oauth-login', async (req, res) => {
       res.status(500).json({ error: '서버 오류', details: err.message });
     }
 });
+

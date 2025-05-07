@@ -141,7 +141,7 @@ app.post('/api/classrooms', authenticateToken, async (req, res) => {
     // 새 학급 생성
     const invite_code = crypto.randomBytes(4).toString('hex');
 
-    await db.query(
+    const [result] = await db.query(
       'INSERT INTO classrooms (grade, class_number, invite_code, school, teacher_id, created_at) VALUES (?, ?, ?, ?, ?, NOW())',
       [grade, class_number, invite_code, school, teacher_id]
     );
@@ -181,7 +181,7 @@ app.delete('/api/classrooms/:id', authenticateToken, async (req, res) => {
   const teacher_id = req.user.user_id;
 
   try {
-    // 먼저 해당 학급이 본인 소유인지 확인
+    // 학급 소유 확인
     const [classroom] = await db.query(
       'SELECT * FROM classrooms WHERE classroom_id = ? AND teacher_id = ?',
       [id, teacher_id]
@@ -191,11 +191,14 @@ app.delete('/api/classrooms/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: '권한이 없습니다.' });
     }
 
-    // 학급 삭제
-    await db.query(
-      'DELETE FROM classrooms WHERE classroom_id = ?',
-      [id]
-    );
+    // ✅ posts → 삭제
+    await db.query('DELETE FROM posts WHERE classroom_id = ?', [id]);
+
+    // ✅ users → 참조 제거
+    await db.query('UPDATE users SET classroom_id = NULL WHERE classroom_id = ?', [id]);
+
+    // ✅ classrooms → 삭제
+    await db.query('DELETE FROM classrooms WHERE classroom_id = ?', [id]);
 
     res.json({ message: '학급 삭제 완료' });
 
@@ -204,6 +207,8 @@ app.delete('/api/classrooms/:id', authenticateToken, async (req, res) => {
     res.status(500).json({ error: '서버 오류', details: err.message });
   }
 });
+
+
 
 
 // 학급 초대코드로 가입하는 API

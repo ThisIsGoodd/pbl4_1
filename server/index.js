@@ -1,40 +1,38 @@
-const { OAuth2Client } = require('google-auth-library'); //oauth 로그인
+const { OAuth2Client } = require('google-auth-library'); // OAuth 로그인
 const client = new OAuth2Client('701008683168-eoqi92nqvhp6qk5mfr927hrbrpeujup0.apps.googleusercontent.com');
 
 const passport = require('passport');
-
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
-const db = require('./db');  // 추가
+
+const path = require('path');          // ✅ 중복 제거
+const multer = require('multer');      // ✅ 중복 제거
+const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
+
+const db = require('./db');
+const authenticateToken = require('./authMiddleware');
+require('./config/passport');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-const authenticateToken = require('./authMiddleware'); //JWT 미들웨어
-const crypto = require('crypto');  // 👈 초대코드 생성용 추가
-
-const jwt = require('jsonwebtoken');  // JWT 토큰
-require('dotenv').config();
-
-require('./config/passport'); // passport 설정 파일 불러오기
+// ✅ 공통 미들웨어
 app.use(passport.initialize());
-
 app.use(cors());
-const path = require('path');
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
 app.use(express.json());
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));  // ✅ 정적 경로는 한 번만
 
-const multer = require('multer'); //multer 업로드 기능 추가가
-const path = require('path');
-
-const upload = multer({
-  dest: 'uploads/', // public/uploads 폴더 내 저장됨
-  limits: { fileSize: 5 * 1024 * 1024 } // 5MB 제한
+// ✅ 파일 업로드 설정
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, 'uploads/'),
+  filename: (req, file, cb) => cb(null, `${Date.now()}_${file.originalname}`)
 });
+const upload = multer({ storage });
 
-app.use('/uploads', express.static('uploads'));
+// ✅ 이후 API 코드들 작성...
+
 
 app.get('/', (req, res) => {
   res.send('✅ 백엔드 서버가 잘 동작합니다!');
@@ -143,15 +141,6 @@ app.post('/api/login', async (req, res) => {
       res.status(500).json({ error: '서버 오류', details: err.message });
     }
   });
-  
-  const multer = require('multer');
-  app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-  
-  const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, 'uploads/'),
-    filename: (req, file, cb) => cb(null, `${Date.now()}_${file.originalname}`)
-  });
-  const upload = multer({ storage });
 
   app.patch('/api/profile', authenticateToken, upload.single('profile_picture'), async (req, res) => {
     const { name } = req.body;

@@ -23,6 +23,16 @@ app.use(passport.initialize());
 app.use(cors());
 app.use(express.json());
 
+const multer = require('multer'); //multer 업로드 기능 추가가
+const path = require('path');
+
+const upload = multer({
+  dest: 'uploads/', // public/uploads 폴더 내 저장됨
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB 제한
+});
+
+app.use('/uploads', express.static('uploads'));
+
 app.get('/', (req, res) => {
   res.send('✅ 백엔드 서버가 잘 동작합니다!');
 });
@@ -208,9 +218,6 @@ app.delete('/api/classrooms/:id', authenticateToken, async (req, res) => {
   }
 });
 
-
-
-
 // 학급 초대코드로 가입하는 API
 app.post('/api/join-classroom', authenticateToken, async (req, res) => {
     const { invite_code } = req.body;
@@ -256,51 +263,37 @@ app.post('/api/join-classroom', authenticateToken, async (req, res) => {
       res.status(500).json({ error: '서버 오류', details: err.message });
     }
   });
-// 게시글 작성 API
-app.post('/api/posts', authenticateToken, async (req, res) => {
-  const { classroom_id, grade, school_wide, title, content, category } = req.body;
-  const { user_id, role } = req.user;
 
+// 게시글 작성 API (파일 첨부 포함)
+app.post('/api/posts', upload.single('file'), authenticateToken, async (req, res) => {
+  const { classroom_id, grade, school_wide, title, content, category } = req.body;
+  const { user_id } = req.user;
+  const file = req.file;
+
+  // 첨부파일 경로 저장 (없으면 null)
+  const attachment_url = file ? `/uploads/${file.filename}` : null;
+
+  // 필수 항목 체크
   if (!title || !content || !category) {
     return res.status(400).json({ error: '필수 항목이 누락되었습니다.' });
   }
 
   try {
-    if (classroom_id) {
-      // 학급 정보를 가져옴
-      const [classroomRows] = await db.query(
-        'SELECT * FROM classrooms WHERE classroom_id = ?',
-        [classroom_id]
-      );
-    
-      if (classroomRows.length === 0) {
-        return res.status(404).json({ error: '학급을 찾을 수 없습니다.' });
-      }
-    
-      const classroom = classroomRows[0];
-    
-      // ✅ 1. 학급 생성자인 경우
-      if (classroom.teacher_id === user_id) {
-        // 생성자라서 바로 통과
-      }
-      // ✅ 2. 학급 구성원(가입자)인 경우
-      else {
-        const [userRows] = await db.query(
-          'SELECT classroom_id FROM users WHERE user_id = ?',
-          [user_id]
-        );
-    
-        if (userRows.length === 0 || userRows[0].classroom_id !== classroom_id) {
-          return res.status(403).json({ error: '이 학급에 글을 쓸 권한이 없습니다.' });
-        }
-      }
-    }
-    // ✅ 글 저장
+    // DB에 게시글 저장
     await db.query(
       `INSERT INTO posts 
-      (author_id, title, category, content, created_at, views, classroom_id, grade, school_wide) 
-      VALUES (?, ?, ?, ?, NOW(), 0, ?, ?, ?)`,
-      [user_id, title, category, content, classroom_id || null, grade || null, school_wide || false]
+      (author_id, title, category, content, created_at, views, classroom_id, grade, school_wide, attachment_url, likes) 
+      VALUES (?, ?, ?, ?, NOW(), 0, ?, ?, ?, ?, 0)`,
+      [
+        user_id,
+        title,
+        category,
+        content,
+        classroom_id || null,
+        grade || null,
+        school_wide === 'true' || school_wide === true,
+        attachment_url
+      ]
     );
 
     res.json({ message: '게시글 작성 완료' });
@@ -310,7 +303,6 @@ app.post('/api/posts', authenticateToken, async (req, res) => {
     res.status(500).json({ error: '서버 오류', details: err.message });
   }
 });
-
 
 // 게시글 조회 API
 app.get('/api/posts', authenticateToken, async (req, res) => {
@@ -352,6 +344,288 @@ app.get('/api/posts', authenticateToken, async (req, res) => {
 
   } catch (err) {
     console.error('🔥 게시글 조회 오류:', err);
+    res.status(500).json({ error: '서버 오류', details: err.message });
+  }
+});
+
+// 게시글 상세 조회 API
+app.get('/api/posts/:id', authenticateToken, async (req, res) => {
+  const postId = req.params.id;
+
+  try {
+    // 게시글 + 작성자 정보 가져오기
+    const [rows] = await db.query(
+      `SELECT posts.*, users.name AS author_name
+       FROM posts
+       JOIN users ON posts.author_id = users.user_id
+       WHERE posts.post_id = ?`,
+      [postId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: '게시글을 찾을 수 없습니다.' });
+    }
+
+    res.json({ post: rows[0] });
+  } catch (err) {
+    console.error('🔥 게시글 상세 조회 오류:', err);
+    res.status(500).json({ error: '서버 오류', details: err.message });
+  }
+});
+
+app.post('/api/posts/:id/view', authenticateToken, async (req, res) => {
+  const post_id = req.params.id;
+  const user_id = req.user.user_id;
+
+  try {
+    // 이전에 조회한 기록 확인
+    const [rows] = await db.query(
+      'SELECT last_viewed FROM post_views WHERE post_id = ? AND user_id = ?',
+      [post_id, user_id]
+    );
+
+    const now = new Date();
+
+    if (rows.length > 0) {
+      const lastViewed = new Date(rows[0].last_viewed);
+      const diffMs = now - lastViewed;
+
+      // 🔒 10분 이내면 조회수 증가 안 함
+      if (diffMs < 10 * 60 * 1000) {
+        return res.json({ message: '10분 내 재조회: 조회수 증가 안 함' });
+      }
+
+      // 10분 이상 경과 → timestamp 갱신
+      await db.query(
+        'UPDATE post_views SET last_viewed = ? WHERE post_id = ? AND user_id = ?',
+        [now, post_id, user_id]
+      );
+    } else {
+      // 처음 보는 경우 → 새로 삽입
+      await db.query(
+        'INSERT INTO post_views (post_id, user_id, last_viewed) VALUES (?, ?, ?)',
+        [post_id, user_id, now]
+      );
+    }
+
+    // ✅ 최종적으로 조회수 증가
+    await db.query('UPDATE posts SET views = views + 1 WHERE post_id = ?', [post_id]);
+
+    res.json({ message: '조회수 증가' });
+
+  } catch (err) {
+    console.error('🔥 조회수 제어 오류:', err);
+    res.status(500).json({ error: '서버 오류' });
+  }
+});
+
+//게시글 수정 API
+app.put('/api/posts/:id', authenticateToken, async (req, res) => {
+  const postId = req.params.id;
+  const { title, content, category } = req.body;
+  const userId = req.user.user_id;
+
+  if (!title || !content || !category) {
+    return res.status(400).json({ error: '필수 항목이 누락되었습니다.' });
+  }
+
+  try {
+    // 게시글 존재 및 작성자/교사 여부 확인
+    const [rows] = await db.query(
+      `SELECT posts.*, classrooms.teacher_id
+       FROM posts
+       LEFT JOIN classrooms ON posts.classroom_id = classrooms.classroom_id
+       WHERE posts.post_id = ?`,
+      [postId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: '게시글이 존재하지 않습니다.' });
+    }
+
+    const post = rows[0];
+    if (post.author_id !== userId && post.teacher_id !== userId) {
+      return res.status(403).json({ error: '게시글을 수정할 권한이 없습니다.' });
+    }
+
+    await db.query(
+      `UPDATE posts SET title = ?, content = ?, category = ? WHERE post_id = ?`,
+      [title, content, category, postId]
+    );
+
+    res.json({ message: '게시글 수정 완료' });
+  } catch (err) {
+    console.error('🔥 게시글 수정 오류:', err);
+    res.status(500).json({ error: '서버 오류', details: err.message });
+  }
+});
+
+//게시글 삭제 API
+app.delete('/api/posts/:id', authenticateToken, async (req, res) => {
+  const postId = req.params.id;
+  const userId = req.user.user_id;
+
+  try {
+    const [rows] = await db.query(
+      `SELECT posts.*, classrooms.teacher_id
+       FROM posts
+       LEFT JOIN classrooms ON posts.classroom_id = classrooms.classroom_id
+       WHERE posts.post_id = ?`,
+      [postId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: '게시글이 존재하지 않습니다.' });
+    }
+
+    const post = rows[0];
+    if (post.author_id !== userId && post.teacher_id !== userId) {
+      return res.status(403).json({ error: '게시글을 삭제할 권한이 없습니다.' });
+    }
+
+    await db.query('DELETE FROM posts WHERE post_id = ?', [postId]);
+
+    res.json({ message: '게시글 삭제 완료' });
+  } catch (err) {
+    console.error('🔥 게시글 삭제 오류:', err);
+    res.status(500).json({ error: '서버 오류', details: err.message });
+  }
+});
+
+// 게시글 좋아요 API
+app.post('/api/posts/:id/like', authenticateToken, async (req, res) => {
+  const post_id = req.params.id;
+  const user_id = req.user.user_id;
+
+  try {
+    // 이미 좋아요 했는지 확인
+    const [rows] = await db.query(
+      'SELECT * FROM post_likes WHERE user_id = ? AND post_id = ?',
+      [user_id, post_id]
+    );
+    if (rows.length > 0) {
+      return res.status(400).json({ error: '이미 좋아요한 게시글입니다.' });
+    }
+
+    // 좋아요 등록
+    await db.query('INSERT INTO post_likes (user_id, post_id) VALUES (?, ?)', [user_id, post_id]);
+    await db.query('UPDATE posts SET likes = likes + 1 WHERE post_id = ?', [post_id]);
+
+    res.json({ message: '좋아요 완료' });
+  } catch (err) {
+    console.error('🔥 좋아요 처리 오류:', err);
+    res.status(500).json({ error: '서버 오류', details: err.message });
+  }
+});
+
+
+//댓글 작성 API
+app.post('/api/posts/:id/comments', authenticateToken, async (req, res) => {
+  const postId = req.params.id;
+  const { content } = req.body;
+  const authorId = req.user.user_id;
+
+  if (!content) {
+    return res.status(400).json({ error: '댓글 내용을 입력하세요.' });
+  }
+
+  try {
+    await db.query(
+      'INSERT INTO comments (post_id, author_id, content, created_at) VALUES (?, ?, ?, NOW())',
+      [postId, authorId, content]
+    );
+    res.json({ message: '댓글 작성 완료' });
+  } catch (err) {
+    console.error('🔥 댓글 작성 오류:', err);
+    res.status(500).json({ error: '서버 오류', details: err.message });
+  }
+});
+//댓글 목록 조회 API
+app.get('/api/posts/:id/comments', authenticateToken, async (req, res) => {
+  const postId = req.params.id;
+
+  try {
+    const [rows] = await db.query(
+      `SELECT comments.*, users.name AS author_name
+       FROM comments
+       JOIN users ON comments.author_id = users.user_id
+       WHERE comments.post_id = ?
+       ORDER BY comments.created_at ASC`,
+      [postId]
+    );
+
+    res.json({ comments: rows });
+  } catch (err) {
+    console.error('🔥 댓글 조회 오류:', err);
+    res.status(500).json({ error: '서버 오류', details: err.message });
+  }
+});
+//댓글 삭제 API
+app.delete('/api/comments/:id', authenticateToken, async (req, res) => {
+  const commentId = req.params.id;
+  const userId = req.user.user_id;
+
+  try {
+    // 댓글 존재 여부 및 작성자 확인
+    const [rows] = await db.query(
+      'SELECT * FROM comments WHERE comment_id = ?',
+      [commentId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: '댓글이 존재하지 않습니다.' });
+    }
+
+    const comment = rows[0];
+    if (comment.author_id !== userId) {
+      return res.status(403).json({ error: '본인의 댓글만 삭제할 수 있습니다.' });
+    }
+
+    // 댓글 삭제
+    await db.query('DELETE FROM comments WHERE comment_id = ?', [commentId]);
+
+    res.json({ message: '댓글 삭제 완료' });
+  } catch (err) {
+    console.error('🔥 댓글 삭제 오류:', err);
+    res.status(500).json({ error: '서버 오류', details: err.message });
+  }
+});
+
+//댓글 수정 API
+app.patch('/api/comments/:id', authenticateToken, async (req, res) => {
+  const commentId = req.params.id;
+  const { content } = req.body;
+  const userId = req.user.user_id;
+
+  if (!content || content.trim() === '') {
+    return res.status(400).json({ error: '댓글 내용이 비어있습니다.' });
+  }
+
+  try {
+    // 본인 댓글인지 확인
+    const [rows] = await db.query(
+      'SELECT * FROM comments WHERE comment_id = ?',
+      [commentId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: '댓글이 존재하지 않습니다.' });
+    }
+
+    const comment = rows[0];
+    if (comment.author_id !== userId) {
+      return res.status(403).json({ error: '본인의 댓글만 수정할 수 있습니다.' });
+    }
+
+    // 수정 쿼리
+    await db.query(
+      'UPDATE comments SET content = ? WHERE comment_id = ?',
+      [content, commentId]
+    );
+
+    res.json({ message: '댓글 수정 완료' });
+  } catch (err) {
+    console.error('🔥 댓글 수정 오류:', err);
     res.status(500).json({ error: '서버 오류', details: err.message });
   }
 });

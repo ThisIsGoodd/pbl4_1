@@ -6,6 +6,8 @@ import SignupPage from './pages/SignupPage';
 import ClassroomPage from './pages/ClassroomPage';
 import PostPage from './pages/PostPage';
 import SchedulePage from './pages/SchedulePage';
+import PostDetailPage from './pages/PostDetailPage';
+import PostWritePage from './pages/PostWitrePage';
 
 function App() {
   return (
@@ -17,7 +19,9 @@ function App() {
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/classroom" element={<ClassroomPage />} />
           <Route path="/posts" element={<PostPage />} />
+          <Route path="/posts/:id" element={<PostDetailPage />} />
           <Route path="/schedules" element={<SchedulePage />} />
+          <Route path="/posts/write" element={<PostWritePage />} />
         </Routes>
       </AuthProvider>
     </Router>

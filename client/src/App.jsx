@@ -1,5 +1,6 @@
+// App.jsx
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext'; // 추가
+import { AuthProvider } from './contexts/AuthContext';
 import Navigation from './components/Navigation';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
@@ -8,11 +9,12 @@ import PostPage from './pages/PostPage';
 import SchedulePage from './pages/SchedulePage';
 import PostDetailPage from './pages/PostDetailPage';
 import PostWritePage from './pages/PostWitrePage';
+import ProfilePage from './pages/ProfilePage';
 
 function App() {
   return (
     <Router>
-      <AuthProvider> {/* 전역 로그인 상태 관리 */}
+      <AuthProvider>
         <Navigation />
         <Routes>
           <Route path="/" element={<LoginPage />} />
@@ -22,6 +24,7 @@ function App() {
           <Route path="/posts/:id" element={<PostDetailPage />} />
           <Route path="/schedules" element={<SchedulePage />} />
           <Route path="/posts/write" element={<PostWritePage />} />
+          <Route path="/settings" element={<ProfilePage />} /> 
         </Routes>
       </AuthProvider>
     </Router>

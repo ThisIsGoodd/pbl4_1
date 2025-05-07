@@ -12,6 +12,7 @@ function Navigation() {
           <Link to="/classroom" style={{ marginRight: '1rem' }}>학급 관리</Link>
           <Link to="/posts" style={{ marginRight: '1rem' }}>게시판</Link>
           <Link to="/schedules" style={{ marginRight: '1rem' }}>일정</Link>
+          <Link to="/settings" style={{ marginRight: '1rem' }}>설정</Link>
           <button onClick={logout} style={{ marginLeft: '2rem' }}>로그아웃</button>
         </>
       ) : (

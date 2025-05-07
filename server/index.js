@@ -21,6 +21,9 @@ require('./config/passport'); // passport 설정 파일 불러오기
 app.use(passport.initialize());
 
 app.use(cors());
+const path = require('path');
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 app.use(express.json());
 
 const multer = require('multer'); //multer 업로드 기능 추가가
@@ -114,13 +117,89 @@ app.post('/api/login', async (req, res) => {
     }
   });
 
-// 로그인한 사용자만 접근 가능한 예제 API
-app.get('/api/profile', authenticateToken, (req, res) => {
-    res.json({
-      message: '프로필 데이터 반환',
-      user: req.user
-    });
+  app.get('/api/profile', authenticateToken, async (req, res) => {
+    const user_id = req.user.user_id;
+  
+    try {
+      const [rows] = await db.query(`
+        SELECT 
+          u.user_id, u.name, u.email, u.role, u.profile_picture,
+          c.school, c.grade, c.class_number
+        FROM users u
+        LEFT JOIN classrooms c ON u.classroom_id = c.classroom_id
+        WHERE u.user_id = ?
+      `, [user_id]);
+  
+      if (rows.length === 0) {
+        return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
+      }
+  
+      res.json({
+        message: '프로필 데이터 반환',
+        user: rows[0]
+      });
+    } catch (err) {
+      console.error('🔥 프로필 조회 오류:', err);
+      res.status(500).json({ error: '서버 오류', details: err.message });
+    }
   });
+  
+  const multer = require('multer');
+  app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+  
+  const storage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, 'uploads/'),
+    filename: (req, file, cb) => cb(null, `${Date.now()}_${file.originalname}`)
+  });
+  const upload = multer({ storage });
+
+  app.patch('/api/profile', authenticateToken, upload.single('profile_picture'), async (req, res) => {
+    const { name } = req.body;
+    const user_id = req.user.user_id;
+    const profile_picture = req.file ? `/uploads/${req.file.filename}` : null;
+  
+    try {
+      const updateQuery = profile_picture
+        ? 'UPDATE users SET name = ?, profile_picture = ? WHERE user_id = ?'
+        : 'UPDATE users SET name = ? WHERE user_id = ?';
+  
+      const updateParams = profile_picture
+        ? [name, profile_picture, user_id]
+        : [name, user_id];
+  
+      await db.query(updateQuery, updateParams);
+      res.json({ message: '프로필 수정 완료' });
+    } catch (err) {
+      console.error('🔥 프로필 수정 오류:', err);
+      res.status(500).json({ error: '서버 오류', details: err.message });
+    }
+  });
+  
+  
+// 역할 변경 API
+app.patch('/api/role', authenticateToken, async (req, res) => {
+  const { role } = req.body;
+  const user_id = req.user.user_id;
+
+  console.log('🎯 역할 변경 요청 들어옴:', { user_id, role });
+
+  // 허용된 역할인지 검사
+  if (!['student', 'teacher'].includes(role)) {
+    console.log('❌ 유효하지 않은 역할:', role);
+    return res.status(400).json({ error: '유효하지 않은 역할입니다.' });
+  }
+
+  try {
+    const [result] = await db.query('UPDATE users SET role = ? WHERE user_id = ?', [role, user_id]);
+
+    console.log('✅ 역할 변경 완료:', result);
+
+    res.json({ message: '역할이 성공적으로 변경되었습니다.' });
+  } catch (err) {
+    console.error('🔥 역할 변경 오류:', err);
+    res.status(500).json({ error: '서버 오류', details: err.message });
+  }
+});
 
 // 학급 생성 API
 app.post('/api/classrooms', authenticateToken, async (req, res) => {
@@ -185,7 +264,8 @@ app.get('/api/my-classrooms', authenticateToken, async (req, res) => {
     res.status(500).json({ error: '서버 오류', details: err.message });
   }
 });
-//학급 삭제 api
+
+// 학급 삭제 API
 app.delete('/api/classrooms/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   const teacher_id = req.user.user_id;
@@ -751,3 +831,4 @@ app.post('/api/oauth-login', async (req, res) => {
       res.status(500).json({ error: '서버 오류', details: err.message });
     }
 });
+

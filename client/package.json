@@ -14,9 +14,12 @@
     "@fullcalendar/interaction": "^6.1.17",
     "@fullcalendar/react": "^6.1.17",
     "axios": "^1.9.0",
+    "date-fns": "^4.1.0",
     "react": "^19.0.0",
+    "react-calendar": "^5.1.0",
     "react-dom": "^19.0.0",
-    "react-router-dom": "^7.5.3"
+    "react-router-dom": "^7.5.3",
+    "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.22.0",

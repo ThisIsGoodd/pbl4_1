@@ -5,6 +5,7 @@ function ProfilePage() {
   const [user, setUser] = useState(null);
   const [name, setName] = useState('');
   const [role, setRole] = useState('');
+  const [childName, setChildName] = useState('');
   const [image, setImage] = useState(null);
   const [preview, setPreview] = useState('');
 
@@ -12,18 +13,14 @@ function ProfilePage() {
 
   useEffect(() => {
     const fetchProfile = async () => {
-      if (!token) {
-        alert('로그인이 필요합니다!');
-        return;
-      }
-
       try {
-        const res = await axios.get('http://localhost:3001/api/profile', {
+        const res = await axios.get('http://localhost:3001/api/users/profile', {
           headers: { Authorization: `Bearer ${token}` },
         });
         setUser(res.data.user);
         setName(res.data.user.name);
         setRole(res.data.user.role);
+        setChildName(res.data.user.child_name || '');
         setPreview(`http://localhost:3001${res.data.user.profile_picture}`);
       } catch (err) {
         console.error('❌ 프로필 호출 실패:', err);
@@ -44,27 +41,20 @@ function ProfilePage() {
     try {
       const formData = new FormData();
       formData.append('name', name);
+      formData.append('child_name', childName);
       if (image) formData.append('profile_picture', image);
-  
-      console.log('🔧 프로필 PATCH 요청 전:', name, image);
-  
-      const res1 = await axios.patch('http://localhost:3001/api/profile', formData, {
+
+      await axios.patch('http://localhost:3001/api/users/profile', formData, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'multipart/form-data',
         },
       });
-  
-      console.log('✅ 프로필 PATCH 성공:', res1.data);
-  
-      const res2 = await axios.patch('http://localhost:3001/api/role', { role }, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+
+      await axios.patch('http://localhost:3001/api/users/role', { role }, {
+        headers: { Authorization: `Bearer ${token}` },
       });
-  
-      console.log('✅ 역할 PATCH 성공:', res2.data);
-  
+
       alert('프로필 수정 완료');
       window.location.reload();
     } catch (err) {
@@ -72,7 +62,7 @@ function ProfilePage() {
       alert('수정 실패');
     }
   };
-  
+
   if (!user) return <div>⏳ 불러오는 중...</div>;
 
   return (
@@ -84,11 +74,15 @@ function ProfilePage() {
 
       <br /><br />
 
-      <label>역할:</label>
-      <select value={role} onChange={(e) => setRole(e.target.value)}>
-        <option value="teacher">선생님</option>
-        <option value="student">학생</option>
-      </select>
+      <br /><br />
+
+      <label>자녀 이름:</label>
+      <input
+        type="text"
+        placeholder="자녀 이름 입력"
+        value={childName}
+        onChange={(e) => setChildName(e.target.value)}
+      />
 
       <br /><br />
 

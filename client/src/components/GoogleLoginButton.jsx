@@ -4,8 +4,9 @@ function GoogleLoginButton({ onSuccess }) {
   useEffect(() => {
     if (window.google) {
       window.google.accounts.id.initialize({
-        client_id: '701008683168-vdtgcfkssnh9joq1fjkjk4utlm3ln9ug.apps.googleusercontent.com',
-        callback: onSuccess
+        client_id: '701008683168-eoqi92nqvhp6qk5mfr927hrbrpeujup0.apps.googleusercontent.com',
+        callback: onSuccess,
+        ux_mode: 'popup'
       });
 
       window.google.accounts.id.renderButton(

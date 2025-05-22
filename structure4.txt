@@ -1,0 +1,86 @@
+.
+├── client
+│   ├── README.md
+│   ├── eslint.config.js
+│   ├── index.html
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── public
+│   │   ├── assets
+│   │   │   ├── logo.png
+│   │   │   └── logo.png:Zone.Identifier
+│   │   └── vite.svg
+│   ├── src
+│   │   ├── App.css
+│   │   ├── App.jsx
+│   │   ├── assets
+│   │   │   └── react.svg
+│   │   ├── components
+│   │   │   ├── GoogleLoginButton.jsx
+│   │   │   └── Navigation.jsx
+│   │   ├── contexts
+│   │   │   └── AuthContext.jsx
+│   │   ├── index.css
+│   │   ├── main.jsx
+│   │   └── pages
+│   │       ├── AdminDashboard.jsx
+│   │       ├── CalendarPage.jsx
+│   │       ├── ChatPage.jsx
+│   │       ├── ClassroomCreatePage.jsx
+│   │       ├── ClassroomDashboardPage.jsx
+│   │       ├── JoinClassPage.jsx
+│   │       ├── JoinCompletePage.jsx
+│   │       ├── JoinInfoPage.jsx
+│   │       ├── JoinInvitePage.jsx
+│   │       ├── LoginPage.jsx
+│   │       ├── MainPage.jsx
+│   │       ├── NotificationSettingsPage.jsx
+│   │       ├── NotificationsPage.jsx
+│   │       ├── PostDetailPage.jsx
+│   │       ├── PostPage.jsx
+│   │       ├── PostWritePage.jsx
+│   │       ├── ProfilePage.jsx
+│   │       ├── RoleSelectPage.jsx
+│   │       ├── SchedulePage.jsx
+│   │       ├── SuperAdminSchoolRequestPage.jsx
+│   │       └── TeacherAuthPage.jsx
+│   └── vite.config.js
+├── my-key.pem
+├── package-lock.json
+├── package.json
+├── schema.sql
+├── school_app.sql
+├── server
+│   ├── authMiddleware.js
+│   ├── checkAdmin.js
+│   ├── checkSuperAdmin.js
+│   ├── config
+│   │   └── passport.js
+│   ├── config.js
+│   ├── db.js
+│   ├── index.js
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── routes
+│   │   ├── admin.js
+│   │   ├── auth.js
+│   │   ├── chat.js
+│   │   ├── classrooms.js
+│   │   ├── comments.js
+│   │   ├── notificationSettings.js
+│   │   ├── notifications.js
+│   │   ├── posts.js
+│   │   ├── schedules.js
+│   │   ├── schools.js
+│   │   ├── superAdmin.js
+│   │   └── users.js
+│   ├── uploads
+│   │   └── 1746606240227_á\204\213á\205§á\204\200á\205¯á\206«á\204\211á\205¡á\204\214á\205µá\206«.jpg
+│   └── utils
+│       └── notify.js
+├── structure.txt
+├── structure2.txt
+├── structure3.txt
+└── structure4.txt
+
+14 directories, 70 files

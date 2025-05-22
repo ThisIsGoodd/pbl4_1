@@ -4,15 +4,38 @@ import { useNavigate } from 'react-router-dom';
 export const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(undefined); // ✅ null → undefined
   const navigate = useNavigate();
 
   useEffect(() => {
     const token = localStorage.getItem('token');
-    if (token) {
-      // 토큰이 있으면 사용자 정보를 서버에 요청하거나, 일단 로그인 상태로 처리
-      setUser({ token }); // 지금은 간단히 token만 저장
+    if (!token) {
+      setUser(null); // ✅ 명확히 로그인 안 된 상태로 표시
+      return;
     }
+
+    fetch('http://localhost:3001/api/users/profile', {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.user) {
+          setUser(data.user);
+
+          // 역할이 아직 없으면 role 선택 페이지로
+          if (!data.user.role) {
+            navigate('/role-select');
+          }
+        } else {
+          localStorage.removeItem('token');
+          setUser(null);
+        }
+      })
+      .catch(err => {
+        console.error('프로필 불러오기 실패:', err);
+        localStorage.removeItem('token');
+        setUser(null);
+      });
   }, []);
 
   const logout = () => {

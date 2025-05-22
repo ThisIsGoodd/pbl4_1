@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 
 function PostDetailPage() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const classroomId = searchParams.get('classroom_id');
   const navigate = useNavigate();
 
   const [post, setPost] = useState(null);
@@ -15,9 +17,9 @@ function PostDetailPage() {
   const [editTitle, setEditTitle] = useState('');
   const [editPostContent, setEditPostContent] = useState('');
   const [editCategory, setEditCategory] = useState('');
+  const [hasLiked, setHasLiked] = useState(false);
   const token = localStorage.getItem('token');
 
-  // JWT 디코딩하여 user_id 추출
   useEffect(() => {
     const parseJwt = (token) => {
       try {
@@ -30,7 +32,6 @@ function PostDetailPage() {
     setMyUserId(payload?.user_id || null);
   }, [token]);
 
-  // 조회수 제어 로직 포함
   useEffect(() => {
     const viewKey = `viewed_post_${id}`;
     const lastViewed = localStorage.getItem(viewKey);
@@ -40,13 +41,13 @@ function PostDetailPage() {
       increaseView();
       localStorage.setItem(viewKey, now.toString());
     } else {
-      fetchPost(); // 조회수 증가 없이 조회
+      fetchPost();
     }
 
     fetchComments();
+    fetchLikeStatus();
   }, [id, token]);
 
-  // 조회수 증가 요청
   const increaseView = async () => {
     try {
       await fetch(`http://localhost:3001/api/posts/${id}/view`, {
@@ -59,7 +60,6 @@ function PostDetailPage() {
     }
   };
 
-  // 게시글 데이터 가져오기
   const fetchPost = async () => {
     try {
       const res = await fetch(`http://localhost:3001/api/posts/${id}`, {
@@ -72,7 +72,6 @@ function PostDetailPage() {
     }
   };
 
-  // 댓글 가져오기
   const fetchComments = async () => {
     try {
       const res = await fetch(`http://localhost:3001/api/posts/${id}/comments`, {
@@ -85,7 +84,18 @@ function PostDetailPage() {
     }
   };
 
-  // 게시글 수정 저장
+  const fetchLikeStatus = async () => {
+    try {
+      const res = await fetch(`http://localhost:3001/api/posts/${id}/like-check`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok) setHasLiked(data.liked);
+    } catch (err) {
+      console.error('공감 상태 확인 실패:', err);
+    }
+  };
+
   const handlePostEditSave = async () => {
     try {
       const res = await fetch(`http://localhost:3001/api/posts/${id}`, {
@@ -109,7 +119,6 @@ function PostDetailPage() {
     }
   };
 
-  // 게시글 삭제
   const handlePostDelete = async () => {
     if (!window.confirm('삭제하시겠습니까?')) return;
     try {
@@ -119,32 +128,32 @@ function PostDetailPage() {
       });
       if (res.ok) {
         alert('삭제 완료');
-        navigate('/posts');
+        navigate(`/posts?classroom_id=${classroomId}`);
       }
     } catch (err) {
       console.error('게시글 삭제 오류:', err);
     }
   };
 
-  // 공감 처리
-  const handleLike = async () => {
+  const handleLikeToggle = async () => {
+    const method = hasLiked ? 'DELETE' : 'POST';
     try {
       const res = await fetch(`http://localhost:3001/api/posts/${id}/like`, {
-        method: 'POST',
+        method,
         headers: { Authorization: `Bearer ${token}` }
       });
-      const data = await res.json();
       if (res.ok) {
-        fetchPost(); // 공감 반영
+        fetchPost();
+        setHasLiked(!hasLiked);
       } else {
-        alert(data.error); // 이미 공감한 경우 처리
+        const data = await res.json();
+        alert(data.error || '공감 처리 실패');
       }
     } catch (err) {
       console.error('공감 처리 오류:', err);
     }
   };
 
-  // 댓글 작성
   const handleCommentSubmit = async () => {
     if (!newComment.trim()) return;
     try {
@@ -236,7 +245,9 @@ function PostDetailPage() {
           )}
           <div style={{ marginTop: '1rem' }}>
             ❤️ 공감 수: {post.likes || 0}
-            <button onClick={handleLike} style={{ marginLeft: '0.5rem' }}>공감하기</button>
+            <button onClick={handleLikeToggle} style={{ marginLeft: '0.5rem' }}>
+              {hasLiked ? '💔 공감 취소하기' : '❤️ 공감하기'}
+            </button>
           </div>
           {(post.author_id === myUserId || post.teacher_id === myUserId) && (
             <div style={{ marginTop: '1rem' }}>

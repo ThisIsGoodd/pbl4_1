@@ -1,0 +1,97 @@
+const express = require('express');
+const router = express.Router();
+const db = require('../db');
+const authenticateToken = require('../authMiddleware');
+
+// 📌 알림 목록 조회
+router.get('/', authenticateToken, async (req, res) => {
+  const { user_id } = req.user;
+
+  try {
+    const [rows] = await db.query(
+      `SELECT notification_id, type, related_id, message, created_at, is_read
+       FROM notifications
+       WHERE user_id = ?
+       ORDER BY created_at DESC`,
+      [user_id]
+    );
+
+    res.json({ notifications: rows });
+  } catch (err) {
+    console.error('🔥 알림 목록 조회 오류:', err);
+    res.status(500).json({ error: '서버 오류' });
+  }
+});
+
+// 📌 알림 읽음 처리 (본인 알림만)
+router.patch('/:id/read', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const { user_id } = req.user;
+
+  try {
+    const [rows] = await db.query(
+      'SELECT * FROM notifications WHERE notification_id = ? AND user_id = ?',
+      [id, user_id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: '알림을 찾을 수 없거나 권한이 없습니다.' });
+    }
+
+    await db.query(
+      `UPDATE notifications SET is_read = TRUE WHERE notification_id = ?`,
+      [id]
+    );
+
+    res.json({ message: '읽음 처리 완료' });
+  } catch (err) {
+    console.error('🔥 알림 읽음 처리 오류:', err);
+    res.status(500).json({ error: '서버 오류' });
+  }
+});
+
+// 📌 알림 삭제
+router.delete('/:id', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const { user_id } = req.user;
+
+  try {
+    const [rows] = await db.query(
+      'SELECT * FROM notifications WHERE notification_id = ? AND user_id = ?',
+      [id, user_id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: '해당 알림이 없거나 권한이 없습니다.' });
+    }
+
+    await db.query(
+      'DELETE FROM notifications WHERE notification_id = ?',
+      [id]
+    );
+
+    res.json({ message: '알림이 삭제되었습니다.' });
+  } catch (err) {
+    console.error('🔥 알림 삭제 오류:', err);
+    res.status(500).json({ error: '서버 오류' });
+  }
+});
+
+// 📌 전체 읽음 처리
+router.patch('/mark-all-read', authenticateToken, async (req, res) => {
+  const { user_id } = req.user;
+
+  try {
+    await db.query(
+      'UPDATE notifications SET is_read = TRUE WHERE user_id = ?',
+      [user_id]
+    );
+
+    res.json({ message: '전체 읽음 처리 완료' });
+  } catch (err) {
+    console.error('🔥 전체 읽음 처리 오류:', err);
+    res.status(500).json({ error: '서버 오류' });
+  }
+});
+
+module.exports = router;

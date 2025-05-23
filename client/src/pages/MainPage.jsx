@@ -1,18 +1,49 @@
 import { useContext, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AuthContext } from '../contexts/AuthContext';
 
 function MainPage() {
   const { user } = useContext(AuthContext);
+  const [searchParams] = useSearchParams();
+  const [classroomId, setClassroomId] = useState(null);
+  const [classroomInfo, setClassroomInfo] = useState(null); // ✅ 추가
   const [posts, setPosts] = useState([]);
   const [todayEvents, setTodayEvents] = useState([]);
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!user) return;
+    const id = searchParams.get('classroom_id');
+    if (id) {
+      setClassroomId(id);
+    } else {
+      alert('학급 정보가 없습니다. 다시 로그인해주세요.');
+      navigate('/join/invite');
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!classroomId) return;
     const token = localStorage.getItem('token');
 
-    fetch('http://localhost:3001/api/posts', {
+    // ✅ 학급 정보 가져오기
+    fetch(`http://localhost:3001/api/classrooms/${classroomId}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        setClassroomInfo(data);
+      })
+      .catch(err => {
+        console.error('학급 정보 불러오기 실패:', err);
+      });
+  }, [classroomId]);
+
+  useEffect(() => {
+    if (!user || !classroomId) return;
+    const token = localStorage.getItem('token');
+
+    // ✅ 공지사항 요청
+    fetch(`http://localhost:3001/api/posts?classroom_id=${classroomId}`, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(res => res.json())
@@ -23,7 +54,8 @@ function MainPage() {
         }
       });
 
-    fetch('http://localhost:3001/api/schedules', {
+    // ✅ 일정 요청
+    fetch(`http://localhost:3001/api/schedules?classroom_id=${classroomId}`, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(res => res.json())
@@ -34,18 +66,21 @@ function MainPage() {
           setTodayEvents(filtered);
         }
       });
-  }, [user]);
+  }, [user, classroomId]);
 
   if (user === undefined) return null;
 
   return (
     <div style={styles.wrapper}>
-      <h2>{user?.school || '학교'} - {user?.grade}학년 {user?.class_number}반</h2>
+      <h2 style={{ fontSize: '2rem', fontWeight: 'bold', textAlign: 'center', margin: '2rem 0' }}>
+        {classroomInfo
+          ? `${classroomInfo.school} - ${classroomInfo.grade}학년 ${classroomInfo.class_number}반`
+          : '학급 정보 불러오는 중...'}
+      </h2>
 
       <div style={styles.layout}>
         {/* 왼쪽 영역 */}
         <div style={styles.left}>
-          {/* 상단: 단체 사진 */}
           <div style={styles.photoBox}>
             <img
               src="/class_photo.jpg"
@@ -58,7 +93,6 @@ function MainPage() {
             />
           </div>
 
-          {/* 하단: 최근 공지사항 */}
           <div style={styles.noticeBox}>
             <h3>📌 최근 공지사항</h3>
             <ul>
@@ -67,7 +101,7 @@ function MainPage() {
               ) : (
                 posts.map(p => (
                   <li key={p.post_id} style={{ marginBottom: '0.5rem' }}>
-                    <a href={`/posts/${p.post_id}`}>{p.title}</a>
+                    <a href={`/posts/${p.post_id}?classroom_id=${classroomId}`}>{p.title}</a>
                   </li>
                 ))
               )}
@@ -91,11 +125,12 @@ function MainPage() {
             </ul>
           )}
           <br />
-          <button onClick={() => navigate('/schedules')}>전체 캘린더 보기</button>
+          <button onClick={() => navigate(`/schedules?classroom_id=${classroomId}`)}>
+            전체 캘린더 보기
+          </button>
           <hr style={{ margin: '2rem 0' }} />
           <h3>📅 달력 (예시 캘린더 자리)</h3>
           <div style={styles.calendarPlaceholder}>
-            {/* 이 부분을 캘린더 라이브러리로 교체하면 됨 */}
             <p style={{ textAlign: 'center', color: '#999' }}>[여기에 달력이 표시됩니다]</p>
           </div>
         </div>

@@ -3,19 +3,40 @@ const router = express.Router();
 const db = require('../db');
 const authenticateToken = require('../authMiddleware');
 
-// 📌 알림 목록 조회
+// 📌 알림 목록 조회 (SuperAdmin 및 classroom 조건 필터 추가)
 router.get('/', authenticateToken, async (req, res) => {
-  const { user_id } = req.user;
+  const { user_id, role } = req.user;
 
   try {
-    const [rows] = await db.query(
-      `SELECT notification_id, type, related_id, message, created_at, is_read
-       FROM notifications
-       WHERE user_id = ?
-       ORDER BY created_at DESC`,
+    // 현재 사용자가 속한 학급 목록 가져오기
+    const [joined] = await db.query(
+      `SELECT classroom_id FROM user_classrooms WHERE user_id = ?`,
       [user_id]
     );
+    const classroomIds = joined.map(c => c.classroom_id);
 
+    let query = `
+      SELECT notification_id, type, related_id, message, created_at, is_read
+      FROM notifications
+      WHERE user_id = ?
+    `;
+    const params = [user_id];
+
+    if (role === 'superadmin') {
+      query += ` AND (type = 'inquiry' OR school_id IS NOT NULL)`;
+    } else {
+      if (classroomIds.length > 0) {
+        const placeholders = classroomIds.map(() => '?').join(',');
+        query += ` AND (classroom_id IS NULL OR classroom_id IN (${placeholders}))`;
+        params.push(...classroomIds);
+      } else {
+        query += ` AND classroom_id IS NULL`;
+      }
+    }
+
+    query += ` ORDER BY created_at DESC`;
+
+    const [rows] = await db.query(query, params);
     res.json({ notifications: rows });
   } catch (err) {
     console.error('🔥 알림 목록 조회 오류:', err);

@@ -20,7 +20,7 @@ router.get('/profile', authenticateToken, async (req, res) => {
     // 1. 기본 사용자 정보
     const [userRows] = await db.query(`
       SELECT 
-        user_id, name, email, role, is_admin, profile_picture, child_name
+        user_id, name, email, role, is_admin, school_id, profile_picture, child_name
       FROM users
       WHERE user_id = ?
     `, [user_id]);
@@ -41,7 +41,7 @@ router.get('/profile', authenticateToken, async (req, res) => {
     `, [user_id]);
 
     // 3. 사용자 객체에 joinedClassrooms 배열 추가
-    user.joinedClassrooms = classRows;
+    user.joined_classrooms = classRows;
 
     res.json({ message: '프로필 데이터 반환', user });
   } catch (err) {
@@ -89,11 +89,6 @@ router.patch('/join-classroom', authenticateToken, async (req, res) => {
   }
 
   try {
-    await db.query(
-      'UPDATE users SET classroom_id = ? WHERE user_id = ?',
-      [classroom_id, req.user.user_id]
-    );
-
     await db.query(
       'INSERT IGNORE INTO user_classrooms (user_id, classroom_id) VALUES (?, ?)',
       [req.user.user_id, classroom_id]

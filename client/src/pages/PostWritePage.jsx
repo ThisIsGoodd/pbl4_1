@@ -14,7 +14,6 @@ function PostWritePage() {
   const [searchParams] = useSearchParams();
   const classroomId = searchParams.get('classroom_id');
 
-  // ✅ 학급 정보 불러오기
   useEffect(() => {
     const fetchClassroomInfo = async () => {
       try {
@@ -43,6 +42,7 @@ function PostWritePage() {
 
     if (scope === 'classroom') {
       formData.append('classroom_id', classroomId);
+      formData.append('school_wide', false);
     } else if (scope === 'school') {
       formData.append('school_wide', true);
     }
@@ -69,6 +69,7 @@ function PostWritePage() {
       }
     } catch (err) {
       console.error('🔥 게시글 작성 오류:', err);
+      alert('서버 오류');
     }
   };
 

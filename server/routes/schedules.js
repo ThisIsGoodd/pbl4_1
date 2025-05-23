@@ -14,26 +14,26 @@ router.post('/', authenticateToken, async (req, res) => {
   }
 
   try {
-    const [userRows] = await db.query(
-      'SELECT classroom_id, role FROM users WHERE user_id = ?',
+    const [[user]] = await db.query(
+      `SELECT u.classroom_id, us.school_id
+       FROM users u
+       LEFT JOIN classrooms c ON u.classroom_id = c.classroom_id
+       LEFT JOIN user_schools us ON us.user_id = u.user_id AND us.role = 'teacher'
+       WHERE u.user_id = ?`,
       [user_id]
     );
 
-    if (userRows.length === 0 || !userRows[0].classroom_id) {
-      return res.status(400).json({ error: '학급에 가입되어 있지 않습니다.' });
+    if (!user || !user.classroom_id || !user.school_id) {
+      return res.status(400).json({ error: '소속 학급 또는 학교 정보가 없습니다.' });
     }
 
-    if (userRows[0].role !== 'teacher') {
-      return res.status(403).json({ error: '일정 추가는 선생님만 가능합니다.' });
-    }
-
-    const classroom_id = userRows[0].classroom_id;
+    const { classroom_id, school_id } = user;
 
     const [result] = await db.query(
       `INSERT INTO schedules 
-        (title, description, start_date, end_date, created_at, created_by, classroom_id, grade, school_wide) 
-       VALUES (?, ?, ?, ?, NOW(), ?, ?, NULL, ?)`,
-      [title, description, start_date, end_date, user_id, classroom_id, school_wide]
+        (title, description, start_date, end_date, created_at, created_by, classroom_id, school_id, grade, school_wide) 
+       VALUES (?, ?, ?, ?, NOW(), ?, ?, ?, NULL, ?)`,
+      [title, description, start_date, end_date, user_id, classroom_id, school_id, school_wide]
     );
 
     const scheduleId = result.insertId;
@@ -49,6 +49,7 @@ router.post('/', authenticateToken, async (req, res) => {
     for (const p of parents) {
       await createNotification({
         userId: p.user_id,
+        classroomId: classroom_id,
         type: 'schedule',
         relatedId: scheduleId,
         message: `일정이 등록되었습니다: ${title}`
@@ -60,29 +61,33 @@ router.post('/', authenticateToken, async (req, res) => {
   }
 });
 
-// ✅ 일정 조회 (경로 수정)
+// ✅ 일정 조회
 router.get('/', authenticateToken, async (req, res) => {
   const { user_id } = req.user;
 
   try {
-    const [userRows] = await db.query(
-      'SELECT classroom_id FROM users WHERE user_id = ?',
+    const [[user]] = await db.query(
+      `SELECT u.classroom_id, us.school_id
+       FROM users u
+       LEFT JOIN user_schools us ON us.user_id = u.user_id
+       WHERE u.user_id = ?
+       LIMIT 1`,
       [user_id]
     );
 
-    if (userRows.length === 0 || !userRows[0].classroom_id) {
+    if (!user || !user.classroom_id) {
       return res.status(400).json({ error: '학급에 가입되어 있지 않습니다.' });
     }
 
-    const classroom_id = userRows[0].classroom_id;
+    const { classroom_id, school_id } = user;
 
     const [scheduleRows] = await db.query(
       `SELECT schedule_id, title, description, 
               start_date AS start, end_date AS end, school_wide, created_by 
        FROM schedules 
-       WHERE classroom_id = ? OR school_wide = TRUE 
+       WHERE classroom_id = ? OR (school_id = ? AND school_wide = TRUE)
        ORDER BY start_date ASC`,
-      [classroom_id]
+      [classroom_id, school_id]
     );
 
     res.json({ schedules: scheduleRows });
@@ -103,25 +108,23 @@ router.put('/schedules/:id', authenticateToken, async (req, res) => {
   }
 
   try {
-    const [rows] = await db.query(
+    const [[schedule]] = await db.query(
       'SELECT * FROM schedules WHERE schedule_id = ?',
       [schedule_id]
     );
 
-    if (rows.length === 0) {
+    if (!schedule) {
       return res.status(404).json({ error: '일정을 찾을 수 없습니다.' });
     }
 
-    const schedule = rows[0];
-
-    const [userRows] = await db.query(
-      'SELECT classroom_id, role FROM users WHERE user_id = ?',
+    const [[user]] = await db.query(
+      'SELECT classroom_id FROM users WHERE user_id = ?',
       [user_id]
     );
 
     if (
       schedule.created_by !== user_id &&
-      userRows[0]?.classroom_id !== schedule.classroom_id
+      user?.classroom_id !== schedule.classroom_id
     ) {
       return res.status(403).json({ error: '일정 수정 권한이 없습니다.' });
     }
@@ -144,25 +147,23 @@ router.delete('/schedules/:id', authenticateToken, async (req, res) => {
   const user_id = req.user.user_id;
 
   try {
-    const [rows] = await db.query(
+    const [[schedule]] = await db.query(
       'SELECT * FROM schedules WHERE schedule_id = ?',
       [schedule_id]
     );
 
-    if (rows.length === 0) {
+    if (!schedule) {
       return res.status(404).json({ error: '일정을 찾을 수 없습니다.' });
     }
 
-    const schedule = rows[0];
-
-    const [userRows] = await db.query(
-      'SELECT classroom_id, role FROM users WHERE user_id = ?',
+    const [[user]] = await db.query(
+      'SELECT classroom_id FROM users WHERE user_id = ?',
       [user_id]
     );
 
     if (
       schedule.created_by !== user_id &&
-      userRows[0]?.classroom_id !== schedule.classroom_id
+      user?.classroom_id !== schedule.classroom_id
     ) {
       return res.status(403).json({ error: '일정 삭제 권한이 없습니다.' });
     }
@@ -172,6 +173,37 @@ router.delete('/schedules/:id', authenticateToken, async (req, res) => {
     res.json({ message: '일정 삭제 완료' });
   } catch (err) {
     console.error('🔥 일정 삭제 오류:', err);
+    res.status(500).json({ error: '서버 오류', details: err.message });
+  }
+});
+
+// ✅ 학교 전체 관리자 전용 일정 조회
+router.get('/admin', authenticateToken, async (req, res) => {
+  const { user_id } = req.user;
+
+  try {
+    const [[row]] = await db.query(
+      `SELECT school_id FROM user_schools WHERE user_id = ? AND role = 'admin' LIMIT 1`,
+      [user_id]
+    );
+
+    const school_id = row?.school_id;
+    if (!school_id) {
+      return res.status(400).json({ error: 'school_id 정보가 없습니다.' });
+    }
+
+    const [scheduleRows] = await db.query(
+      `SELECT schedule_id, title, description, 
+              start_date AS start, end_date AS end, created_by 
+       FROM schedules 
+       WHERE school_id = ? AND school_wide = TRUE
+       ORDER BY start_date ASC`,
+      [school_id]
+    );
+
+    res.json({ schedules: scheduleRows });
+  } catch (err) {
+    console.error('🔥 관리자 일정 조회 오류:', err);
     res.status(500).json({ error: '서버 오류', details: err.message });
   }
 });

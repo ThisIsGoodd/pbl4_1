@@ -5,7 +5,7 @@ const authenticateToken = require('../authMiddleware');
 const checkAdmin = require('../checkAdmin');
 const crypto = require('crypto');
 
-// ✅ 관리자 인증코드 확인 → 관리자 권한 부여
+// ✅ 관리자 인증코드 확인 → user_schools 테이블에 admin 등록
 router.post('/auth/verify-admin', authenticateToken, async (req, res) => {
   const { schoolId, code } = req.body;
   const userId = req.user.user_id;
@@ -21,8 +21,8 @@ router.post('/auth/verify-admin', authenticateToken, async (req, res) => {
     }
 
     await db.query(
-      'UPDATE users SET is_admin = true WHERE user_id = ?',
-      [userId]
+      'INSERT INTO user_schools (user_id, school_id, role) VALUES (?, ?, ?)',
+      [userId, schoolId, 'teacher']
     );
 
     res.json({ message: '관리자 승인이 완료되었습니다.' });
@@ -41,9 +41,10 @@ router.get('/teachers', authenticateToken, checkAdmin, async (req, res) => {
       SELECT 
         u.user_id, u.name, u.email, u.created_at,
         COUNT(c.classroom_id) AS classroom_count
-      FROM users u
+      FROM user_schools us
+      JOIN users u ON us.user_id = u.user_id
       LEFT JOIN classrooms c ON u.user_id = c.teacher_id
-      WHERE u.school_id = ? AND u.role = 'teacher'
+      WHERE us.school_id = ? AND us.role = 'teacher'
       GROUP BY u.user_id
     `, [school_id]);
 
@@ -54,23 +55,28 @@ router.get('/teachers', authenticateToken, checkAdmin, async (req, res) => {
   }
 });
 
-// ✅ 관리자용: 교사 삭제
+// ✅ 교사 삭제
 router.delete('/teachers/:id', authenticateToken, checkAdmin, async (req, res) => {
   const teacherId = req.params.id;
-  const adminSchoolId = req.user.school_id;
+  const school_id = req.user.school_id;
 
   try {
-    const [rows] = await db.query(
-      'SELECT * FROM users WHERE user_id = ? AND role = "teacher" AND school_id = ?',
-      [teacherId, adminSchoolId]
+    const [target] = await db.query(
+      'SELECT * FROM user_schools WHERE user_id = ? AND school_id = ? AND role = ?',
+      [teacherId, school_id, 'teacher']
     );
 
-    if (rows.length === 0) {
-      return res.status(404).json({ error: '해당 교사를 찾을 수 없거나 다른 학교 소속입니다.' });
+    if (target.length === 0) {
+      return res.status(404).json({ error: '해당 교사를 찾을 수 없습니다.' });
     }
 
     await db.query(
-      `UPDATE users SET role = NULL, school_id = NULL, classroom_id = NULL WHERE user_id = ?`,
+      'DELETE FROM user_schools WHERE user_id = ? AND school_id = ?',
+      [teacherId, school_id]
+    );
+
+    await db.query(
+      'UPDATE users SET classroom_id = NULL WHERE user_id = ?',
       [teacherId]
     );
 
@@ -81,7 +87,7 @@ router.delete('/teachers/:id', authenticateToken, checkAdmin, async (req, res) =
   }
 });
 
-// ✅ 관리자용: 인증코드 확인
+// ✅ 인증코드 조회 (단일)
 router.get('/invite-code', authenticateToken, checkAdmin, async (req, res) => {
   const school_id = req.user.school_id;
 
@@ -102,7 +108,7 @@ router.get('/invite-code', authenticateToken, checkAdmin, async (req, res) => {
   }
 });
 
-// ✅ 관리자용: 인증코드 재설정
+// ✅ 인증코드 재설정
 router.patch('/invite-code', authenticateToken, checkAdmin, async (req, res) => {
   const school_id = req.user.school_id;
   const newCode = crypto.randomBytes(4).toString('hex');
@@ -122,91 +128,33 @@ router.patch('/invite-code', authenticateToken, checkAdmin, async (req, res) => 
   }
 });
 
-// ✅ 관리자용: 학급 목록 조회
-router.get('/classrooms', authenticateToken, checkAdmin, async (req, res) => {
-  const school_id = req.user.school_id;
+// ✅ 전체 관리자용: 인증코드 목록 조회
+router.get('/auth-codes', authenticateToken, checkAdmin, async (req, res) => {
+  const adminId = req.user.user_id;
+  const schoolId = req.query.school_id;
 
-  try {
-    const [rows] = await db.query(`
-      SELECT 
-        c.classroom_id, c.grade, c.class_number, c.school,
-        u.name AS teacher_name,
-        (
-          SELECT COUNT(*) FROM users u2 WHERE u2.classroom_id = c.classroom_id AND u2.role = 'student'
-        ) AS parent_count
-      FROM classrooms c
-      LEFT JOIN users u ON c.teacher_id = u.user_id
-      WHERE u.school_id = ?
-      ORDER BY c.grade, c.class_number
-    `, [school_id]);
-
-    res.json({ classrooms: rows });
-  } catch (err) {
-    console.error('🔥 학급 목록 조회 오류:', err);
-    res.status(500).json({ error: '서버 오류', details: err.message });
+  if (!schoolId) {
+    return res.status(400).json({ error: 'school_id 쿼리 파라미터가 필요합니다.' });
   }
-});
-
-// ✅ 학교 생성 요청 목록 조회
-router.get('/school-requests', authenticateToken, checkAdmin, async (req, res) => {
-  try {
-    const [rows] = await db.query(`
-      SELECT r.request_id, r.school_name, r.region, r.requested_at,
-             u.name AS requester_name, u.email
-      FROM school_requests r
-      JOIN users u ON r.user_id = u.user_id
-      ORDER BY r.requested_at DESC
-    `);
-
-    res.json({ requests: rows });
-  } catch (err) {
-    console.error('🔥 요청 목록 조회 오류:', err);
-    res.status(500).json({ error: '서버 오류', details: err.message });
-  }
-});
-
-// ✅ 학교 생성 요청 승인 처리
-router.post('/school-requests/:requestId/approve', authenticateToken, checkAdmin, async (req, res) => {
-  const requestId = req.params.requestId;
 
   try {
-    const [rows] = await db.query(
-      'SELECT * FROM school_requests WHERE request_id = ?',
-      [requestId]
+    const [schoolRows] = await db.query(
+      'SELECT * FROM schools WHERE school_id = ? AND created_by = ?',
+      [schoolId, adminId]
     );
 
-    if (rows.length === 0) {
-      return res.status(404).json({ error: '해당 요청이 존재하지 않습니다.' });
+    if (schoolRows.length === 0) {
+      return res.status(403).json({ error: '이 학교의 전체 관리자만 인증코드를 조회할 수 있습니다.' });
     }
 
-    const { user_id, school_name, region } = rows[0];
-
-    // 학교 등록
-    const [insertResult] = await db.query(
-      'INSERT INTO schools (name, region) VALUES (?, ?)',
-      [school_name, region]
-    );
-    const school_id = insertResult.insertId;
-
-    // 요청자에게 관리자 권한 부여
-    await db.query(
-      'UPDATE users SET school_id = ?, is_admin = TRUE WHERE user_id = ?',
-      [school_id, user_id]
+    const [rows] = await db.query(
+      'SELECT code, created_at FROM school_admin_codes WHERE school_id = ? ORDER BY created_at DESC',
+      [schoolId]
     );
 
-    // 인증코드 생성
-    const code = crypto.randomBytes(4).toString('hex');
-    await db.query(
-      'INSERT INTO school_admin_codes (school_id, code) VALUES (?, ?)',
-      [school_id, code]
-    );
-
-    // 요청 삭제
-    await db.query('DELETE FROM school_requests WHERE request_id = ?', [requestId]);
-
-    res.json({ message: '학교가 생성되고 관리자 권한이 부여되었습니다.', school_id });
+    res.json({ codes: rows });
   } catch (err) {
-    console.error('🔥 요청 승인 오류:', err);
+    console.error('🔥 인증코드 목록 조회 오류:', err);
     res.status(500).json({ error: '서버 오류', details: err.message });
   }
 });

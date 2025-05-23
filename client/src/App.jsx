@@ -1,6 +1,7 @@
 // App.jsx
 import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { AuthProvider, AuthContext } from './contexts/AuthContext';
+import RequireAuth from './components/RequireAuth';
 import Navigation from './components/Navigation';
 import LoginPage from './pages/LoginPage';
 import PostPage from './pages/PostPage';
@@ -21,6 +22,11 @@ import JoinInfoPage from './pages/JoinInfoPage';
 import JoinCompletePage from './pages/JoinCompletePage';
 import ClassroomCreatePage from './pages/ClassroomCreatePage';
 import ClassroomDashboardPage from './pages/ClassroomDashboardPage';
+import SchoolPendingPage from './pages/SchoolPendingPage';
+import RequestSchoolPage from './pages/RequestSchoolPage';
+import SuperAdminSchoolPage from './pages/SuperAdminSchoolPage';
+import AdminDashboard from './pages/AdminDashboard';
+import AdminMainPage from './pages/AdminMainPage';
 
 import { useContext, useEffect } from 'react';
 
@@ -43,25 +49,76 @@ function AppRoutes() {
       <Navigation />
       <Routes>
         <Route path="/" element={<LoginPage />} />
-        <Route path="/select-role" element={<RoleSelectPage />} />
-        <Route path="/join-class" element={<JoinClassPage />} />
-        <Route path="/posts" element={<PostPage />} />
-        <Route path="/posts/:id" element={<PostDetailPage />} />
-        <Route path="/schedules" element={<SchedulePage />} />
-        <Route path="/posts/write" element={<PostWritePage />} />
-        <Route path="/settings" element={<ProfilePage />} />
-        <Route path="/teacher-auth" element={<TeacherAuthPage />} />
-        <Route path="/main" element={<MainPage />} />
-        <Route path="/notifications" element={<NotificationsPage />} />
-        <Route path="/notification-settings" element={<NotificationSettingsPage />} />
-        <Route path="/chat" element={<ChatPage />} />
-        <Route path="/superadmin/school-requests" element={<SuperAdminSchoolRequestPage />} />
-        <Route path="/role-select" element={<RoleSelectPage />} />
-        <Route path="/join/invite" element={<JoinInvitePage />} />
-        <Route path="/join/info" element={<JoinInfoPage />} />
-        <Route path="/join/complete" element={<JoinCompletePage />} />
-        <Route path="/classroom/create" element={<ClassroomCreatePage />} />
-        <Route path="/classroom" element={<ClassroomDashboardPage />} />
+
+        <Route path="/select-role" element={
+          <RequireAuth><RoleSelectPage /></RequireAuth>
+        } />
+        <Route path="/join-class" element={
+          <RequireAuth><JoinClassPage /></RequireAuth>
+        } />
+        <Route path="/posts" element={
+          <RequireAuth><PostPage /></RequireAuth>
+        } />
+        <Route path="/posts/:id" element={
+          <RequireAuth><PostDetailPage /></RequireAuth>
+        } />
+        <Route path="/schedules" element={
+          <RequireAuth><SchedulePage /></RequireAuth>
+        } />
+        <Route path="/posts/write" element={
+          <RequireAuth><PostWritePage /></RequireAuth>
+        } />
+        <Route path="/settings" element={
+          <RequireAuth><ProfilePage /></RequireAuth>
+        } />
+        <Route path="/teacher/auth" element={
+          <RequireAuth><TeacherAuthPage /></RequireAuth>
+        } />
+        <Route path="/main" element={
+          <RequireAuth><MainPage /></RequireAuth>
+        } />
+        <Route path="/notifications" element={
+          <RequireAuth><NotificationsPage /></RequireAuth>
+        } />
+        <Route path="/notification-settings" element={
+          <RequireAuth><NotificationSettingsPage /></RequireAuth>
+        } />
+        <Route path="/chat" element={
+          <RequireAuth><ChatPage /></RequireAuth>
+        } />
+        <Route path="/superadmin/school-requests" element={
+          <RequireAuth><SuperAdminSchoolRequestPage /></RequireAuth>
+        } />
+        <Route path="/join/invite" element={
+          <RequireAuth><JoinInvitePage /></RequireAuth>
+        } />
+        <Route path="/join/info" element={
+          <RequireAuth><JoinInfoPage /></RequireAuth>
+        } />
+        <Route path="/join/complete" element={
+          <RequireAuth><JoinCompletePage /></RequireAuth>
+        } />
+        <Route path="/classroom/create" element={
+          <RequireAuth><ClassroomCreatePage /></RequireAuth>
+        } />
+        <Route path="/classroom/dashboard" element={
+          <RequireAuth><ClassroomDashboardPage /></RequireAuth>
+        } />
+        <Route path="/school/pending" element={
+          <RequireAuth><SchoolPendingPage /></RequireAuth>
+        } />
+        <Route path="/admin/request-school" element={
+          <RequireAuth><RequestSchoolPage /></RequireAuth>
+        } />
+        <Route path="/superadmin/schools" element={
+          <RequireAuth><SuperAdminSchoolPage /></RequireAuth>
+        } />
+        <Route path="/admindashboard" element={
+          <RequireAuth><AdminDashboard /></RequireAuth>
+        } />
+        <Route path="/admin/main" element={
+          <RequireAuth><AdminMainPage /></RequireAuth>
+        } />
       </Routes>
     </>
   );

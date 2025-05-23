@@ -92,7 +92,7 @@ function ClassroomDashboardPage() {
     <div style={{ padding: '2rem' }}>
       <h2>📘 학급 대시보드</h2>
       <p><strong>{classroom.grade}학년 {classroom.class_number}반</strong></p>
-      <p>학교 ID: {classroom.school}</p>
+      <p>학교명: {classroom.school_name}</p>
       <p>초대코드: <strong>{classroom.invite_code}</strong></p>
       <button onClick={regenerateCode}>초대코드 재발급</button>
       <button onClick={handleDelete} style={{ marginLeft: '1rem', color: 'red' }}>학급 삭제</button>

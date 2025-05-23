@@ -14,12 +14,11 @@ function PostPage() {
   const keywordFromNav = searchParams.get('search') || '';
   const classroomId = searchParams.get('classroom_id');
 
-  const { currentUser } = useContext(AuthContext);
+  const { user: currentUser } = useContext(AuthContext);
   const postsPerPage = 10;
   const token = localStorage.getItem('token');
   const navigate = useNavigate();
 
-  // ✅ 학급 이름 가져오기 (쿼리 기반)
   useEffect(() => {
     const fetchClassroomName = async () => {
       if (!classroomId) return;
@@ -39,12 +38,13 @@ function PostPage() {
     fetchClassroomName();
   }, [classroomId, token]);
 
-  // ✅ 게시글 목록 불러오기
   const fetchPosts = async () => {
+    if (!classroomId) return;
+
     try {
-      let url = 'http://localhost:3001/api/posts';
+      let url = `http://localhost:3001/api/posts?classroom_id=${classroomId}`;
       if (keywordFromNav.trim()) {
-        url += `?search=${encodeURIComponent(keywordFromNav.trim())}`;
+        url += `&search=${encodeURIComponent(keywordFromNav.trim())}`;
       }
 
       const res = await fetch(url, {
@@ -97,96 +97,44 @@ function PostPage() {
   const currentPosts = posts.slice(indexOfFirst, indexOfLast);
   const totalPages = Math.ceil(posts.length / postsPerPage);
 
-  // ✅ 스타일 정의
-  const pageTitleStyle = {
-    fontSize: '2rem',
-    fontWeight: 'bold',
-    textAlign: 'center',
-    margin: '2rem 0'
-  };
-
-  const tabButtonStyle = (selected) => ({
-    padding: '0.5rem 1.2rem',
-    border: '1px solid #aaa',
-    borderRadius: '5px',
-    backgroundColor: selected ? '#f6f2e8' : '#fff',
-    fontWeight: selected ? 'bold' : 'normal',
-    marginRight: '1rem',
-    cursor: 'pointer'
-  });
-
-  const tableStyle = {
-    width: '100%',
-    borderCollapse: 'collapse',
-    marginTop: '1rem'
-  };
-
-  const thStyle = {
-    borderBottom: '2px solid #ccc',
-    padding: '12px 10px',
-    textAlign: 'center',
-    backgroundColor: '#f9f9f9',
-    fontSize: '0.95rem'
-  };
-
-  const tdStyle = {
-    padding: '12px 10px',
-    textAlign: 'center',
-    fontSize: '0.9rem'
-  };
-
-  const searchContainerStyle = {
-    display: 'flex',
-    justifyContent: 'flex-end',
-    marginBottom: '1.5rem'
-  };
-
-  const searchInputStyle = {
-    padding: '0.5rem',
-    width: '200px',
-    border: '1px solid #ccc',
-    borderRadius: '4px'
-  };
-
-  const paginationStyle = {
-    display: 'flex',
-    justifyContent: 'center',
-    marginTop: '1.5rem',
-    gap: '0.5rem'
-  };
-
-  const paginationButtonStyle = (active) => ({
-    padding: '6px 12px',
-    border: '1px solid #ccc',
-    borderRadius: '4px',
-    backgroundColor: active ? '#e6e6ff' : '#fff',
-    fontWeight: active ? 'bold' : 'normal',
-    cursor: 'pointer'
-  });
-
   return (
     <div style={{ padding: '2rem', width: '100%' }}>
-      <h2 style={pageTitleStyle}>{classroomName}</h2>
+      <h2 style={{ fontSize: '2rem', fontWeight: 'bold', textAlign: 'center', margin: '2rem 0' }}>
+        {classroomName}
+      </h2>
 
       <div style={{ marginBottom: '1rem' }}>
         {['classroom', 'school'].map(type => (
           <button
             key={type}
             onClick={() => setScope(type)}
-            style={tabButtonStyle(scope === type)}
+            style={{
+              padding: '0.5rem 1.2rem',
+              border: '1px solid #aaa',
+              borderRadius: '5px',
+              backgroundColor: scope === type ? '#f6f2e8' : '#fff',
+              fontWeight: scope === type ? 'bold' : 'normal',
+              marginRight: '1rem',
+              cursor: 'pointer'
+            }}
           >
             {type === 'classroom' ? '학급 공지사항' : '학교 공지사항'}
           </button>
         ))}
       </div>
 
-      <div style={searchContainerStyle}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1.5rem' }}>
         <input
           type="text"
           placeholder="제목 또는 내용 검색"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          style={searchInputStyle}
+          style={{
+            padding: '0.5rem',
+            width: '200px',
+            border: '1px solid #ccc',
+            borderRadius: '4px'
+          }}
         />
       </div>
 
@@ -211,14 +159,18 @@ function PostPage() {
 
       {(currentUser?.role === 'teacher' || currentUser?.role === 'admin') && (
         <div style={{ marginBottom: '1rem' }}>
-          <button onClick={() => navigate('/posts/write')}>게시글 작성</button>
+          <button onClick={() => navigate(`/posts/write?classroom_id=${classroomId}`)}>게시글 작성</button>
         </div>
       )}
 
       {currentPosts.length === 0 ? (
         <p>게시글이 없습니다.</p>
       ) : (
-        <table style={tableStyle}>
+        <table style={{
+          width: '100%',
+          borderCollapse: 'collapse',
+          marginTop: '1rem'
+        }}>
           <thead>
             <tr>
               <th style={thStyle}>번호</th>
@@ -233,11 +185,13 @@ function PostPage() {
             {currentPosts.map((post, index) => (
               <tr
                 key={post.post_id}
-                onClick={() => navigate(`/posts/${post.post_id}`)}
+                onClick={() => navigate(`/posts/${post.post_id}?classroom_id=${classroomId}`)}
                 style={{ cursor: 'pointer', borderBottom: '1px solid #ccc' }}
               >
                 <td style={tdStyle}>{indexOfFirst + index + 1}</td>
-                <td style={{ ...tdStyle, textAlign: 'left', color: '#3366cc' }}>{post.title}</td>
+                <td style={{ ...tdStyle, textAlign: 'left', color: '#3366cc' }}>
+                  {post.school_wide ? '[학교 전체] ' : ''}{post.title}
+                </td>
                 <td style={tdStyle}>{post.author_name || '작성자 없음'}</td>
                 <td style={tdStyle}>{post.created_at?.slice(0, 10)}</td>
                 <td style={tdStyle}>{post.views ?? 0}</td>
@@ -248,12 +202,19 @@ function PostPage() {
         </table>
       )}
 
-      <div style={paginationStyle}>
+      <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1.5rem', gap: '0.5rem' }}>
         {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
           <button
             key={page}
             onClick={() => setCurrentPage(page)}
-            style={paginationButtonStyle(currentPage === page)}
+            style={{
+              padding: '6px 12px',
+              border: '1px solid #ccc',
+              borderRadius: '4px',
+              backgroundColor: currentPage === page ? '#e6e6ff' : '#fff',
+              fontWeight: currentPage === page ? 'bold' : 'normal',
+              cursor: 'pointer'
+            }}
           >
             {page}
           </button>
@@ -262,5 +223,16 @@ function PostPage() {
     </div>
   );
 }
+
+const thStyle = {
+  borderBottom: '2px solid #ccc',
+  padding: '12px',
+  backgroundColor: '#f9f9f9'
+};
+
+const tdStyle = {
+  padding: '12px',
+  textAlign: 'center'
+};
 
 export default PostPage;

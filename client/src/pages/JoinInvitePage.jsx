@@ -46,7 +46,6 @@ function JoinInvitePage() {
     navigate('/main');
   };
 
-  // ✅ 로딩 중 처리 (user가 아직 undefined일 때)
   if (user === undefined) {
     return <div style={styles.container}><p>로딩 중...</p></div>;
   }
@@ -56,10 +55,10 @@ function JoinInvitePage() {
       <img src="/assets/logo.png" alt="로고" style={styles.logo} />
       <h2>초대코드 입력</h2>
 
-      {user?.joinedClassrooms?.length > 0 && (
+      {user?.joined_classrooms?.length > 0 && (
         <div style={styles.classInfoBox}>
           <p>이미 가입된 학급:</p>
-          {user.joinedClassrooms.map((cls) => (
+          {user.joined_classrooms.map((cls) => (
             <button
               key={cls.classroom_id}
               onClick={() => navigate(`/main?classroom_id=${cls.classroom_id}`)}
@@ -74,12 +73,15 @@ function JoinInvitePage() {
         </div>
       )}
 
-
       <input
         type="text"
         placeholder="초대코드를 입력하세요."
         value={inviteCode}
-        onChange={(e) => setInviteCode(e.target.value)}
+        onChange={(e) => {
+          const raw = e.target.value.toUpperCase();
+          const filtered = raw.replace(/[^A-Z0-9]/g, '').slice(0, 6);
+          setInviteCode(filtered);
+        }}
         style={styles.input}
       />
       <button onClick={handleSubmit} disabled={!inviteCode} style={styles.continueBtn}>
@@ -105,10 +107,24 @@ const styles = {
     borderRadius: '20px',
     backgroundColor: '#d4eaff',
     border: 'none',
-    cursor: 'pointer'
+    cursor: 'pointer',
+    marginBottom: '0.3rem'
   },
-  input: { padding: '0.8rem', width: '300px', margin: '1rem 0', fontSize: '1rem' },
-  continueBtn: { padding: '0.7rem 3rem', borderRadius: '30px', backgroundColor: '#ccc' }
+  input: {
+    padding: '0.8rem',
+    width: '300px',
+    margin: '1rem 0',
+    fontSize: '1rem',
+    textTransform: 'uppercase'
+  },
+  continueBtn: {
+    padding: '0.7rem 3rem',
+    borderRadius: '30px',
+    backgroundColor: '#ccc',
+    border: 'none',
+    cursor: 'pointer',
+    fontWeight: 'bold'
+  }
 };
 
 export default JoinInvitePage;

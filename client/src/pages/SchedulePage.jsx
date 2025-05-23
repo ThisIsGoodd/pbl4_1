@@ -4,16 +4,15 @@ import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import { format } from 'date-fns';
+import ScheduleWriteModal from './ScheduleWriteModal';
 
 function SchedulePage() {
   const [searchParams] = useSearchParams();
   const classroomId = searchParams.get('classroom_id');
 
+  const [showModal, setShowModal] = useState(false);
   const [schedules, setSchedules] = useState([]);
   const [selectedDate, setSelectedDate] = useState(null);
-  const [form, setForm] = useState({ title: '', description: '', start: '', end: '' });
-  const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState(null);
   const [myUserId, setMyUserId] = useState(null);
   const [myRole, setMyRole] = useState(null);
   const [searchKeyword, setSearchKeyword] = useState('');
@@ -65,6 +64,9 @@ function SchedulePage() {
 
   const handleDateClick = (arg) => {
     setSelectedDate(arg.dateStr);
+    if (myRole === 'teacher') {
+      setShowModal(true);
+    }
   };
 
   const getEventsForSelectedDate = () => {
@@ -78,17 +80,6 @@ function SchedulePage() {
     });
   };
 
-  const handleEdit = (schedule) => {
-    setEditingId(schedule.schedule_id);
-    setForm({
-      title: schedule.title,
-      description: schedule.description,
-      start: schedule.start,
-      end: schedule.end
-    });
-    setShowForm(true);
-  };
-
   const handleDelete = async (id) => {
     if (!window.confirm('정말 삭제할까요?')) return;
     const res = await fetch(`http://localhost:3001/api/schedules/${id}`, {
@@ -98,46 +89,6 @@ function SchedulePage() {
     if (res.ok) {
       alert('삭제 완료');
       fetchSchedules();
-    }
-  };
-
-  const handleSubmit = async () => {
-    if (!form.title || !form.start || !form.end) {
-      alert('제목, 시작일, 종료일은 필수입니다.');
-      return;
-    }
-
-    const payload = {
-      title: form.title,
-      description: form.description,
-      start_date: form.start,
-      end_date: form.end,
-      classroom_id: classroomId
-    };
-
-    const url = editingId
-      ? `http://localhost:3001/api/schedules/${editingId}`
-      : 'http://localhost:3001/api/schedules';
-
-    const method = editingId ? 'PUT' : 'POST';
-
-    const res = await fetch(url, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`
-      },
-      body: JSON.stringify(payload)
-    });
-
-    if (res.ok) {
-      alert(editingId ? '수정 완료' : '등록 완료');
-      fetchSchedules();
-      setForm({ title: '', description: '', start: '', end: '' });
-      setEditingId(null);
-      setShowForm(false);
-    } else {
-      alert('요청 실패');
     }
   };
 
@@ -159,23 +110,6 @@ function SchedulePage() {
           events={events}
           height="auto"
         />
-        {myRole === 'teacher' && selectedDate && (
-          <button
-            onClick={() => {
-              setForm({
-                title: '',
-                description: '',
-                start: selectedDate,
-                end: selectedDate
-              });
-              setEditingId(null);
-              setShowForm(true);
-            }}
-            style={{ marginTop: '1rem' }}
-          >
-            일정 등록
-          </button>
-        )}
       </div>
 
       {/* 일정 목록 */}
@@ -227,61 +161,19 @@ function SchedulePage() {
             </div>
             {myRole === 'teacher' && s.created_by === myUserId && (
               <div style={{ marginTop: '0.5rem' }}>
-                <button onClick={() => handleEdit(s)}>수정</button>
-                <button onClick={() => handleDelete(s.schedule_id)} style={{ color: 'red', marginLeft: '0.5rem' }}>삭제</button>
+                <button onClick={() => handleDelete(s.schedule_id)} style={{ color: 'red' }}>삭제</button>
               </div>
             )}
           </div>
         ))}
       </div>
 
-      {/* 일정 등록/수정 모달 */}
-      {showForm && (
-        <div style={{
-          position: 'fixed',
-          top: '20%',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          backgroundColor: '#fff',
-          border: '1px solid #ccc',
-          borderRadius: '8px',
-          padding: '2rem',
-          zIndex: 1000
-        }}>
-          <h3>{editingId ? '일정 수정' : '일정 등록'}</h3>
-          <input
-            placeholder="제목"
-            value={form.title}
-            onChange={(e) => setForm({ ...form, title: e.target.value })}
-            style={{ width: '100%', marginBottom: '1rem' }}
-          />
-          <textarea
-            placeholder="내용"
-            value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-            style={{ width: '100%', marginBottom: '1rem' }}
-          />
-          <input
-            type="date"
-            value={form.start}
-            onChange={(e) => setForm({ ...form, start: e.target.value })}
-            style={{ marginBottom: '0.5rem' }}
-          />
-          <input
-            type="date"
-            value={form.end}
-            onChange={(e) => setForm({ ...form, end: e.target.value })}
-            style={{ marginLeft: '1rem', marginBottom: '1rem' }}
-          />
-          <div>
-            <button onClick={handleSubmit}>{editingId ? '수정' : '등록'}</button>
-            <button onClick={() => {
-              setShowForm(false);
-              setForm({ title: '', description: '', start: '', end: '' });
-              setEditingId(null);
-            }} style={{ marginLeft: '1rem' }}>취소</button>
-          </div>
-        </div>
+      {showModal && (
+        <ScheduleWriteModal
+          onClose={() => setShowModal(false)}
+          onSubmit={fetchSchedules}
+          classroomId={classroomId}
+        />
       )}
     </div>
   );

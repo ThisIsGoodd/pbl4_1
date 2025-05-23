@@ -1,4 +1,3 @@
-// 📄 routes/posts.js
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
@@ -7,22 +6,21 @@ const multer = require('multer');
 const path = require('path');
 const { createNotification } = require('../utils/notify');
 
-
-// ✅ 파일 업로드 설정
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, 'uploads/'),
   filename: (req, file, cb) => cb(null, `${Date.now()}_${file.originalname}`)
 });
 const upload = multer({ storage });
 
-// 게시글 작성
+/**
+ * ✅ 게시글 작성
+ */
 router.post('/', upload.single('file'), authenticateToken, async (req, res) => {
-  const { classroom_id, grade, school_wide, title, content, category } = req.body;
-  const { user_id, role } = req.user; // 🔍 role 정보 사용
+  const { classroom_id, school_wide, title, content, category } = req.body;
+  const { user_id, role } = req.user;
   const file = req.file;
   const attachment_url = file ? `/uploads/${file.filename}` : null;
 
-  // 🔒 학부모 글쓰기 제한
   if (role === 'parent') {
     return res.status(403).json({ error: '학부모는 게시글을 작성할 수 없습니다.' });
   }
@@ -32,14 +30,24 @@ router.post('/', upload.single('file'), authenticateToken, async (req, res) => {
   }
 
   try {
+    let school_id = null;
+    if (school_wide === 'true' || school_wide === true) {
+      const [[schoolRow]] = await db.query(
+        'SELECT school_id FROM user_schools WHERE user_id = ? AND role = "teacher" LIMIT 1',
+        [user_id]
+      );
+      if (!schoolRow) return res.status(400).json({ error: '학교 정보 없음' });
+      school_id = schoolRow.school_id;
+    }
+
     await db.query(
       `INSERT INTO posts 
-      (author_id, title, category, content, created_at, views, classroom_id, grade, school_wide, attachment_url, likes) 
+      (author_id, title, category, content, created_at, views, classroom_id, school_id, school_wide, attachment_url, likes) 
       VALUES (?, ?, ?, ?, NOW(), 0, ?, ?, ?, ?, 0)`,
       [
         user_id, title, category, content,
         classroom_id || null,
-        grade || null,
+        school_id,
         school_wide === 'true' || school_wide === true,
         attachment_url
       ]
@@ -56,6 +64,7 @@ router.post('/', upload.single('file'), authenticateToken, async (req, res) => {
     for (const u of classUsers) {
       await createNotification({
         userId: u.user_id,
+        classroomId: classroom_id,
         type: 'post',
         relatedId: newPostId,
         message: '새 공지사항이 등록되었습니다.'
@@ -69,37 +78,41 @@ router.post('/', upload.single('file'), authenticateToken, async (req, res) => {
   }
 });
 
-// 게시글 목록 조회
+/**
+ * ✅ 게시글 목록 조회
+ */
 router.get('/', authenticateToken, async (req, res) => {
   const { user_id } = req.user;
+  const { search, classroom_id } = req.query;
+
+  if (!classroom_id) {
+    return res.status(400).json({ error: 'classroom_id가 필요합니다.' });
+  }
 
   try {
-    const [created] = await db.query(
-      'SELECT classroom_id FROM classrooms WHERE teacher_id = ?',
+    const [[schoolRow]] = await db.query(
+      'SELECT school_id FROM user_schools WHERE user_id = ? LIMIT 1',
       [user_id]
     );
-    const createdClassroomIds = created.map(c => c.classroom_id);
+    const school_id = schoolRow?.school_id || null;
 
-    const [userRows] = await db.query(
-      'SELECT classroom_id FROM users WHERE user_id = ?',
-      [user_id]
-    );
-    const joinedClassroomId = userRows[0]?.classroom_id;
+    let query = `
+      SELECT posts.*, users.name AS author_name
+      FROM posts
+      JOIN users ON posts.author_id = users.user_id
+      WHERE (classroom_id = ? OR (school_id = ? AND school_wide = TRUE))
+    `;
+    const params = [classroom_id, school_id];
 
-    if (!joinedClassroomId && createdClassroomIds.length === 0) {
-      return res.status(400).json({ error: '학급에 가입되어 있지 않습니다.' });
+    if (search) {
+      query += ` AND (title LIKE ? OR content LIKE ?)`;
+      const likeKeyword = `%${search}%`;
+      params.push(likeKeyword, likeKeyword);
     }
 
-    const allVisibleClassroomIds = [...createdClassroomIds];
-    if (joinedClassroomId) allVisibleClassroomIds.push(joinedClassroomId);
+    query += ` ORDER BY created_at DESC`;
 
-    const [postRows] = await db.query(
-      `SELECT * FROM posts 
-       WHERE classroom_id IN (?) OR school_wide = TRUE 
-       ORDER BY created_at DESC`,
-      [allVisibleClassroomIds]
-    );
-
+    const [postRows] = await db.query(query, params);
     res.json({ posts: postRows });
   } catch (err) {
     console.error('🔥 게시글 조회 오류:', err);
@@ -107,7 +120,9 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
-// 게시글 상세 조회
+/**
+ * ✅ 게시글 상세 조회
+ */
 router.get('/posts/:id', authenticateToken, async (req, res) => {
   const postId = req.params.id;
 
@@ -131,7 +146,9 @@ router.get('/posts/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// 게시글 조회수 증가
+/**
+ * ✅ 조회수 증가 (10분 제한)
+ */
 router.post('/posts/:id/view', authenticateToken, async (req, res) => {
   const post_id = req.params.id;
   const user_id = req.user.user_id;
@@ -146,9 +163,7 @@ router.post('/posts/:id/view', authenticateToken, async (req, res) => {
 
     if (rows.length > 0) {
       const lastViewed = new Date(rows[0].last_viewed);
-      const diffMs = now - lastViewed;
-
-      if (diffMs < 10 * 60 * 1000) {
+      if (now - lastViewed < 10 * 60 * 1000) {
         return res.json({ message: '10분 내 재조회: 조회수 증가 안 함' });
       }
 
@@ -171,10 +186,12 @@ router.post('/posts/:id/view', authenticateToken, async (req, res) => {
   }
 });
 
-// 게시글 수정
+/**
+ * ✅ 게시글 수정
+ */
 router.put('/posts/:id', authenticateToken, async (req, res) => {
   const postId = req.params.id;
-  const { title, content, category } = req.body;
+  const { title, content, category, school_wide } = req.body;
   const userId = req.user.user_id;
 
   if (!title || !content || !category) {
@@ -196,12 +213,12 @@ router.put('/posts/:id', authenticateToken, async (req, res) => {
 
     const post = rows[0];
     if (post.author_id !== userId && post.teacher_id !== userId) {
-      return res.status(403).json({ error: '게시글을 수정할 권한이 없습니다.' });
+      return res.status(403).json({ error: '수정 권한이 없습니다.' });
     }
 
     await db.query(
-      `UPDATE posts SET title = ?, content = ?, category = ? WHERE post_id = ?`,
-      [title, content, category, postId]
+      `UPDATE posts SET title = ?, content = ?, category = ?, school_wide = ? WHERE post_id = ?`,
+      [title, content, category, school_wide === true, postId]
     );
 
     res.json({ message: '게시글 수정 완료' });
@@ -211,7 +228,9 @@ router.put('/posts/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// 게시글 삭제
+/**
+ * ✅ 게시글 삭제
+ */
 router.delete('/posts/:id', authenticateToken, async (req, res) => {
   const postId = req.params.id;
   const userId = req.user.user_id;
@@ -231,7 +250,7 @@ router.delete('/posts/:id', authenticateToken, async (req, res) => {
 
     const post = rows[0];
     if (post.author_id !== userId && post.teacher_id !== userId) {
-      return res.status(403).json({ error: '게시글을 삭제할 권한이 없습니다.' });
+      return res.status(403).json({ error: '삭제 권한이 없습니다.' });
     }
 
     await db.query('DELETE FROM posts WHERE post_id = ?', [postId]);
@@ -242,7 +261,9 @@ router.delete('/posts/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// 게시글 좋아요
+/**
+ * ✅ 공감하기
+ */
 router.post('/posts/:id/like', authenticateToken, async (req, res) => {
   const post_id = req.params.id;
   const user_id = req.user.user_id;
@@ -253,26 +274,27 @@ router.post('/posts/:id/like', authenticateToken, async (req, res) => {
       [user_id, post_id]
     );
     if (rows.length > 0) {
-      return res.status(400).json({ error: '이미 좋아요한 게시글입니다.' });
+      return res.status(400).json({ error: '이미 공감한 게시글입니다.' });
     }
 
     await db.query('INSERT INTO post_likes (user_id, post_id) VALUES (?, ?)', [user_id, post_id]);
     await db.query('UPDATE posts SET likes = likes + 1 WHERE post_id = ?', [post_id]);
 
-    res.json({ message: '좋아요 완료' });
+    res.json({ message: '공감 완료' });
   } catch (err) {
-    console.error('🔥 좋아요 처리 오류:', err);
-    res.status(500).json({ error: '서버 오류', details: err.message });
+    console.error('🔥 공감 오류:', err);
+    res.status(500).json({ error: '서버 오류' });
   }
 });
 
-// 공감 취소 (공감했던 사용자가 다시 누르면 취소)
+/**
+ * ✅ 공감 취소
+ */
 router.delete('/posts/:id/like', authenticateToken, async (req, res) => {
   const post_id = req.params.id;
   const user_id = req.user.user_id;
 
   try {
-    // 공감 여부 확인
     const [rows] = await db.query(
       'SELECT * FROM post_likes WHERE user_id = ? AND post_id = ?',
       [user_id, post_id]
@@ -282,18 +304,19 @@ router.delete('/posts/:id/like', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: '공감하지 않은 게시글입니다.' });
     }
 
-    // 삭제 및 카운트 감소
     await db.query('DELETE FROM post_likes WHERE user_id = ? AND post_id = ?', [user_id, post_id]);
     await db.query('UPDATE posts SET likes = likes - 1 WHERE post_id = ?', [post_id]);
 
     res.json({ message: '공감 취소 완료' });
   } catch (err) {
     console.error('🔥 공감 취소 오류:', err);
-    res.status(500).json({ error: '서버 오류', details: err.message });
+    res.status(500).json({ error: '서버 오류' });
   }
 });
 
-// GET /posts/:id/like-check
+/**
+ * ✅ 공감 여부 조회
+ */
 router.get('/posts/:id/like-check', authenticateToken, async (req, res) => {
   const post_id = req.params.id;
   const user_id = req.user.user_id;
@@ -304,54 +327,6 @@ router.get('/posts/:id/like-check', authenticateToken, async (req, res) => {
   );
 
   res.json({ liked: rows.length > 0 });
-});
-
-router.get('/', authenticateToken, async (req, res) => {
-  const { user_id } = req.user;
-  const search = req.query.search;
-
-  try {
-    const [created] = await db.query(
-      'SELECT classroom_id FROM classrooms WHERE teacher_id = ?',
-      [user_id]
-    );
-    const createdClassroomIds = created.map(c => c.classroom_id);
-
-    const [userRows] = await db.query(
-      'SELECT classroom_id FROM users WHERE user_id = ?',
-      [user_id]
-    );
-    const joinedClassroomId = userRows[0]?.classroom_id;
-
-    if (!joinedClassroomId && createdClassroomIds.length === 0) {
-      return res.status(400).json({ error: '학급에 가입되어 있지 않습니다.' });
-    }
-
-    const allVisibleClassroomIds = [...createdClassroomIds];
-    if (joinedClassroomId) allVisibleClassroomIds.push(joinedClassroomId);
-
-    // 🔍 검색어 조건
-    let query = `
-      SELECT * FROM posts 
-      WHERE (classroom_id IN (?) OR school_wide = TRUE)
-    `;
-    const params = [allVisibleClassroomIds];
-
-    if (search) {
-      query += ` AND (title LIKE ? OR content LIKE ?)`;
-      const likeKeyword = `%${search}%`;
-      params.push(likeKeyword, likeKeyword);
-    }
-
-    query += ` ORDER BY created_at DESC`;
-
-    const [postRows] = await db.query(query, params);
-
-    res.json({ posts: postRows });
-  } catch (err) {
-    console.error('🔥 게시글 조회 오류:', err);
-    res.status(500).json({ error: '서버 오류', details: err.message });
-  }
 });
 
 module.exports = router;

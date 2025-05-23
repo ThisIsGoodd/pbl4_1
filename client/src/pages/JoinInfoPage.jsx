@@ -1,9 +1,38 @@
+import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 function JoinInfoPage() {
-  const { state } = useLocation(); // role, inviteCode, classroom_id, school, grade, classNumber
+  const { state } = useLocation(); // role, inviteCode, classroom_id, school (== school_id), grade, classNumber
   const navigate = useNavigate();
+  const [schoolName, setSchoolName] = useState('');
 
+  // ✅ 학교 이름 불러오기
+  useEffect(() => {
+    const fetchSchoolName = async () => {
+      if (!state?.school) return;
+
+      try {
+        const res = await fetch(`http://localhost:3001/api/schools/${state.school}`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setSchoolName(data.name);
+        } else {
+          setSchoolName('학교 이름 불러오기 실패');
+        }
+      } catch (err) {
+        console.error('학교 정보 오류:', err);
+        setSchoolName('학교 정보 오류');
+      }
+    };
+
+    fetchSchoolName();
+  }, [state?.school]);
+
+  // ✅ 학급 연결 API 호출 및 메인 페이지 이동
   const handleSubmit = async () => {
     if (!state?.classroom_id) return;
 
@@ -18,9 +47,9 @@ function JoinInfoPage() {
       });
 
       if (res.ok) {
-        navigate('/join/complete', {
+        navigate(`/main?classroom_id=${state.classroom_id}`, {
           state: {
-            schoolName: state.school,
+            schoolName,
             grade: state.grade,
             classNumber: state.classNumber
           }
@@ -42,7 +71,7 @@ function JoinInfoPage() {
       <p>아래 정보를 확인한 후 가입을 완료하세요.</p>
 
       <div style={styles.infoBox}>
-        <p><strong>학교명:</strong> {state?.school}</p>
+        <p><strong>학교명:</strong> {schoolName}</p>
         <p><strong>학년:</strong> {state?.grade}</p>
         <p><strong>반:</strong> {state?.classNumber}</p>
       </div>

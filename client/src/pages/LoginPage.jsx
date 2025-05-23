@@ -4,7 +4,6 @@ import GoogleLoginButton from '../components/GoogleLoginButton';
 import { AuthContext } from '../contexts/AuthContext';
 
 function LoginPage() {
-  const navigate = useNavigate();
   const { setUser } = useContext(AuthContext);
 
   const handleGoogleLogin = async (response) => {
@@ -28,21 +27,10 @@ function LoginPage() {
         const profileData = await profileRes.json();
 
         if (profileRes.ok && profileData.user) {
-          setUser(profileData.user);
+          setUser(profileData.user); // ✅ 역할 분기 제거
           alert('로그인 성공!');
-
-          const role = profileData.user.role;
-
-          if (!role) {
-            navigate('/role-select');
-          } else if (role === 'parent') {
-            navigate('/join/invite');
-          } else if (role === 'teacher') {
-            navigate('/teacher/auth');
-          } else {
-            navigate('/main'); // 예외 처리 fallback
-          }
-
+          window.location.reload();
+          // 이동은 AuthContext에서 처리됨
         } else {
           alert('사용자 정보 불러오기 실패');
         }

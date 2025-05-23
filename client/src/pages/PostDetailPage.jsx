@@ -86,6 +86,7 @@ function PostDetailPage() {
       body: JSON.stringify({
         title: editTitle,
         content: editPostContent,
+        category: '공지사항',
         school_wide: editSchoolWide
       })
     });

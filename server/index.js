@@ -6,10 +6,20 @@ const passport = require('passport');
 const path = require('path');
 const http = require('http');
 const socketIo = require('socket.io');
+const fs = require('fs');
 
 const db = require('./db');
 const authenticateToken = require('./authMiddleware');
 require('./config/passport');
+
+// uploads 폴더 존재 확인 및 생성
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  console.log('✅ uploads 폴더 생성됨:', uploadsDir);
+} else {
+  console.log('✅ uploads 폴더 존재함:', uploadsDir);
+}
 
 const app = express();
 const server = http.createServer(app); // 서버 인스턴스를 socket.io와 공유

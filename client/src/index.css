@@ -70,3 +70,23 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+/* TipTap 에디터 기본 스타일 */
+.ProseMirror {
+  padding: 1rem;
+  min-height: 200px;
+  outline: none;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+  font-size: 1rem;
+}
+
+.ProseMirror p {
+  margin: 0 0 1em;
+}
+.ProseMirror img {
+  max-width: 100%;
+  height: auto;
+}
+

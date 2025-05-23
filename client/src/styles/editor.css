@@ -1,0 +1,81 @@
+/* TipTap Editor 기본 스타일 */
+.ProseMirror {
+  outline: none;
+  padding: 16px;
+  min-height: 200px;
+  border-radius: 6px;
+}
+
+.ProseMirror p {
+  margin: 0.5em 0;
+  line-height: 1.6;
+}
+
+.ProseMirror h1 {
+  font-size: 1.5em;
+  font-weight: bold;
+  margin: 1em 0 0.5em 0;
+}
+
+.ProseMirror h2 {
+  font-size: 1.3em;
+  font-weight: bold;
+  margin: 1em 0 0.5em 0;
+}
+
+.ProseMirror h3 {
+  font-size: 1.1em;
+  font-weight: bold;
+  margin: 1em 0 0.5em 0;
+}
+
+.ProseMirror ul, .ProseMirror ol {
+  margin: 0.5em 0;
+  padding-left: 2em;
+}
+
+.ProseMirror li {
+  margin: 0.2em 0;
+}
+
+.ProseMirror blockquote {
+  border-left: 4px solid #ddd;
+  padding-left: 1em;
+  margin: 1em 0;
+  font-style: italic;
+}
+
+.ProseMirror strong {
+  font-weight: bold;
+}
+
+.ProseMirror em {
+  font-style: italic;
+}
+
+.ProseMirror code {
+  background-color: #f3f4f6;
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+  font-family: monospace;
+}
+
+.ProseMirror pre {
+  background-color: #f3f4f6;
+  padding: 1em;
+  border-radius: 6px;
+  overflow-x: auto;
+}
+
+.ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  margin: 0.5em 0;
+}
+
+/* 포커스 시 테두리 */
+.ProseMirror:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}

@@ -16,7 +16,6 @@ function PostDetailPage() {
   const [isEditingPost, setIsEditingPost] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editPostContent, setEditPostContent] = useState('');
-  const [editCategory, setEditCategory] = useState('');
   const [editSchoolWide, setEditSchoolWide] = useState(false);
   const [hasLiked, setHasLiked] = useState(false);
   const token = localStorage.getItem('token');
@@ -55,7 +54,10 @@ function PostDetailPage() {
       headers: { Authorization: `Bearer ${token}` }
     });
     const data = await res.json();
-    if (res.ok) setPost(data.post);
+    if (res.ok) {
+      const fullPost = { ...data.post, attachments: data.attachments || [] };
+      setPost(fullPost);
+    }
   };
 
   const fetchComments = async () => {
@@ -84,7 +86,6 @@ function PostDetailPage() {
       body: JSON.stringify({
         title: editTitle,
         content: editPostContent,
-        category: editCategory,
         school_wide: editSchoolWide
       })
     });
@@ -93,7 +94,6 @@ function PostDetailPage() {
         ...post,
         title: editTitle,
         content: editPostContent,
-        category: editCategory,
         school_wide: editSchoolWide
       });
       setIsEditingPost(false);
@@ -169,11 +169,6 @@ function PostDetailPage() {
         <>
           <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
           <textarea value={editPostContent} onChange={(e) => setEditPostContent(e.target.value)} />
-          <select value={editCategory} onChange={(e) => setEditCategory(e.target.value)}>
-            <option value="공지">공지</option>
-            <option value="자유">자유</option>
-            <option value="질문">질문</option>
-          </select>
           <div style={{ marginTop: '1rem' }}>
             <label>
               <input
@@ -206,15 +201,25 @@ function PostDetailPage() {
             )}
           </h1>
           <p><strong>작성자:</strong> {post.author_name}</p>
-          <p><strong>카테고리:</strong> {post.category}</p>
           <p><strong>작성일:</strong> {new Date(post.created_at).toLocaleString()}</p>
           <p><strong>조회수:</strong> {post.views}</p>
-          <p>{post.content}</p>
-          {post.attachment_url && (
+          <div dangerouslySetInnerHTML={{ __html: post.content }} />
+
+          {post.attachments && post.attachments.length > 0 && (
             <div>
-              <a href={`http://localhost:3001${post.attachment_url}`} target="_blank" rel="noreferrer">첨부파일 열기</a>
+              <h4>첨부파일:</h4>
+              <ul>
+                {post.attachments.map(att => (
+                  <li key={att.attachment_id}>
+                    <a href={`http://localhost:3001${att.file_path}`} target="_blank" rel="noreferrer">
+                      {att.original_name}
+                    </a>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
+
           <div style={{ marginTop: '1rem' }}>
             ❤️ 공감 수: {post.likes || 0}
             <button onClick={handleLikeToggle} style={{ marginLeft: '0.5rem' }}>
@@ -227,7 +232,6 @@ function PostDetailPage() {
                 setIsEditingPost(true);
                 setEditTitle(post.title);
                 setEditPostContent(post.content);
-                setEditCategory(post.category);
                 setEditSchoolWide(post.school_wide);
               }}>수정</button>
               <button onClick={handlePostDelete} style={{ marginLeft: '0.5rem', color: 'red' }}>삭제</button>

@@ -4,29 +4,47 @@ const db = require('../db');
 const authenticateToken = require('../authMiddleware');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 const { createNotification } = require('../utils/notify');
 
+// 파일 업로드 설정
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, 'uploads/'),
   filename: (req, file, cb) => cb(null, `${Date.now()}_${file.originalname}`)
 });
-const upload = multer({ storage });
+const upload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 }
+});
 
-/**
- * ✅ 게시글 작성
- */
-router.post('/', upload.single('file'), authenticateToken, async (req, res) => {
-  const { classroom_id, school_wide, title, content, category } = req.body;
+// ✅ 이미지 단일 업로드 (에디터 이미지 삽입용)
+router.post('/upload-image', authenticateToken, upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: '파일이 없습니다.' });
+    return res.status(200).json({ url: `/uploads/${req.file.filename}` });
+  } catch (err) {
+    console.error('🔥 이미지 업로드 오류:', err);
+    res.status(500).json({ error: '이미지 업로드 실패', details: err.message });
+  }
+});
+
+//✅ 게시글 작성
+router.post('/', authenticateToken, upload.array('files', 10), async (req, res) => {
+  const { classroom_id, school_wide, title, content } = req.body;
   const { user_id, role } = req.user;
-  const file = req.file;
-  const attachment_url = file ? `/uploads/${file.filename}` : null;
+  const files = req.files || [];
+
+  console.log('📝 게시글 작성 요청');
+  console.log('body:', req.body);
+  console.log('files:', req.files);
+  console.log('user:', req.user);
 
   if (role === 'parent') {
     return res.status(403).json({ error: '학부모는 게시글을 작성할 수 없습니다.' });
   }
 
-  if (!title || !content || !category) {
-    return res.status(400).json({ error: '필수 항목이 누락되었습니다.' });
+  if (!title || !content) {
+    return res.status(400).json({ error: '제목과 내용은 필수입니다.' });
   }
 
   try {
@@ -40,38 +58,47 @@ router.post('/', upload.single('file'), authenticateToken, async (req, res) => {
       school_id = schoolRow.school_id;
     }
 
-    await db.query(
+    // 게시글 저장 (category는 기본값 '공지사항'으로 설정)
+    const [result] = await db.query(
       `INSERT INTO posts 
-      (author_id, title, category, content, created_at, views, classroom_id, school_id, school_wide, attachment_url, likes) 
-      VALUES (?, ?, ?, ?, NOW(), 0, ?, ?, ?, ?, 0)`,
-      [
-        user_id, title, category, content,
-        classroom_id || null,
-        school_id,
-        school_wide === 'true' || school_wide === true,
-        attachment_url
-      ]
+        (author_id, title, content, category, created_at, views, classroom_id, school_id, school_wide, likes) 
+        VALUES (?, ?, ?, ?, NOW(), 0, ?, ?, ?, 0)`,
+      [user_id, title, content, '공지사항', classroom_id || null, school_id, school_wide === 'true']
     );
 
-    const [lastPost] = await db.query('SELECT LAST_INSERT_ID() AS post_id');
-    const newPostId = lastPost[0].post_id;
+    const postId = result.insertId;
+    console.log('✅ 게시글 저장 완료, ID:', postId);
 
-    const [classUsers] = await db.query(
-      'SELECT user_id FROM users WHERE classroom_id = ? AND user_id != ?',
-      [classroom_id, user_id]
-    );
+    // 첨부파일 저장
+    for (const file of files) {
+      await db.query(
+        `INSERT INTO attachments (post_id, original_name, file_path, uploaded_at)
+         VALUES (?, ?, ?, NOW())`,
+        [postId, file.originalname, `/uploads/${file.filename}`]
+      );
+    }
+    console.log('✅ 첨부파일 저장 완료:', files.length, '개');
 
-    for (const u of classUsers) {
-      await createNotification({
-        userId: u.user_id,
-        classroomId: classroom_id,
-        type: 'post',
-        relatedId: newPostId,
-        message: '새 공지사항이 등록되었습니다.'
-      });
+    // 알림 전송 (classroom_id가 있을 때만)
+    if (classroom_id) {
+      const [classUsers] = await db.query(
+        'SELECT user_id FROM users WHERE classroom_id = ? AND user_id != ?',
+        [classroom_id, user_id]
+      );
+
+      for (const u of classUsers) {
+        await createNotification({
+          userId: u.user_id,
+          classroomId: classroom_id,
+          type: 'post',
+          relatedId: postId,
+          message: '새 공지사항이 등록되었습니다.'
+        });
+      }
+      console.log('✅ 알림 전송 완료:', classUsers.length, '명');
     }
 
-    res.json({ message: '게시글 작성 완료' });
+    res.json({ message: '게시글 작성 완료', post_id: postId });
   } catch (err) {
     console.error('🔥 게시글 작성 오류:', err);
     res.status(500).json({ error: '서버 오류', details: err.message });
@@ -120,13 +147,12 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * ✅ 게시글 상세 조회
- */
+//✅ 게시글 상세 조회
 router.get('/posts/:id', authenticateToken, async (req, res) => {
   const postId = req.params.id;
 
   try {
+    // 게시글 + 작성자 정보 가져오기
     const [rows] = await db.query(
       `SELECT posts.*, users.name AS author_name
        FROM posts
@@ -139,7 +165,17 @@ router.get('/posts/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: '게시글을 찾을 수 없습니다.' });
     }
 
-    res.json({ post: rows[0] });
+    const post = rows[0];
+
+    // 첨부파일 목록 가져오기
+    const [attachments] = await db.query(
+      `SELECT attachment_id, original_name, file_path
+       FROM attachments
+       WHERE post_id = ?`,
+      [postId]
+    );
+
+    res.json({ post, attachments });
   } catch (err) {
     console.error('🔥 게시글 상세 조회 오류:', err);
     res.status(500).json({ error: '서버 오류', details: err.message });

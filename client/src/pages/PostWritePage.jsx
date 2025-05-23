@@ -9,6 +9,7 @@ function PostWritePage() {
   const [title, setTitle] = useState('');
   const [files, setFiles] = useState([]);
   const [classroomInfo, setClassroomInfo] = useState(null);
+  const [postType, setPostType] = useState('classroom'); // 'classroom' or 'school'
 
   const token = localStorage.getItem('token');
   const navigate = useNavigate();
@@ -17,7 +18,8 @@ function PostWritePage() {
 
   const editor = useEditor({
     extensions: [StarterKit, Image],
-    content: '<p>여기에 내용을 입력하세요...</p>',
+    content: '',
+    placeholder: '여기에 내용을 입력하세요...',
     editorProps: {
       attributes: {
         class: 'prose prose-sm sm:prose lg:prose-lg xl:prose-2xl mx-auto focus:outline-none min-h-[200px] p-4 border border-gray-300 rounded-md',
@@ -53,7 +55,7 @@ function PostWritePage() {
     formData.append('title', title);
     formData.append('content', content);
     formData.append('classroom_id', classroomId);
-    formData.append('school_wide', false);
+    formData.append('school_wide', postType === 'school'); // 학교 공지 여부
     for (let i = 0; i < files.length; i++) {
       formData.append('files', files[i]);
     }
@@ -110,6 +112,51 @@ function PostWritePage() {
           대상 학급: {classroomInfo.grade}학년 {classroomInfo.class_number}반 ({classroomInfo.school})
         </p>
       )}
+
+      {/* 공지사항 유형 선택 */}
+      <div style={{ 
+        marginBottom: '1.5rem', 
+        padding: '1rem', 
+        border: '1px solid #d1d5db', 
+        borderRadius: '8px', 
+        backgroundColor: '#f9fafb' 
+      }}>
+        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>
+          공지사항 유형 선택
+        </label>
+        <div style={{ display: 'flex', gap: '1.5rem' }}>
+          <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+            <input
+              type="radio"
+              value="classroom"
+              checked={postType === 'classroom'}
+              onChange={(e) => setPostType(e.target.value)}
+              style={{ marginRight: '8px' }}
+            />
+            <span style={{ fontSize: '14px' }}>
+              📚 학급 공지사항 
+              <small style={{ color: '#6b7280', display: 'block' }}>
+                해당 학급 학생들에게만 알림
+              </small>
+            </span>
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+            <input
+              type="radio"
+              value="school"
+              checked={postType === 'school'}
+              onChange={(e) => setPostType(e.target.value)}
+              style={{ marginRight: '8px' }}
+            />
+            <span style={{ fontSize: '14px' }}>
+              🏫 학교 전체 공지사항
+              <small style={{ color: '#6b7280', display: 'block' }}>
+                학교 전체 학생들에게 알림
+              </small>
+            </span>
+          </label>
+        </div>
+      </div>
 
       <input
         type="text"
@@ -194,7 +241,7 @@ function PostWritePage() {
         onMouseOver={(e) => e.target.style.backgroundColor = '#2563eb'}
         onMouseOut={(e) => e.target.style.backgroundColor = '#3b82f6'}
       >
-        글 작성하기
+        {postType === 'school' ? '🏫 학교 전체 공지 작성' : '📚 학급 공지 작성'}
       </button>
     </div>
   );

@@ -54,6 +54,13 @@ function PostDetailPage() {
       headers: { Authorization: `Bearer ${token}` }
     });
     const data = await res.json();
+    console.log('=== 디버깅 정보 ===');
+    console.log('전체 응답 데이터:', data);
+    console.log('post 객체:', data.post);
+    console.log('제목 값:', data.post?.title);
+    console.log('제목 길이:', data.post?.title?.length);
+    console.log('제목 문자 코드:', data.post?.title?.split('').map(char => char.charCodeAt(0)));
+    
     if (res.ok) {
       const fullPost = { ...data.post, attachments: data.attachments || [] };
       setPost(fullPost);
@@ -163,7 +170,8 @@ function PostDetailPage() {
   };
 
   if (!post) return <p>로딩 중...</p>;
-
+  console.log('렌더링 시점 post.title:', post.title);
+  console.log('렌더링 시점 전체 post:', post);
   return (
     <div style={{ padding: '2rem' }}>
       {isEditingPost ? (
@@ -193,14 +201,15 @@ function PostDetailPage() {
         </>
       ) : (
         <>
-          <h1>
+          <h1 style={{ fontFamily: 'Arial, sans-serif' }}>
             {post.title}
-            {post.school_wide && (
-              <span style={{ marginLeft: '10px', color: '#3366cc', fontSize: '1rem' }}>
-                [학교 전체]
-              </span>
-            )}
-          </h1>
+            {console.log('school_wide 값:', post.school_wide)}
+            {post.school_wide === true && (
+            <span style={{ marginLeft: '10px', color: '#3366cc', fontSize: '1rem' }}>
+              [학교 전체]
+            </span>
+          )}
+</h1>
           <p><strong>작성자:</strong> {post.author_name}</p>
           <p><strong>작성일:</strong> {new Date(post.created_at).toLocaleString()}</p>
           <p><strong>조회수:</strong> {post.views}</p>
@@ -212,15 +221,20 @@ function PostDetailPage() {
               <ul>
                 {post.attachments.map(att => (
                   <li key={att.attachment_id}>
-                    <a href={`http://localhost:3001${att.file_path}`} target="_blank" rel="noreferrer">
-                      {att.original_name}
+                    <a 
+                      href={`http://localhost:3001${att.file_path}`} 
+                      download={att.original_name}
+                      target="_blank" 
+                      rel="noreferrer"
+                      style={{ textDecoration: 'underline', color: 'blue' }}
+                    >
+                      📎 {att.original_name}
                     </a>
                   </li>
                 ))}
               </ul>
             </div>
           )}
-
           <div style={{ marginTop: '1rem' }}>
             ❤️ 공감 수: {post.likes || 0}
             <button onClick={handleLikeToggle} style={{ marginLeft: '0.5rem' }}>

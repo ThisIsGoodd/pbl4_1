@@ -16,7 +16,7 @@ function Navigation() {
   const isParent = user?.role === 'parent';
   const isJoinedClass = user?.joined_classrooms?.length > 0;
   const isJoinPage = location.pathname.startsWith('/join/invite');
-  const isAdminCreator = user?.is_admin && isCreator;
+  const isAdminCreator = Boolean(user?.is_admin && isCreator);
   const classroomId = user?.joined_classrooms?.[0]?.classroom_id;
 
   // 학교 생성자인지 확인
@@ -33,23 +33,32 @@ function Navigation() {
       });
   }, [user]);
 
-  // 알림 개수
+  // 알림 개수 (실시간 갱신)
   useEffect(() => {
     if (!user || !token || isSuperAdmin || isJoinPage || (!isJoinedClass && !user.is_admin)) return;
-    fetch('http://localhost:3001/api/notifications', {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (data.notifications) {
-          const unread = data.notifications.filter(n => !n.is_read).length;
-          setUnreadCount(unread);
-        }
+    
+    const fetchNotifications = () => {
+      fetch('http://localhost:3001/api/notifications', {
+        headers: { Authorization: `Bearer ${token}` }
       })
-      .catch(err => {
-        console.error('🔔 알림 실패:', err);
-      });
-  }, [user]);
+        .then(res => res.json())
+        .then(data => {
+          if (data.notifications) {
+            const unread = data.notifications.filter(n => !n.is_read).length;
+            setUnreadCount(unread);
+          }
+        })
+        .catch(err => {
+          console.error('🔔 알림 실패:', err);
+        });
+    };
+
+    fetchNotifications();
+    
+    // 30초마다 알림 갱신
+    const interval = setInterval(fetchNotifications, 30000);
+    return () => clearInterval(interval);
+  }, [user, token, isSuperAdmin, isJoinPage, isJoinedClass]);
 
   if (!user) return null;
 
@@ -114,9 +123,9 @@ function Navigation() {
           <>
             <Link to={`/posts?classroom_id=${classroomId}`} style={styles.link}>게시판</Link>
             <Link to={`/schedules?classroom_id=${classroomId}`} style={styles.link}>일정</Link>
-            {isParent || isTeacher ? (
+            {(isParent || isTeacher) && (
               <Link to={`/chat?classroom_id=${classroomId}`} style={styles.link}>채팅</Link>
-            ) : null}
+            )}
             <Link to={`/settings?classroom_id=${classroomId}`} style={styles.link}>마이페이지</Link>
           </>
         )}

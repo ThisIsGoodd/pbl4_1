@@ -34,9 +34,10 @@ router.get('/profile', authenticateToken, async (req, res) => {
     // 2. 가입된 학급 리스트 조회
     const [classRows] = await db.query(`
       SELECT 
-        c.classroom_id, c.school, c.grade, c.class_number
+        c.classroom_id, c.grade, c.class_number, s.name as school
       FROM user_classrooms uc
       JOIN classrooms c ON uc.classroom_id = c.classroom_id
+      JOIN schools s ON c.school = s.school_id
       WHERE uc.user_id = ?
     `, [user_id]);
 

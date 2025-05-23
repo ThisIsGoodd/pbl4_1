@@ -1,5 +1,5 @@
 import { useContext, useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { AuthContext } from '../contexts/AuthContext';
 
 function MainPage() {
@@ -101,7 +101,12 @@ function MainPage() {
               ) : (
                 posts.map(p => (
                   <li key={p.post_id} style={{ marginBottom: '0.5rem' }}>
-                    <a href={`/posts/${p.post_id}?classroom_id=${classroomId}`}>{p.title}</a>
+                    <Link 
+                      to={`/posts/${p.post_id}?classroom_id=${classroomId}`}
+                      style={{ textDecoration: 'none', color: '#0066cc' }}
+                    >
+                      {p.title}
+                    </Link>
                   </li>
                 ))
               )}

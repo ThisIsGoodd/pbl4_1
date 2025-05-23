@@ -5,7 +5,7 @@ const authenticateToken = require('../authMiddleware');
 const { createNotification } = require('../utils/notify');
 
 /**
- * ✅ 댓글 작성
+ * ✅ 댓글 작성 (게시글 제목 포함 알림)
  */
 router.post('/posts/:id/comments', authenticateToken, async (req, res) => {
   const postId = req.params.id;
@@ -24,46 +24,25 @@ router.post('/posts/:id/comments', authenticateToken, async (req, res) => {
 
     res.json({ message: '댓글 작성 완료' });
 
+    // 게시글 작성자 정보 및 제목 가져오기
     const [postRows] = await db.query(
-      'SELECT author_id FROM posts WHERE post_id = ?',
+      'SELECT author_id, title FROM posts WHERE post_id = ?',
       [postId]
     );
 
     const postAuthorId = postRows[0]?.author_id;
+    const postTitle = postRows[0]?.title || '게시글';
 
     if (postAuthorId && postAuthorId !== authorId) {
       await createNotification({
         userId: postAuthorId,
         type: 'comment',
         relatedId: postId,
-        message: '당신의 게시글에 댓글이 달렸습니다.'
+        message: `"${postTitle}"에 새 댓글이 달렸습니다.`
       });
     }
   } catch (err) {
     console.error('🔥 댓글 작성 오류:', err);
-    res.status(500).json({ error: '서버 오류', details: err.message });
-  }
-});
-
-/**
- * ✅ 댓글 목록 조회
- */
-router.get('/posts/:id/comments', authenticateToken, async (req, res) => {
-  const postId = req.params.id;
-
-  try {
-    const [rows] = await db.query(
-      `SELECT comments.*, users.name AS author_name
-       FROM comments
-       JOIN users ON comments.author_id = users.user_id
-       WHERE comments.post_id = ?
-       ORDER BY comments.created_at ASC`,
-      [postId]
-    );
-
-    res.json({ comments: rows });
-  } catch (err) {
-    console.error('🔥 댓글 조회 오류:', err);
     res.status(500).json({ error: '서버 오류', details: err.message });
   }
 });

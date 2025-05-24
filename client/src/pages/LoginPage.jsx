@@ -69,17 +69,7 @@ function LoginPage() {
     <div style={{
       ...styles.container,
       padding: isMobile ? '1rem' : '2rem'
-    }}>
-      {/* 로그인 텍스트 (왼쪽 상단) */}
-      <div style={{
-        ...styles.loginText,
-        top: isMobile ? '1rem' : '2rem',
-        left: isMobile ? '1rem' : '2rem',
-        fontSize: isMobile ? '1rem' : '1.1rem'
-      }}>
-        Login
-      </div>
-      
+    }}>      
       {/* 메인 콘텐츠 */}
       <div style={{
         ...styles.content,

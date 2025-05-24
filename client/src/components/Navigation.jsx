@@ -7,7 +7,7 @@ function Navigation() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [isCreator, setIsCreator] = useState(false);
-  const [teacherClassroomId, setTeacherClassroomId] = useState(null); // 🆕 교사 학급 ID
+  const [teacherClassroomId, setTeacherClassroomId] = useState(null);
   const navigate = useNavigate();
   const location = useLocation();
   const token = localStorage.getItem('token');
@@ -18,7 +18,11 @@ function Navigation() {
   const isJoinedClass = user?.joined_classrooms?.length > 0;
   const isJoinPage = location.pathname.startsWith('/join/invite');
   const isAdminCreator = Boolean(user?.is_admin && isCreator);
-  const classroomId = user?.joined_classrooms?.[0]?.classroom_id;
+
+  // 🆕 URL에서 classroom_id 추출 로직 (이 부분이 누락되어 있었음!)
+  const urlParams = new URLSearchParams(location.search);
+  const currentClassroomId = urlParams.get('classroom_id');
+  const classroomId = currentClassroomId || user?.joined_classrooms?.[0]?.classroom_id;
 
   // 학교 생성자인지 확인 + 교사 학급 확인
   useEffect(() => {
@@ -105,8 +109,9 @@ function Navigation() {
       return navigate('/join/invite');
     }
 
+    // 🆕 학교 전체 관리자(학교 생성자)는 관리자 메인페이지로
     if (isTeacher && isAdminCreator) {
-      return navigate('/admindashboard');
+      return navigate('/admin/main'); // 🆕 수정: /admindashboard → /admin/main
     }
 
     if (isTeacher) {
@@ -157,9 +162,10 @@ function Navigation() {
           </>
         )}
 
-        {/* 학교 전체 관리자 메뉴 */}
+        {/* 🆕 학교 전체 관리자 메뉴 (메인 링크 추가) */}
         {!isSuperAdmin && isAdminCreator && (
           <>
+            <Link to="/admin/main" style={styles.link}>메인</Link>
             <Link to="/admindashboard?tab=codes" style={styles.link}>관리</Link>
             <Link to="/inquiry/form" style={styles.link}>문의하기</Link>
           </>
@@ -185,14 +191,12 @@ function Navigation() {
           </>
         )}
 
-        {/* 일반 사용자 메뉴 (학급 있음) */}
+        {/* 일반 사용자(학부모) 메뉴 (학급 있음) */}
         {!isSuperAdmin && !isAdminCreator && !isTeacher && isJoinedClass && (
           <>
             <Link to={`/posts?classroom_id=${classroomId}`} style={styles.link}>게시판</Link>
             <Link to={`/schedules?classroom_id=${classroomId}`} style={styles.link}>일정</Link>
-            {(isParent || isTeacher) && (
-              <Link to={`/chat?classroom_id=${classroomId}`} style={styles.link}>채팅</Link>
-            )}
+            <Link to={`/chat?classroom_id=${classroomId}`} style={styles.link}>채팅</Link>
             <Link to={`/settings?classroom_id=${classroomId}`} style={styles.link}>마이페이지</Link>
             <Link to="/inquiry/form" style={styles.link}>문의하기</Link>
           </>
@@ -205,10 +209,15 @@ function Navigation() {
       </div>
 
       <div style={styles.rightSection}>
-        {/* 교사 알림 및 검색 */}
-        {!isSuperAdmin && !isAdminCreator && isTeacher && teacherClassroomId && (
+        {/* 🆕 교사와 학부모 모두 알림 및 검색 (통합된 조건) */}
+        {!isSuperAdmin && !isAdminCreator && (
+          (isTeacher && teacherClassroomId) || (!isTeacher && isJoinedClass)
+        ) && !isJoinPage && (
           <>
-            <Link to={`/notifications?classroom_id=${teacherClassroomId}`} style={{ ...styles.link, position: 'relative' }}>
+            <Link 
+              to={`/notifications?classroom_id=${teacherClassroomId || classroomId}`} 
+              style={{ ...styles.link, position: 'relative' }}
+            >
               🔔
               {unreadCount > 0 && <span style={styles.badge}>{unreadCount}</span>}
             </Link>
@@ -219,30 +228,8 @@ function Navigation() {
               onChange={(e) => setSearchKeyword(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && searchKeyword.trim()) {
-                  navigate(`/posts?search=${encodeURIComponent(searchKeyword.trim())}&classroom_id=${teacherClassroomId}`);
-                  setSearchKeyword('');
-                }
-              }}
-              style={styles.searchInput}
-            />
-          </>
-        )}
-
-        {/* 일반 사용자 알림 및 검색 */}
-        {!isSuperAdmin && !isAdminCreator && !isTeacher && isJoinedClass && !isJoinPage && (
-          <>
-            <Link to={`/notifications?classroom_id=${classroomId}`} style={{ ...styles.link, position: 'relative' }}>
-              🔔
-              {unreadCount > 0 && <span style={styles.badge}>{unreadCount}</span>}
-            </Link>
-            <input
-              type="text"
-              placeholder="공지 검색"
-              value={searchKeyword}
-              onChange={(e) => setSearchKeyword(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && searchKeyword.trim()) {
-                  navigate(`/posts?search=${encodeURIComponent(searchKeyword.trim())}&classroom_id=${classroomId}`);
+                  const targetClassroomId = teacherClassroomId || classroomId;
+                  navigate(`/posts?search=${encodeURIComponent(searchKeyword.trim())}&classroom_id=${targetClassroomId}`);
                   setSearchKeyword('');
                 }
               }}

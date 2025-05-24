@@ -67,7 +67,7 @@ router.get('/teachers', authenticateToken, async (req, res) => {
   }
 });
 
-// ✅ 관리자용: 학급 목록 조회
+// ✅ 관리자용: 학급 목록 조회 - class_photo 추가
 router.get('/classrooms', authenticateToken, async (req, res) => {
   const user_id = req.user.user_id;
   const { school_id } = req.query;
@@ -83,10 +83,10 @@ router.get('/classrooms', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: '해당 학교의 생성자만 학급 목록을 조회할 수 있습니다.' });
     }
 
-    // 2. 학급 목록 조회
+    // 2. 학급 목록 조회 - 🆕 class_photo 추가
     const [rows] = await db.query(`
       SELECT 
-        c.classroom_id, c.grade, c.class_number, 
+        c.classroom_id, c.grade, c.class_number, c.class_photo,
         s.name as school,
         u.name as teacher_name,
         COUNT(uc.user_id) as parent_count

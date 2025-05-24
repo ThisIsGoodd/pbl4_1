@@ -1,11 +1,12 @@
 import { createContext, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 export const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(undefined);
   const navigate = useNavigate();
+  const location = useLocation();
 
   // ✅ 토큰 새로고침 함수
   const refreshToken = async () => {
@@ -53,23 +54,68 @@ export function AuthProvider({ children }) {
         const user = data.user;
 
         console.log('👤 사용자 상태:', user);
+        console.log('🌍 현재 경로:', location.pathname);
 
+        // 🆕 현재 페이지가 특정 페이지들이면 리다이렉트 하지 않음
+        const protectedPaths = [
+          '/posts', '/schedules', '/chat', '/settings', '/notifications',
+          '/posts/', '/main', '/classroom/dashboard', '/admindashboard'
+        ];
+        
+        const isOnProtectedPath = protectedPaths.some(path => 
+          location.pathname.startsWith(path)
+        );
+
+        // 현재 페이지가 보호된 페이지라면 리다이렉트 하지 않음
+        if (isOnProtectedPath) {
+          console.log('🔒 보호된 페이지에서 새로고침 - 현재 페이지 유지');
+          return;
+        }
+
+        // 역할이 없으면 역할 선택 페이지로
         if (!user.role) {
           navigate('/select-role');
           return;
         }
 
+        // SuperAdmin
         if (user.role === 'superadmin') {
           navigate('/superadmin/school-requests');
           return;
         }
 
+        // 학부모
         if (user.role === 'parent') {
-          navigate('/join/invite');
+          // 🆕 현재 URL에 classroom_id가 있으면 해당 페이지 유지
+          const urlParams = new URLSearchParams(location.search);
+          const currentClassroomId = urlParams.get('classroom_id');
+          
+          if (currentClassroomId) {
+            console.log('📍 URL에 classroom_id 있음 - 현재 페이지 유지');
+            return;
+          }
+
+          // 가입된 학급이 있으면 첫 번째 학급으로 이동
+          if (user.joined_classrooms?.length > 0) {
+            const firstClassroom = user.joined_classrooms[0];
+            navigate(`/main?classroom_id=${firstClassroom.classroom_id}`);
+          } else {
+            navigate('/join/invite');
+          }
           return;
         }
 
+        // 교사
         if (user.role === 'teacher') {
+          // 🆕 현재 URL에 classroom_id가 있으면 해당 페이지 유지
+          const urlParams = new URLSearchParams(location.search);
+          const currentClassroomId = urlParams.get('classroom_id');
+          
+          if (currentClassroomId) {
+            console.log('📍 교사 - URL에 classroom_id 있음 - 현재 페이지 유지');
+            return;
+          }
+
           // ✅ 전체 관리자(학교 생성자)인지 확인
           if (user.is_admin && user.school_id) {
             try {
@@ -132,27 +178,7 @@ export function AuthProvider({ children }) {
           return;
         }
 
-        if (user.role === 'admin' && user.is_admin) {
-          const schoolRes = await fetch('http://localhost:3001/api/schools/created-by/me', {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-
-          if (schoolRes.ok) {
-            navigate('/admindashboard');
-          } else {
-            const requestRes = await fetch('http://localhost:3001/api/schools/school-requests/my', {
-              headers: { Authorization: `Bearer ${token}` },
-            });
-
-            if (requestRes.ok) {
-              navigate('/school/pending');
-            } else {
-              navigate('/admin/request-school');
-            }
-          }
-          return;
-        }
-
+        // 기타 역할
         navigate('/main');
       } catch (err) {
         console.error('🔥 사용자 정보 확인 실패:', err);
@@ -169,7 +195,7 @@ export function AuthProvider({ children }) {
     };
 
     fetchUserAndRedirect();
-  }, []);
+  }, []); // location.pathname 의존성 제거
 
   const logout = () => {
     localStorage.removeItem('token');

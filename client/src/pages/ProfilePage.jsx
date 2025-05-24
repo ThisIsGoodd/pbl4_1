@@ -296,7 +296,7 @@ function ProfilePage() {
         </div>
       </div>
 
-      {/* 소속 정보 */}
+       {/* 소속 정보 */}
       <div style={{ 
         marginBottom: '2rem', 
         padding: '1.5rem', 
@@ -304,7 +304,35 @@ function ProfilePage() {
         borderRadius: '12px',
         backgroundColor: '#f0fff0'
       }}>
-        <h3 style={{ marginBottom: '1rem', color: '#333' }}>🏫 소속 정보</h3>
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          marginBottom: '1rem'
+        }}>
+          <h3 style={{ margin: 0, color: '#333' }}>🏫 소속 정보</h3>
+          {/* 🆕 학급 변경 버튼 (학부모만) */}
+          {user.role === 'parent' && (
+            <button
+              onClick={() => navigate('/join/invite')}
+              style={{
+                backgroundColor: '#007bff',
+                color: 'white',
+                border: 'none',
+                padding: '0.5rem 1rem',
+                borderRadius: '6px',
+                fontSize: '0.9rem',
+                cursor: 'pointer',
+                fontWeight: 'bold'
+              }}
+              onMouseOver={(e) => e.target.style.backgroundColor = '#0056b3'}
+              onMouseOut={(e) => e.target.style.backgroundColor = '#007bff'}
+            >
+              🔄 학급 변경
+            </button>
+          )}
+        </div>
+        
         {user.joined_classrooms && user.joined_classrooms.length > 0 ? (
           <div>
             {user.joined_classrooms.map((classroom, index) => (
@@ -325,13 +353,34 @@ function ProfilePage() {
             ))}
           </div>
         ) : (
-          <p style={{ 
-            textAlign: 'center', 
-            color: '#666',
-            fontStyle: 'italic'
-          }}>
-            학급에 가입되어 있지 않습니다.
-          </p>
+          <div style={{ textAlign: 'center' }}>
+            <p style={{ 
+              color: '#666',
+              fontStyle: 'italic',
+              marginBottom: '1rem'
+            }}>
+              학급에 가입되어 있지 않습니다.
+            </p>
+            {user.role === 'parent' && (
+              <button
+                onClick={() => navigate('/join/invite')}
+                style={{
+                  backgroundColor: '#28a745',
+                  color: 'white',
+                  border: 'none',
+                  padding: '0.75rem 1.5rem',
+                  borderRadius: '8px',
+                  fontSize: '1rem',
+                  cursor: 'pointer',
+                  fontWeight: 'bold'
+                }}
+                onMouseOver={(e) => e.target.style.backgroundColor = '#218838'}
+                onMouseOut={(e) => e.target.style.backgroundColor = '#28a745'}
+              >
+                📚 학급 가입하기
+              </button>
+            )}
+          </div>
         )}
       </div>
 

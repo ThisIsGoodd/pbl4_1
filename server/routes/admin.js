@@ -52,11 +52,13 @@ router.get('/teachers', authenticateToken, async (req, res) => {
     const [rows] = await db.query(`
       SELECT 
         u.user_id, u.name, u.email, u.created_at, u.profile_picture,
-        c.grade, c.class_number
+        c.grade, c.class_number,
+        COUNT(DISTINCT c.classroom_id) as classroom_count
       FROM user_schools us
       JOIN users u ON us.user_id = u.user_id
       LEFT JOIN classrooms c ON u.user_id = c.teacher_id
       WHERE us.school_id = ? AND us.role = 'teacher'
+      GROUP BY u.user_id
       ORDER BY u.name
     `, [school_id]);
 

@@ -18,6 +18,7 @@ function SchedulePage() {
   const [isAdmin, setIsAdmin] = useState(false); // 🆕 관리자 여부
   const [searchKeyword, setSearchKeyword] = useState('');
   const [classroomInfo, setClassroomInfo] = useState(null);
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   
   // 🆕 모달 관련 상태
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -30,6 +31,16 @@ function SchedulePage() {
   });
 
   const token = localStorage.getItem('token');
+
+  // 반응형 처리
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const isMobile = windowWidth <= 768;
+  const isTablet = windowWidth > 768 && windowWidth <= 1024;
 
   // JWT 토큰에서 사용자 정보 추출
   useEffect(() => {
@@ -102,6 +113,7 @@ function SchedulePage() {
       schoolWide: s.school_wide,
       createdBy: s.created_by
     },
+    className: s.school_wide ? 'fc-event-school custom-event' : 'fc-event-classroom custom-event',
     color: s.school_wide ? '#9DA7E3' : '#5ADD7D'
   }));
 
@@ -227,154 +239,286 @@ function SchedulePage() {
   };
 
   return (
-    <div style={styles.container}>
-      {/* 헤더 */}
-      <div style={styles.header}>
-        <h1 style={styles.title}>
-          {schoolId && isAdmin 
-            ? '학교 전체 일정 관리'
-            : classroomInfo 
-            ? `${classroomInfo.grade}학년 ${classroomInfo.class_number}반 일정` 
-            : '일정 관리'}
-        </h1>
-        {(myRole === 'teacher' || isAdmin) && (
-          <button 
-            style={styles.addButton}
-            onClick={() => {
-              setScheduleForm({
-                title: '',
-                description: '',
-                startDate: new Date().toISOString().split('T')[0],
-                endDate: new Date().toISOString().split('T')[0],
-                schoolWide: isAdmin && schoolId // 관리자는 기본적으로 학교 전체 일정
-              });
-              setIsModalOpen(true);
-            }}
-          >
-            ➕ 일정 추가
-          </button>
-        )}
-      </div>
+    <>
+      {/* 🆕 인라인 CSS 스타일 추가 */}
+      <style>
+        {`
+          /* FullCalendar 커스텀 스타일 */
+          
+          /* 선택된 날짜 배경색 */
+          .fc .fc-daygrid-day.selected-date {
+            background-color: #e3f2fd !important;
+            border: 2px solid #2196f3 !important;
+          }
 
-      <div style={styles.layout}>
-        {/* 왼쪽: 달력 */}
-        <div style={styles.calendarSection}>
-          <FullCalendar
-            plugins={[dayGridPlugin, interactionPlugin]}
-            initialView="dayGridMonth"
-            locale="ko"
-            dateClick={handleDateClick}
-            eventClick={handleEventClick} // 🆕 이벤트 클릭 핸들러
-            events={events}
-            height="auto"
-            headerToolbar={{
-              left: 'prev,next today',
-              center: 'title',
-              right: 'dayGridMonth'
-            }}
-            dayCellContent={(arg) => arg.date.getDate()}
-          />
+          .fc .fc-daygrid-day.selected-date .fc-daygrid-day-number {
+            background-color: #2196f3;
+            color: white;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 2px auto;
+            font-weight: bold;
+          }
+
+          /* 이벤트 스타일 개선 */
+          .fc .custom-event {
+            border: none !important;
+            border-radius: 4px !important;
+            font-size: 11px !important;
+            padding: 1px 3px !important;
+            margin: 1px 0 !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+          }
+
+          /* 모바일에서 이벤트 크기 조정 */
+          @media (max-width: 768px) {
+            .fc .custom-event {
+              font-size: 10px !important;
+              padding: 0px 2px !important;
+              line-height: 1.2 !important;
+            }
+            
+            .fc .fc-daygrid-day-number {
+              font-size: 12px !important;
+              padding: 2px !important;
+            }
+            
+            .fc .fc-col-header-cell {
+              font-size: 12px !important;
+              padding: 4px 2px !important;
+            }
+            
+            .fc .fc-toolbar {
+              flex-direction: column !important;
+              gap: 10px !important;
+            }
+            
+            .fc .fc-toolbar-chunk {
+              display: flex !important;
+              justify-content: center !important;
+            }
+            
+            .fc .fc-button-group {
+              font-size: 12px !important;
+            }
+            
+            .fc .fc-button {
+              padding: 4px 8px !important;
+              font-size: 12px !important;
+            }
+          }
+
+          /* 더보기 링크 스타일 */
+          .fc .fc-more-link {
+            font-size: 10px !important;
+            color: #666 !important;
+            text-decoration: none !important;
+          }
+
+          .fc .fc-more-link:hover {
+            color: #333 !important;
+            text-decoration: underline !important;
+          }
+
+          /* 오늘 날짜 강조 */
+          .fc .fc-day-today {
+            background-color: #fff3cd !important;
+          }
+
+          .fc .fc-day-today .fc-daygrid-day-number {
+            background-color: #ffc107;
+            color: white;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 2px auto;
+            font-weight: bold;
+          }
+
+          /* 선택된 날짜가 오늘인 경우 */
+          .fc .fc-day-today.selected-date {
+            background-color: #e8f5e8 !important;
+            border: 2px solid #4caf50 !important;
+          }
+
+          .fc .fc-day-today.selected-date .fc-daygrid-day-number {
+            background-color: #4caf50;
+          }
+
+          /* 달력 헤더 스타일 개선 */
+          .fc .fc-toolbar-title {
+            font-size: 1.5rem !important;
+            font-weight: bold !important;
+            color: #333 !important;
+          }
+
+          @media (max-width: 768px) {
+            .fc .fc-toolbar-title {
+              font-size: 1.2rem !important;
+            }
+          }
+
+          /* 이벤트 색상 조정 */
+          .fc-event-school {
+            background-color: #9DA7E3 !important;
+            border-color: #9DA7E3 !important;
+          }
+
+          .fc-event-classroom {
+            background-color: #5ADD7D !important;
+            border-color: #5ADD7D !important;
+          }
+        `}
+      </style>
+
+      <div style={styles.container}>
+        {/* 헤더 */}
+        <div style={styles.header}>
+          <h1 style={styles.title}>
+            {schoolId && isAdmin 
+              ? '학교 전체 일정 관리'
+              : classroomInfo 
+              ? `${classroomInfo.grade}학년 ${classroomInfo.class_number}반 일정` 
+              : '일정 관리'}
+          </h1>
+          {(myRole === 'teacher' || isAdmin) && (
+            <button 
+              style={styles.addButton}
+              onClick={() => {
+                setScheduleForm({
+                  title: '',
+                  description: '',
+                  startDate: new Date().toISOString().split('T')[0],
+                  endDate: new Date().toISOString().split('T')[0],
+                  schoolWide: isAdmin && schoolId // 관리자는 기본적으로 학교 전체 일정
+                });
+                setIsModalOpen(true);
+              }}
+            >
+              ➕ 일정 추가
+            </button>
+          )}
         </div>
 
-        {/* 오른쪽: 일정 목록 또는 상세보기 */}
-        <div style={styles.sidePanel}>
-          {/* 검색창 */}
-          <div style={styles.searchSection}>
-            <input
-              type="text"
-              placeholder="일정 검색..."
-              value={searchKeyword}
-              onChange={(e) => setSearchKeyword(e.target.value)}
-              style={styles.searchInput}
+        <div style={styles.layout}>
+          {/* 왼쪽: 달력 */}
+          <div style={styles.calendarSection}>
+            <FullCalendar
+              plugins={[dayGridPlugin, interactionPlugin]}
+              initialView="dayGridMonth"
+              locale="ko"
+              dateClick={handleDateClick}
+              eventClick={handleEventClick}
+              events={events}
+              height={isMobile ? 350 : "auto"}
+              aspectRatio={isMobile ? 1.2 : 1.35}
+              headerToolbar={{
+                left: 'prev,next today',
+                center: 'title',
+                right: isMobile ? '' : 'dayGridMonth'
+              }}
+              titleFormat={{ 
+                year: 'numeric', 
+                month: isMobile ? 'short' : 'long' 
+              }}
+              dayCellClassNames={(arg) => {
+                const dateStr = arg.date.toISOString().split('T')[0];
+                return selectedDate === dateStr ? 'selected-date' : '';
+              }}
+              dayCellContent={(arg) => arg.date.getDate()}
+              dayMaxEvents={isMobile ? 2 : 3}
+              moreLinkText="개 더보기"
+              eventDisplay="block"
+              eventClassNames="custom-event"
+              eventTextColor="#fff"
+              nowIndicator={true}
             />
           </div>
 
-          {/* 🆕 이벤트 상세보기 */}
-          {selectedEvent ? (
-            <div style={styles.eventDetailSection}>
-              <div style={styles.detailHeader}>
-                <h3 style={styles.sectionTitle}>📋 일정 상세</h3>
-                <button 
-                  onClick={() => setSelectedEvent(null)}
-                  style={styles.closeButton}
-                >
-                  ✕
-                </button>
-              </div>
-              
-              <div style={styles.eventDetail}>
-                <h4 style={styles.eventDetailTitle}>{selectedEvent.title}</h4>
-                
-                <div style={styles.eventBadgeContainer}>
-                  <span style={{
-                    ...styles.eventBadge,
-                    backgroundColor: selectedEvent.school_wide ? '#9DA7E3' : '#5ADD7D'
-                  }}>
-                    {selectedEvent.school_wide ? '🏫 학교' : '📚 학급'}
-                  </span>
-                </div>
-
-                {selectedEvent.description && (
-                  <div style={styles.eventDetailDescription}>
-                    {selectedEvent.description}
-                  </div>
-                )}
-                
-                <div style={styles.eventDetailDate}>
-                  📅 {formatDateRange(selectedEvent.start, selectedEvent.end)}
-                </div>
-
-                {(myRole === 'teacher' || isAdmin) && selectedEvent.created_by === myUserId && (
-                  <button 
-                    onClick={() => handleDelete(selectedEvent.schedule_id)} 
-                    style={styles.deleteButton}
-                  >
-                    🗑️ 삭제
-                  </button>
-                )}
-              </div>
+          {/* 오른쪽: 일정 목록 또는 상세보기 */}
+          <div style={styles.sidePanel}>
+            {/* 검색창 */}
+            <div style={styles.searchSection}>
+              <input
+                type="text"
+                placeholder="일정 검색..."
+                value={searchKeyword}
+                onChange={(e) => setSearchKeyword(e.target.value)}
+                style={styles.searchInput}
+              />
             </div>
-          ) : (
-            // 기존 날짜별 일정 목록
-            <>
-              <div style={styles.dateSection}>
-                <h3 style={styles.sectionTitle}>
-                  {selectedDate
-                    ? format(new Date(selectedDate), 'yyyy년 MM월 dd일')
-                    : '날짜를 선택하거나 일정을 클릭하세요'}
-                </h3>
-              </div>
 
-              <div style={styles.eventList}>
-                {selectedDate && getEventsForSelectedDate().length === 0 && (
-                  <div style={styles.noEventsContainer}>
-                    <p style={styles.noEvents}>이 날짜에는 일정이 없습니다.</p>
-                    {/* 🆕 일정 추가 버튼 (교사/관리자만) */}
-                    {(myRole === 'teacher' || isAdmin) && (
-                      <button 
-                        style={styles.addEventButton}
-                        onClick={() => {
-                          setScheduleForm({
-                            title: '',
-                            description: '',
-                            startDate: selectedDate,
-                            endDate: selectedDate,
-                            schoolWide: isAdmin && schoolId
-                          });
-                          setIsModalOpen(true);
-                        }}
-                      >
-                        ➕ 이 날짜에 일정 추가
-                      </button>
-                    )}
+            {/* 🆕 이벤트 상세보기 */}
+            {selectedEvent ? (
+              <div style={styles.eventDetailSection}>
+                <div style={styles.detailHeader}>
+                  <h3 style={styles.sectionTitle}>📋 일정 상세</h3>
+                  <button 
+                    onClick={() => setSelectedEvent(null)}
+                    style={styles.closeButton}
+                  >
+                    ✕
+                  </button>
+                </div>
+                
+                <div style={styles.eventDetail}>
+                  <h4 style={styles.eventDetailTitle}>{selectedEvent.title}</h4>
+                  
+                  <div style={styles.eventBadgeContainer}>
+                    <span style={{
+                      ...styles.eventBadge,
+                      backgroundColor: selectedEvent.school_wide ? '#9DA7E3' : '#5ADD7D'
+                    }}>
+                      {selectedEvent.school_wide ? '🏫 학교' : '📚 학급'}
+                    </span>
                   </div>
-                )}
 
-                {selectedDate && getEventsForSelectedDate().length > 0 && (
-                  <>
-                    {/* 🆕 일정이 있는 경우에도 추가 버튼 표시 */}
-                    {(myRole === 'teacher' || isAdmin) && (
-                      <div style={styles.addButtonContainer}>
+                  {selectedEvent.description && (
+                    <div style={styles.eventDetailDescription}>
+                      {selectedEvent.description}
+                    </div>
+                  )}
+                  
+                  <div style={styles.eventDetailDate}>
+                    📅 {formatDateRange(selectedEvent.start, selectedEvent.end)}
+                  </div>
+
+                  {(myRole === 'teacher' || isAdmin) && selectedEvent.created_by === myUserId && (
+                    <button 
+                      onClick={() => handleDelete(selectedEvent.schedule_id)} 
+                      style={styles.deleteButton}
+                    >
+                      🗑️ 삭제
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              // 기존 날짜별 일정 목록
+              <>
+                <div style={styles.dateSection}>
+                  <h3 style={styles.sectionTitle}>
+                    {selectedDate
+                      ? format(new Date(selectedDate), 'yyyy년 MM월 dd일')
+                      : '날짜를 선택하거나 일정을 클릭하세요'}
+                  </h3>
+                </div>
+
+                <div style={styles.eventList}>
+                  {selectedDate && getEventsForSelectedDate().length === 0 && (
+                    <div style={styles.noEventsContainer}>
+                      <p style={styles.noEvents}>이 날짜에는 일정이 없습니다.</p>
+                      {/* 🆕 일정 추가 버튼 (교사/관리자만) */}
+                      {(myRole === 'teacher' || isAdmin) && (
                         <button 
                           style={styles.addEventButton}
                           onClick={() => {
@@ -388,167 +532,192 @@ function SchedulePage() {
                             setIsModalOpen(true);
                           }}
                         >
-                          ➕ 일정 추가
+                          ➕ 이 날짜에 일정 추가
                         </button>
-                      </div>
-                    )}
-                    
-                    {getEventsForSelectedDate().map(s => (
-                      <div key={s.schedule_id} style={{
-                        ...styles.eventCard,
-                        borderLeft: `4px solid ${s.school_wide ? '#9DA7E3' : '#5ADD7D'}`
-                      }}>
-                        <div style={styles.eventHeader}>
-                          <h4 
-                            style={{...styles.eventTitle, cursor: 'pointer'}}
-                            onClick={() => setSelectedEvent(s)}
-                          >
-                            {s.title}
-                          </h4>
-                          <span style={{
-                            ...styles.eventBadge,
-                            backgroundColor: s.school_wide ? '#9DA7E3' : '#5ADD7D'
-                          }}>
-                            {s.school_wide ? '학교' : '학급'}
-                          </span>
-                        </div>
-                        
-                        {s.description && (
-                          <p style={styles.eventDescription}>{s.description}</p>
-                        )}
+                      )}
+                    </div>
+                  )}
 
-                        <p style={styles.eventDate}>
-                          {formatDateRange(s.start, s.end)}
-                        </p>
-
-                        {(myRole === 'teacher' || isAdmin) && s.created_by === myUserId && (
+                  {selectedDate && getEventsForSelectedDate().length > 0 && (
+                    <>
+                      {/* 🆕 일정이 있는 경우에도 추가 버튼 표시 */}
+                      {(myRole === 'teacher' || isAdmin) && (
+                        <div style={styles.addButtonContainer}>
                           <button 
-                            onClick={() => handleDelete(s.schedule_id)} 
-                            style={styles.deleteButton}
+                            style={styles.addEventButton}
+                            onClick={() => {
+                              setScheduleForm({
+                                title: '',
+                                description: '',
+                                startDate: selectedDate,
+                                endDate: selectedDate,
+                                schoolWide: isAdmin && schoolId
+                              });
+                              setIsModalOpen(true);
+                            }}
                           >
-                            🗑️ 삭제
+                            ➕ 일정 추가
                           </button>
-                        )}
-                      </div>
-                    ))}
-                  </>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-      </div>
+                        </div>
+                      )}
+                      
+                      {getEventsForSelectedDate().map(s => (
+                        <div key={s.schedule_id} style={{
+                          ...styles.eventCard,
+                          borderLeft: `4px solid ${s.school_wide ? '#9DA7E3' : '#5ADD7D'}`
+                        }}>
+                          <div style={styles.eventHeader}>
+                            <h4 
+                              style={{...styles.eventTitle, cursor: 'pointer'}}
+                              onClick={() => setSelectedEvent(s)}
+                            >
+                              {s.title}
+                            </h4>
+                            <span style={{
+                              ...styles.eventBadge,
+                              backgroundColor: s.school_wide ? '#9DA7E3' : '#5ADD7D'
+                            }}>
+                              {s.school_wide ? '학교' : '학급'}
+                            </span>
+                          </div>
+                          
+                          {s.description && (
+                            <p style={styles.eventDescription}>{s.description}</p>
+                          )}
 
-      {/* 일정 추가 모달 */}
-      {isModalOpen && (
-        <div style={styles.modalOverlay} onClick={() => setIsModalOpen(false)}>
-          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <div style={styles.modalHeader}>
-              <h2 style={styles.modalTitle}>일정 추가</h2>
-              <button 
-                style={styles.closeButton}
-                onClick={() => setIsModalOpen(false)}
-              >
-                ✕
-              </button>
-            </div>
+                          <p style={styles.eventDate}>
+                            {formatDateRange(s.start, s.end)}
+                          </p>
 
-            <form onSubmit={handleScheduleSubmit} style={styles.form}>
-              <div style={styles.formGroup}>
-                <label style={styles.label}>제목 *</label>
-                <input
-                  type="text"
-                  value={scheduleForm.title}
-                  onChange={(e) => setScheduleForm({...scheduleForm, title: e.target.value})}
-                  style={styles.input}
-                  placeholder="일정 제목을 입력하세요"
-                  required
-                />
-              </div>
-
-              <div style={styles.formGroup}>
-                <label style={styles.label}>설명</label>
-                <textarea
-                  value={scheduleForm.description}
-                  onChange={(e) => setScheduleForm({...scheduleForm, description: e.target.value})}
-                  style={styles.textarea}
-                  placeholder="일정 설명을 입력하세요"
-                  rows="3"
-                />
-              </div>
-
-              <div style={styles.formRow}>
-                <div style={styles.formGroup}>
-                  <label style={styles.label}>시작일 *</label>
-                  <input
-                    type="date"
-                    value={scheduleForm.startDate}
-                    onChange={(e) => setScheduleForm({...scheduleForm, startDate: e.target.value})}
-                    style={styles.input}
-                    required
-                  />
+                          {(myRole === 'teacher' || isAdmin) && s.created_by === myUserId && (
+                            <button 
+                              onClick={() => handleDelete(s.schedule_id)} 
+                              style={styles.deleteButton}
+                            >
+                              🗑️ 삭제
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </>
+                  )}
                 </div>
-
-                <div style={styles.formGroup}>
-                  <label style={styles.label}>종료일 *</label>
-                  <input
-                    type="date"
-                    value={scheduleForm.endDate}
-                    onChange={(e) => setScheduleForm({...scheduleForm, endDate: e.target.value})}
-                    style={styles.input}
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* 🆕 학교 전체 관리자가 아닌 경우에만 체크박스 표시 */}
-              {!isAdmin && (
-                <div style={styles.formGroup}>
-                  <label style={styles.checkboxLabel}>
-                    <input
-                      type="checkbox"
-                      checked={scheduleForm.schoolWide}
-                      onChange={(e) => setScheduleForm({...scheduleForm, schoolWide: e.target.checked})}
-                      style={styles.checkbox}
-                    />
-                    학교 전체 일정으로 등록
-                  </label>
-                </div>
-              )}
-
-              {/* 🆕 학교 전체 관리자인 경우 안내 메시지 */}
-              {isAdmin && schoolId && (
-                <div style={styles.adminNotice}>
-                  📢 학교 전체 일정으로 등록됩니다.
-                </div>
-              )}
-
-              <div style={styles.buttonGroup}>
-                <button 
-                  type="button" 
-                  onClick={() => setIsModalOpen(false)}
-                  style={styles.cancelButton}
-                >
-                  취소
-                </button>
-                <button 
-                  type="submit"
-                  style={styles.submitButton}
-                >
-                  등록
-                </button>
-              </div>
-            </form>
+              </>
+            )}
           </div>
         </div>
-      )}
-    </div>
+
+        {/* 일정 추가 모달 */}
+        {isModalOpen && (
+          <div style={styles.modalOverlay} onClick={() => setIsModalOpen(false)}>
+            <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+              <div style={styles.modalHeader}>
+                <h2 style={styles.modalTitle}>일정 추가</h2>
+                <button 
+                  style={styles.closeButton}
+                  onClick={() => setIsModalOpen(false)}
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={handleScheduleSubmit} style={styles.form}>
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>제목 *</label>
+                  <input
+                    type="text"
+                    value={scheduleForm.title}
+                    onChange={(e) => setScheduleForm({...scheduleForm, title: e.target.value})}
+                    style={styles.input}
+                    placeholder="일정 제목을 입력하세요"
+                    required
+                  />
+                </div>
+
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>설명</label>
+                  <textarea
+                    value={scheduleForm.description}
+                    onChange={(e) => setScheduleForm({...scheduleForm, description: e.target.value})}
+                    style={styles.textarea}
+                    placeholder="일정 설명을 입력하세요"
+                    rows="3"
+                  />
+                </div>
+
+                <div style={styles.formRow}>
+                  <div style={styles.formGroup}>
+                    <label style={styles.label}>시작일 *</label>
+                    <input
+                      type="date"
+                      value={scheduleForm.startDate}
+                      onChange={(e) => setScheduleForm({...scheduleForm, startDate: e.target.value})}
+                      style={styles.input}
+                      required
+                    />
+                  </div>
+
+                  <div style={styles.formGroup}>
+                    <label style={styles.label}>종료일 *</label>
+                    <input
+                      type="date"
+                      value={scheduleForm.endDate}
+                      onChange={(e) => setScheduleForm({...scheduleForm, endDate: e.target.value})}
+                      style={styles.input}
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* 🆕 학교 전체 관리자가 아닌 경우에만 체크박스 표시 */}
+                {!isAdmin && (
+                  <div style={styles.formGroup}>
+                    <label style={styles.checkboxLabel}>
+                      <input
+                        type="checkbox"
+                        checked={scheduleForm.schoolWide}
+                        onChange={(e) => setScheduleForm({...scheduleForm, schoolWide: e.target.checked})}
+                        style={styles.checkbox}
+                      />
+                      학교 전체 일정으로 등록
+                    </label>
+                  </div>
+                )}
+
+                {/* 🆕 학교 전체 관리자인 경우 안내 메시지 */}
+                {isAdmin && schoolId && (
+                  <div style={styles.adminNotice}>
+                    📢 학교 전체 일정으로 등록됩니다.
+                  </div>
+                )}
+
+                <div style={styles.buttonGroup}>
+                  <button 
+                    type="button" 
+                    onClick={() => setIsModalOpen(false)}
+                    style={styles.cancelButton}
+                  >
+                    취소
+                  </button>
+                  <button 
+                    type="submit"
+                    style={styles.submitButton}
+                  >
+                    등록
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
 const styles = {
   container: {
-    padding: '2rem',
+    padding: '1rem 2rem',
     width: '100%',
     maxWidth: '1400px',
     margin: '0 auto'
@@ -557,7 +726,9 @@ const styles = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: '2rem'
+    marginBottom: '2rem',
+    flexWrap: 'wrap',
+    gap: '1rem'
   },
   title: {
     fontSize: '2rem',
@@ -577,15 +748,17 @@ const styles = {
   },
   layout: {
     display: 'flex',
+    flexDirection: 'row',
     gap: '2rem',
-    height: '70vh'
+    minHeight: '70vh'
   },
   calendarSection: {
     flex: 2,
     backgroundColor: 'white',
     borderRadius: '12px',
     padding: '1.5rem',
-    boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
+    boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+    minHeight: '500px'
   },
   sidePanel: {
     flex: 1,
@@ -606,7 +779,6 @@ const styles = {
     borderRadius: '8px',
     fontSize: '1rem'
   },
-  // 🆕 이벤트 상세보기 스타일
   eventDetailSection: {
     flex: 1
   },
@@ -846,5 +1018,71 @@ const styles = {
     fontWeight: 'bold'
   }
 };
+
+// 🆕 반응형 미디어 쿼리 스타일 추가
+if (typeof window !== 'undefined') {
+  const isMobile = window.innerWidth <= 768;
+  
+  if (isMobile) {
+    Object.assign(styles, {
+      container: {
+        ...styles.container,
+        padding: '1rem'
+      },
+      header: {
+        ...styles.header,
+        marginBottom: '1rem',
+        flexDirection: 'column',
+        alignItems: 'flex-start'
+      },
+      title: {
+        ...styles.title,
+        fontSize: '1.5rem'
+      },
+      addButton: {
+        ...styles.addButton,
+        padding: '0.6rem 1rem',
+        fontSize: '0.9rem',
+        width: '100%'
+      },
+      layout: {
+        ...styles.layout,
+        flexDirection: 'column',
+        gap: '1rem'
+      },
+      calendarSection: {
+        ...styles.calendarSection,
+        padding: '1rem',
+        minHeight: '350px'
+      },
+      sidePanel: {
+        ...styles.sidePanel,
+        padding: '1rem',
+        minHeight: '300px'
+      },
+      modal: {
+        ...styles.modal,
+        padding: '1.5rem',
+        width: '95%',
+        maxWidth: '400px'
+      },
+      formRow: {
+        ...styles.formRow,
+        flexDirection: 'column',
+        gap: '0.8rem'
+      },
+      buttonGroup: {
+        ...styles.buttonGroup,
+        flexDirection: 'column-reverse',
+        gap: '0.8rem'
+      },
+      eventHeader: {
+        ...styles.eventHeader,
+        flexWrap: 'wrap',
+        gap: '0.5rem'
+      }
+    });
+  }
+}
 
 export default SchedulePage;

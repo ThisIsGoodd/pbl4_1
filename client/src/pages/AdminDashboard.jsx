@@ -250,18 +250,59 @@ function TeacherList({ teachers: initialTeachers }) {
       <table border="1" cellPadding="8" style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
           <tr>
+            <th>프로필</th>
             <th>이름</th>
             <th>이메일</th>
-            <th>생성 학급 수</th>
+            <th>담당 학급</th>
             <th>삭제</th>
           </tr>
         </thead>
         <tbody>
           {paginated.map(t => (
             <tr key={t.user_id}>
+              <td style={{ textAlign: 'center', width: '80px' }}>
+                {t.profile_picture ? (
+                  <img
+                    src={`http://localhost:3001${t.profile_picture}`}
+                    alt="프로필"
+                    style={{
+                      width: '50px',
+                      height: '50px',
+                      borderRadius: '50%',
+                      objectFit: 'cover',
+                      border: '2px solid #e0e0e0'
+                    }}
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      e.target.nextSibling.style.display = 'flex';
+                    }}
+                  />
+                ) : null}
+                <div 
+                  style={{
+                    width: '50px',
+                    height: '50px',
+                    borderRadius: '50%',
+                    backgroundColor: '#f0f0f0',
+                    display: t.profile_picture ? 'none' : 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    margin: '0 auto',
+                    border: '2px solid #e0e0e0',
+                    fontSize: '1.5rem',
+                    color: '#999'
+                  }}
+                >
+                  👤
+                </div>
+              </td>
               <td>{t.name}</td>
               <td>{t.email}</td>
-              <td>{t.classroom_count}</td>
+              <td>
+                {t.grade && t.class_number 
+                  ? `${t.grade}학년 ${t.class_number}반` 
+                  : '미배정'}
+              </td>
               <td>
                 <button onClick={() => handleDelete(t.user_id)}>삭제</button>
               </td>

@@ -1,5 +1,6 @@
+// client/src/pages/NotificationsPage.jsx
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { io } from 'socket.io-client';
 
 function NotificationPage() {
@@ -7,6 +8,10 @@ function NotificationPage() {
   const [loading, setLoading] = useState(true);
   const token = localStorage.getItem('token');
   const navigate = useNavigate();
+  
+  // 🆕 현재 URL에서 classroom_id 추출
+  const [searchParams] = useSearchParams();
+  const currentClassroomId = searchParams.get('classroom_id');
 
   // Socket.io 연결 설정
   useEffect(() => {
@@ -101,6 +106,7 @@ function NotificationPage() {
     }
   };
 
+  // 🔥 수정된 클릭 핸들러 - classroom_id 유지
   const handleClick = async (notification) => {
     // 읽음 처리
     try {
@@ -112,14 +118,18 @@ function NotificationPage() {
       console.error('읽음 처리 실패:', err);
     }
 
-    // 관련된 페이지로 이동 (classroom_id 포함)
-    const getClassroomIdFromUrl = () => {
-      const urlParams = new URLSearchParams(window.location.search);
-      return urlParams.get('classroom_id');
-    };
+    // 🆕 classroom_id 우선순위 결정
+    const classroomId = currentClassroomId || 
+                        notification.classroom_id || 
+                        getUserDefaultClassroomId();
 
-    const classroomId = getClassroomIdFromUrl();
+    console.log('🔍 알림 클릭 - classroom_id:', {
+      currentClassroomId,
+      notificationClassroomId: notification.classroom_id,
+      finalClassroomId: classroomId
+    });
     
+    // 🔥 수정: 모든 경로에 classroom_id 포함
     if (notification.type === 'comment' || notification.type === 'post') {
       const path = classroomId 
         ? `/posts/${notification.related_id}?classroom_id=${classroomId}`
@@ -135,6 +145,15 @@ function NotificationPage() {
         ? `/chat?classroom_id=${classroomId}`
         : '/chat';
       navigate(path);
+    } else if (notification.type === 'inquiry') {
+      // 문의사항은 classroom_id 불필요
+      navigate('/inquiry/form');
+    } else {
+      // 기본값: 메인 페이지로 이동
+      const path = classroomId 
+        ? `/main?classroom_id=${classroomId}`
+        : '/main';
+      navigate(path);
     }
 
     // 로컬 상태에서도 읽음 표시
@@ -145,6 +164,17 @@ function NotificationPage() {
           : n
       )
     );
+  };
+
+  // 🆕 사용자 기본 classroom_id 추출 함수
+  const getUserDefaultClassroomId = () => {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      // JWT에서 추출하거나, localStorage에서 마지막 classroom_id 가져오기
+      return localStorage.getItem('lastClassroomId') || null;
+    } catch {
+      return null;
+    }
   };
 
   // 전체 읽음 처리
@@ -305,22 +335,58 @@ function NotificationPage() {
           )}
         </h2>
         
-        {unreadCount > 0 && (
-          <button
-            onClick={handleMarkAllAsRead}
-            style={{
-              padding: '0.5rem 1rem',
-              backgroundColor: '#3b82f6',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '0.9rem'
-            }}
-          >
-            전체 읽음
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          {unreadCount > 0 && (
+            <button
+              onClick={handleMarkAllAsRead}
+              style={{
+                padding: '0.5rem 1rem',
+                backgroundColor: '#3b82f6',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '0.9rem'
+              }}
+            >
+              전체 읽음
+            </button>
+          )}
+          
+          {notifications.length > 0 && (
+            <>
+              <button
+                onClick={handleDeleteRead}
+                style={{
+                  padding: '0.5rem 1rem',
+                  backgroundColor: '#f59e0b',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '0.9rem'
+                }}
+              >
+                읽은 알림 삭제
+              </button>
+              
+              <button
+                onClick={handleDeleteAll}
+                style={{
+                  padding: '0.5rem 1rem',
+                  backgroundColor: '#ef4444',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '0.9rem'
+                }}
+              >
+                전체 삭제
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* 알림 목록 */}
@@ -446,7 +512,7 @@ function NotificationPage() {
           position: 'fixed',
           top: '20px',
           right: '20px',
-          backgroundColor: toast.type === 'success' ? '#10b981' : '#ef4444',
+          backgroundColor: toast.type === 'success' ? '#10b981' : toast.type === 'error' ? '#ef4444' : '#3b82f6',
           color: 'white',
           padding: '1rem 1.5rem',
           borderRadius: '8px',

@@ -1,3 +1,4 @@
+// client/src/pages/ClassroomCreatePage.jsx
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -6,7 +7,8 @@ function ClassroomCreatePage() {
   const [classNumber, setClassNumber] = useState('');
   const [message, setMessage] = useState('');
   const [inviteCode, setInviteCode] = useState('');
-  const [error, setError] = useState(''); // 🆕 에러 상태 추가
+  const [error, setError] = useState('');
+  const [isCreating, setIsCreating] = useState(false); // 🆕 로딩 상태
   const navigate = useNavigate();
 
   const token = localStorage.getItem('token');
@@ -31,6 +33,7 @@ function ClassroomCreatePage() {
     }
 
     setError(''); // 에러 초기화
+    setIsCreating(true); // 🆕 로딩 시작
 
     try {
       const res = await fetch('http://localhost:3001/api/classrooms', {
@@ -51,13 +54,13 @@ function ClassroomCreatePage() {
         setInviteCode(data.invite_code);
         setMessage(data.message || '학급이 생성되었습니다.');
         
-        // 🔥 수정: 서버에서 받은 classroom_id로 바로 이동
+        // 🔥 개선: classroom_id를 우선적으로 사용하고, 즉시 이동
         if (data.classroom_id) {
-          setTimeout(() => {
-            navigate(`/main?classroom_id=${data.classroom_id}`);
-          }, 2000); // 2초 후 자동 이동
+          // 🆕 성공 메시지와 함께 즉시 이동 (2초 대기 제거)
+          alert('🎉 학급이 성공적으로 생성되었습니다!');
+          navigate(`/main?classroom_id=${data.classroom_id}`);
         } else {
-          // classroom_id가 없으면 기존 방식 사용
+          // 🔥 fallback: classroom_id가 없으면 기존 방식 사용 (1초로 단축)
           setTimeout(async () => {
             try {
               const classroomRes = await fetch('http://localhost:3001/api/classrooms/my-classroom', {
@@ -74,7 +77,7 @@ function ClassroomCreatePage() {
               console.error('학급 정보 조회 실패:', err);
               navigate('/classroom/dashboard');
             }
-          }, 2000);
+          }, 1000); // 🔥 2초 → 1초로 단축
         }
       } else {
         setError(data.error || '학급 생성 실패');
@@ -82,6 +85,8 @@ function ClassroomCreatePage() {
     } catch (err) {
       console.error('🔥 학급 생성 오류:', err);
       setError('서버 오류가 발생했습니다.');
+    } finally {
+      setIsCreating(false); // 🆕 로딩 종료
     }
   };
 
@@ -98,6 +103,7 @@ function ClassroomCreatePage() {
         style={styles.input}
         min="1"
         max="6"
+        disabled={isCreating} // 🆕 로딩 중 비활성화
       />
       <br />
       <input
@@ -108,6 +114,7 @@ function ClassroomCreatePage() {
         style={styles.input}
         min="1"
         max="20"
+        disabled={isCreating} // 🆕 로딩 중 비활성화
       />
       <br />
       
@@ -118,19 +125,24 @@ function ClassroomCreatePage() {
         </p>
       )}
       
-      <button onClick={handleCreate} style={styles.createBtn}>학급 생성</button>
+      <button 
+        onClick={handleCreate} 
+        style={{
+          ...styles.createBtn,
+          backgroundColor: isCreating ? '#ccc' : '#007bff',
+          cursor: isCreating ? 'not-allowed' : 'pointer'
+        }}
+        disabled={isCreating} // 🆕 로딩 중 비활성화
+      >
+        {isCreating ? '생성 중...' : '학급 생성'} {/* 🆕 로딩 텍스트 */}
+      </button>
 
-      {message && (
+      {/* 🔥 수정: 성공 메시지 간소화 (즉시 이동하므로) */}
+      {message && !isCreating && (
         <div style={{ marginTop: '1.5rem' }}>
           <p><strong>{message}</strong></p>
           {inviteCode && (
-            <>
-              <p>초대코드: <strong style={{ fontSize: '1.2rem' }}>{inviteCode}</strong></p>
-              <p style={{ fontSize: '0.9rem', color: '#666', marginTop: '1rem' }}>
-                🎉 학급이 성공적으로 생성되었습니다!<br/>
-                잠시 후 학급 메인 페이지로 이동합니다...
-              </p>
-            </>
+            <p>초대코드: <strong style={{ fontSize: '1.2rem' }}>{inviteCode}</strong></p>
           )}
         </div>
       )}
@@ -152,11 +164,11 @@ const styles = {
   createBtn: {
     padding: '0.7rem 3rem',
     borderRadius: '30px',
-    backgroundColor: '#007bff',
     color: '#fff',
     fontWeight: 'bold',
     border: 'none',
-    cursor: 'pointer'
+    cursor: 'pointer',
+    transition: 'background-color 0.2s'
   }
 };
 

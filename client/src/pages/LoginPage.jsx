@@ -1,10 +1,29 @@
-import { useContext } from 'react';
+import { useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import GoogleLoginButton from '../components/GoogleLoginButton';
 import { AuthContext } from '../contexts/AuthContext';
 
 function LoginPage() {
   const { setUser } = useContext(AuthContext);
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth); // 🆕 윈도우 크기 추적
+
+  // 🆕 윈도우 크기 변화 감지
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowWidth(window.innerWidth);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // 🆕 윈도우 크기에 따른 로고 크기 계산
+  const getLogoSize = () => {
+    if (windowWidth > 1200) return '450px';  // 대형 화면
+    if (windowWidth > 768) return '400px';   // 데스크톱
+    if (windowWidth > 480) return '300px';   // 태블릿
+    return '250px';                          // 모바일
+  };
 
   const handleGoogleLogin = async (response) => {
     const idToken = response.credential;
@@ -54,9 +73,11 @@ function LoginPage() {
           <img 
             src="/assets/logo.png" 
             alt="CLASSFEED Logo" 
-            style={styles.logoImage}
+            style={{
+              ...styles.logoImage,
+              width: getLogoSize() // 🆕 동적 크기 적용
+            }}
           />
-          <h1 style={styles.title}>CLASSFEED</h1>
           <p style={styles.subtitle}>E-가정 통신 & 소통 플랫폼</p>
         </div>
 
@@ -107,22 +128,15 @@ const styles = {
   },
   
   logoImage: {
-    width: '120px',
-    height: '120px',
-    marginBottom: '1.5rem',
-    objectFit: 'contain'
-  },
-  
-  title: {
-    fontSize: '2.5rem',
-    fontWeight: '700',
-    color: '#2B5AA0',
-    margin: '0 0 0.5rem 0',
-    letterSpacing: '1px'
+    height: 'auto',
+    marginBottom: '2rem',
+    objectFit: 'contain',
+    maxWidth: '90vw', // 화면을 넘지 않도록 제한
+    transition: 'width 0.3s ease' // 🆕 부드러운 크기 변화
   },
   
   subtitle: {
-    fontSize: '1rem',
+    fontSize: '1.1rem',
     color: '#6c757d',
     margin: '0',
     fontWeight: '400'
@@ -131,28 +145,6 @@ const styles = {
   loginSection: {
     width: '100%',
     maxWidth: '320px'
-  },
-
-  // 반응형 미디어 쿼리는 CSS로 처리하거나 useState + useEffect로 구현
-  '@media (max-width: 768px)': {
-    loginText: {
-      top: '1rem',
-      left: '1rem',
-      fontSize: '1rem'
-    },
-    content: {
-      padding: '1rem'
-    },
-    logoImage: {
-      width: '80px',
-      height: '80px'
-    },
-    title: {
-      fontSize: '2rem'
-    },
-    subtitle: {
-      fontSize: '0.9rem'
-    }
   }
 };
 

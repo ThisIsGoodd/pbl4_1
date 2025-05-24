@@ -28,7 +28,8 @@ function JoinInvitePage() {
             role: state?.role,
             inviteCode,
             classroom_id: data.classroom.classroom_id,
-            school: data.classroom.school,
+            school: data.classroom.school_id, // school_id 전달
+            schoolName: data.classroom.school_name, // 🆕 학교명도 직접 전달
             grade: data.classroom.grade,
             classNumber: data.classroom.class_number
           }

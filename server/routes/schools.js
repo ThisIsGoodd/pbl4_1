@@ -27,7 +27,7 @@ router.post('/request', authenticateToken, async (req, res) => {
   }
 });
 
-// ✅ 초대코드 유효성 검사
+// ✅ 초대코드 유효성 검사 - school_id 포함하도록 수정
 router.post('/verify-invite', async (req, res) => {
   const { inviteCode } = req.body;
 
@@ -36,8 +36,12 @@ router.post('/verify-invite', async (req, res) => {
   }
 
   try {
+    // 🔥 수정: classrooms와 schools를 조인하여 school_id도 함께 반환
     const [rows] = await db.query(
-      'SELECT * FROM classrooms WHERE invite_code = ?',
+      `SELECT c.classroom_id, c.school_id, c.grade, c.class_number, s.name as school_name
+       FROM classrooms c
+       JOIN schools s ON c.school_id = s.school_id
+       WHERE c.invite_code = ?`,
       [inviteCode]
     );
 
@@ -50,7 +54,8 @@ router.post('/verify-invite', async (req, res) => {
       message: '유효한 초대코드입니다.',
       classroom: {
         classroom_id: classroom.classroom_id,
-        school: classroom.school,
+        school_id: classroom.school_id, // 🔥 추가: school_id 반환
+        school_name: classroom.school_name, // 🔥 추가: 학교명도 반환
         grade: classroom.grade,
         class_number: classroom.class_number
       }

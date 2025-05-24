@@ -110,6 +110,22 @@ function Navigation() {
 
     if (isSuperAdmin) return navigate('/superadmin/school-requests');
 
+    // 🆕 학교 요청을 했지만 아직 승인 대기 중인 교사
+    if (isTeacher && !user.is_admin && !isAdminCreator) {
+      try {
+        const requestRes = await fetch('http://localhost:3001/api/schools/school-requests/my', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (requestRes.ok) {
+          // 학교 요청이 있으면 pending 페이지로
+          return navigate('/school/pending');
+        }
+      } catch (e) {
+        console.warn('학교 요청 확인 실패:', e);
+      }
+    }
+
     if (isParent) {
       if (isJoinedClass) {
         return navigate(`/main?classroom_id=${classroomId}`);

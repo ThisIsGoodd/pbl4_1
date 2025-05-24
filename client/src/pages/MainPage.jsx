@@ -138,12 +138,7 @@ function MainPage() {
               <img
                 src={classPhoto}
                 alt="단체사진"
-                style={{ 
-                  width: '100%', 
-                  height: '100%', 
-                  objectFit: 'cover',
-                  borderRadius: '8px'
-                }}
+                style={styles.classPhoto} // 새로운 스타일 적용
                 onError={(e) => {
                   e.target.style.display = 'none';
                   setClassPhoto('');
@@ -168,7 +163,6 @@ function MainPage() {
                 )}
               </div>
             )}
-
             {/* 교사만 업로드 버튼 표시 */}
             {isTeacher && (
               <div style={styles.uploadButtonContainer}>
@@ -270,7 +264,14 @@ const styles = {
     flexDirection: 'column',
     position: 'relative',
     borderRadius: '8px',
-    overflow: 'hidden'
+    overflow: 'hidden', // 이미지가 박스를 벗어나지 않도록
+    minHeight: '300px' // 최소 높이 설정
+  },
+  classPhoto: {
+    width: '100%',
+    height: '100%', 
+    objectFit: 'cover', // 비율 유지하면서 박스에 맞춤
+    borderRadius: '8px'
   },
   uploadButtonContainer: {
     position: 'absolute',

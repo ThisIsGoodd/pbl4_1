@@ -59,10 +59,14 @@ router.patch('/:id/read', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: '알림을 찾을 수 없거나 권한이 없습니다.' });
     }
 
-    await db.query(
+    const [result] = await db.query(
       `UPDATE notifications SET is_read = TRUE WHERE notification_id = ?`,
       [id]
     );
+
+    if (result.affectedRows === 0) {
+      return res.status(500).json({ error: '읽음 처리에 실패했습니다.' });
+    }
 
     res.json({ message: '읽음 처리 완료' });
   } catch (err) {
@@ -86,10 +90,14 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: '해당 알림이 없거나 권한이 없습니다.' });
     }
 
-    await db.query(
+    const [result] = await db.query(
       'DELETE FROM notifications WHERE notification_id = ?',
       [id]
     );
+
+    if (result.affectedRows === 0) {
+      return res.status(500).json({ error: '알림 삭제에 실패했습니다.' });
+    }
 
     res.json({ message: '알림이 삭제되었습니다.' });
   } catch (err) {
@@ -98,19 +106,83 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// 📌 전체 읽음 처리
+// 📌 전체 읽음 처리 (개선된 버전)
 router.patch('/mark-all-read', authenticateToken, async (req, res) => {
   const { user_id } = req.user;
 
   try {
-    await db.query(
-      'UPDATE notifications SET is_read = TRUE WHERE user_id = ?',
+    const [result] = await db.query(
+      'UPDATE notifications SET is_read = TRUE WHERE user_id = ? AND is_read = FALSE',
       [user_id]
     );
 
-    res.json({ message: '전체 읽음 처리 완료' });
+    res.json({ 
+      message: '전체 읽음 처리 완료',
+      updated_count: result.affectedRows
+    });
   } catch (err) {
     console.error('🔥 전체 읽음 처리 오류:', err);
+    res.status(500).json({ error: '서버 오류' });
+  }
+});
+
+// 📌 🆕 전체 삭제 (새로 추가)
+router.delete('/delete-all', authenticateToken, async (req, res) => {
+  const { user_id } = req.user;
+
+  try {
+    const [result] = await db.query(
+      'DELETE FROM notifications WHERE user_id = ?',
+      [user_id]
+    );
+
+    res.json({ 
+      message: '모든 알림이 삭제되었습니다.',
+      deleted_count: result.affectedRows
+    });
+  } catch (err) {
+    console.error('🔥 전체 삭제 오류:', err);
+    res.status(500).json({ error: '서버 오류' });
+  }
+});
+
+// 📌 🆕 읽은 알림만 삭제 (새로 추가)
+router.delete('/delete-read', authenticateToken, async (req, res) => {
+  const { user_id } = req.user;
+
+  try {
+    const [result] = await db.query(
+      'DELETE FROM notifications WHERE user_id = ? AND is_read = TRUE',
+      [user_id]
+    );
+
+    res.json({ 
+      message: '읽은 알림이 삭제되었습니다.',
+      deleted_count: result.affectedRows
+    });
+  } catch (err) {
+    console.error('🔥 읽은 알림 삭제 오류:', err);
+    res.status(500).json({ error: '서버 오류' });
+  }
+});
+
+// 📌 🆕 알림 통계 조회 (새로 추가)
+router.get('/stats', authenticateToken, async (req, res) => {
+  const { user_id } = req.user;
+
+  try {
+    const [stats] = await db.query(`
+      SELECT 
+        COUNT(*) as total_count,
+        SUM(CASE WHEN is_read = FALSE THEN 1 ELSE 0 END) as unread_count,
+        SUM(CASE WHEN is_read = TRUE THEN 1 ELSE 0 END) as read_count
+      FROM notifications 
+      WHERE user_id = ?
+    `, [user_id]);
+
+    res.json({ stats: stats[0] });
+  } catch (err) {
+    console.error('🔥 알림 통계 조회 오류:', err);
     res.status(500).json({ error: '서버 오류' });
   }
 });

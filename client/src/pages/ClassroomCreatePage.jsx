@@ -6,14 +6,31 @@ function ClassroomCreatePage() {
   const [classNumber, setClassNumber] = useState('');
   const [message, setMessage] = useState('');
   const [inviteCode, setInviteCode] = useState('');
+  const [error, setError] = useState(''); // 🆕 에러 상태 추가
   const navigate = useNavigate();
 
   const token = localStorage.getItem('token');
 
   const handleCreate = async () => {
+    // 🔥 수정: 클라이언트 유효성 검사 추가
     if (!grade || !classNumber) {
-      return alert('학년과 반을 모두 입력해주세요.');
+      return setError('학년과 반을 모두 입력해주세요.');
     }
+
+    const gradeNum = parseInt(grade);
+    const classNum = parseInt(classNumber);
+
+    // 학년 유효성 검사 (1~6학년)
+    if (gradeNum < 1 || gradeNum > 6) {
+      return setError('학년은 1학년부터 6학년까지만 입력 가능합니다.');
+    }
+
+    // 반 번호 유효성 검사 (1~20반)
+    if (classNum < 1 || classNum > 20) {
+      return setError('반 번호는 1반부터 20반까지만 입력 가능합니다.');
+    }
+
+    setError(''); // 에러 초기화
 
     try {
       const res = await fetch('http://localhost:3001/api/classrooms', {
@@ -23,8 +40,8 @@ function ClassroomCreatePage() {
           Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({
-          grade: parseInt(grade),
-          class_number: parseInt(classNumber)
+          grade: gradeNum,
+          class_number: classNum
         })
       });
 
@@ -33,12 +50,38 @@ function ClassroomCreatePage() {
       if (res.ok) {
         setInviteCode(data.invite_code);
         setMessage(data.message || '학급이 생성되었습니다.');
+        
+        // 🔥 수정: 서버에서 받은 classroom_id로 바로 이동
+        if (data.classroom_id) {
+          setTimeout(() => {
+            navigate(`/main?classroom_id=${data.classroom_id}`);
+          }, 2000); // 2초 후 자동 이동
+        } else {
+          // classroom_id가 없으면 기존 방식 사용
+          setTimeout(async () => {
+            try {
+              const classroomRes = await fetch('http://localhost:3001/api/classrooms/my-classroom', {
+                headers: { Authorization: `Bearer ${token}` }
+              });
+              
+              if (classroomRes.ok) {
+                const classroomData = await classroomRes.json();
+                navigate(`/main?classroom_id=${classroomData.classroom.classroom_id}`);
+              } else {
+                navigate('/classroom/dashboard');
+              }
+            } catch (err) {
+              console.error('학급 정보 조회 실패:', err);
+              navigate('/classroom/dashboard');
+            }
+          }, 2000);
+        }
       } else {
-        alert(data.error || '학급 생성 실패');
+        setError(data.error || '학급 생성 실패');
       }
     } catch (err) {
       console.error('🔥 학급 생성 오류:', err);
-      alert('서버 오류');
+      setError('서버 오류가 발생했습니다.');
     }
   };
 
@@ -49,29 +92,46 @@ function ClassroomCreatePage() {
 
       <input
         type="number"
-        placeholder="학년"
+        placeholder="학년 (1-6)"
         value={grade}
         onChange={(e) => setGrade(e.target.value)}
         style={styles.input}
+        min="1"
+        max="6"
       />
       <br />
       <input
         type="number"
-        placeholder="반 번호"
+        placeholder="반 번호 (1-20)"
         value={classNumber}
         onChange={(e) => setClassNumber(e.target.value)}
         style={styles.input}
+        min="1"
+        max="20"
       />
       <br />
+      
+      {/* 🆕 에러 메시지 표시 */}
+      {error && (
+        <p style={{ color: 'red', marginBottom: '1rem', fontSize: '0.9rem' }}>
+          ⚠️ {error}
+        </p>
+      )}
+      
       <button onClick={handleCreate} style={styles.createBtn}>학급 생성</button>
 
       {message && (
         <div style={{ marginTop: '1.5rem' }}>
           <p><strong>{message}</strong></p>
           {inviteCode && (
-            <p>초대코드: <strong style={{ fontSize: '1.2rem' }}>{inviteCode}</strong></p>
+            <>
+              <p>초대코드: <strong style={{ fontSize: '1.2rem' }}>{inviteCode}</strong></p>
+              <p style={{ fontSize: '0.9rem', color: '#666', marginTop: '1rem' }}>
+                🎉 학급이 성공적으로 생성되었습니다!<br/>
+                잠시 후 학급 메인 페이지로 이동합니다...
+              </p>
+            </>
           )}
-          <button onClick={() => navigate('/classroom')} style={styles.continueBtn}>학급 관리로 이동</button>
         </div>
       )}
     </div>
@@ -95,14 +155,6 @@ const styles = {
     backgroundColor: '#007bff',
     color: '#fff',
     fontWeight: 'bold',
-    border: 'none',
-    cursor: 'pointer'
-  },
-  continueBtn: {
-    marginTop: '1rem',
-    padding: '0.5rem 2rem',
-    borderRadius: '20px',
-    backgroundColor: '#ccc',
     border: 'none',
     cursor: 'pointer'
   }

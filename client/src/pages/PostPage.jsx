@@ -140,15 +140,6 @@ function PostPage() {
 
       <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
         <div>
-          <label>카테고리: </label>
-          <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
-            <option value="전체">전체</option>
-            <option value="공지">공지</option>
-            <option value="자유">자유</option>
-            <option value="질문">질문</option>
-          </select>
-        </div>
-        <div>
           <label>정렬: </label>
           <select value={sortOption} onChange={(e) => setSortOption(e.target.value)}>
             <option value="latest">최신순</option>

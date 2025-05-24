@@ -2,13 +2,19 @@ import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 function JoinInfoPage() {
-  const { state } = useLocation(); // role, inviteCode, classroom_id, school (== school_id), grade, classNumber
+  const { state } = useLocation(); // role, inviteCode, classroom_id, school (== school_id), schoolName, grade, classNumber
   const navigate = useNavigate();
-  const [schoolName, setSchoolName] = useState('');
+  const [schoolName, setSchoolName] = useState(state?.schoolName || ''); // 🔥 수정: state에서 바로 사용
 
-  // ✅ 학교 이름 불러오기
+  // ✅ 학교 이름 불러오기 - schoolName이 이미 있으면 API 호출 생략
   useEffect(() => {
     const fetchSchoolName = async () => {
+      // 🔥 수정: 이미 schoolName이 있으면 API 호출하지 않음
+      if (state?.schoolName) {
+        setSchoolName(state.schoolName);
+        return;
+      }
+
       if (!state?.school) return;
 
       try {
@@ -30,7 +36,7 @@ function JoinInfoPage() {
     };
 
     fetchSchoolName();
-  }, [state?.school]);
+  }, [state?.school, state?.schoolName]);
 
   // ✅ 학급 연결 API 호출 및 메인 페이지 이동
   const handleSubmit = async () => {

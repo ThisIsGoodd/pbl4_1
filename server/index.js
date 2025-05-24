@@ -51,7 +51,10 @@ const notificationSettingsRoutes = require('./routes/notificationSettings');
 const chatRoutes = require('./routes/chat');
 const superAdminRoutes = require('./routes/superAdmin');
 const inquiryRoutes = require('./routes/inquiries');
-const { createNotification } = require('./utils/notify');
+const { createNotification, setSocketIO } = require('./utils/notify');
+
+// ✅ Socket.io 인스턴스를 notify 유틸에 전달
+setSocketIO(io);
 
 // ✅ 라우터 등록 (원래대로 복원)
 app.use('/api/auth', authRoutes);
@@ -73,11 +76,18 @@ app.get('/', (req, res) => {
   res.send('✅ 백엔드 서버가 잘 동작합니다!');
 });
 
-// ✅ socket.io 이벤트 처리 (메시지 저장 기능 추가)
+// ✅ socket.io 이벤트 처리 (메시지 저장 기능 + 알림 room 참가 추가)
 io.on('connection', (socket) => {
   console.log('✅ 사용자 연결됨:', socket.id);
 
-  // 방 참가
+  // 🆕 알림 room 참가
+  socket.on('joinNotificationRoom', (userId) => {
+    const roomName = `user_${userId}`;
+    socket.join(roomName);
+    console.log(`🔔 사용자 ${userId}가 알림 room ${roomName}에 참가`);
+  });
+
+  // 채팅 방 참가
   socket.on('joinRoom', (roomId) => {
     socket.join(`room_${roomId}`);
     console.log(`👉 ${socket.id}가 room_${roomId}에 참가`);

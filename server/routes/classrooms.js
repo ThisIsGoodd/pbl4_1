@@ -88,13 +88,26 @@ router.post('/', authenticateToken, checkAdmin, async (req, res) => {
     return res.status(400).json({ error: '학년, 반, 학교 정보가 필요합니다.' });
   }
 
+  // 🔥 추가: 서버에서도 유효성 검사
+  if (grade < 1 || grade > 6) {
+    return res.status(400).json({ error: '학년은 1학년부터 6학년까지만 가능합니다.' });
+  }
+  
+  if (class_number < 1 || class_number > 20) {
+    return res.status(400).json({ error: '반 번호는 1반부터 20반까지만 가능합니다.' });
+  }
+
   try {
     const [existingClassroom] = await db.query(
       'SELECT * FROM classrooms WHERE grade = ? AND class_number = ? AND school_id = ?',
       [grade, class_number, school_id]
     );
     if (existingClassroom.length > 0) {
-      return res.json({ message: '이미 존재하는 학급입니다.', invite_code: existingClassroom[0].invite_code });
+      return res.json({ 
+        message: '이미 존재하는 학급입니다.', 
+        invite_code: existingClassroom[0].invite_code,
+        classroom_id: existingClassroom[0].classroom_id // 🔥 추가: classroom_id 반환
+      });
     }
 
     const invite_code = Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -125,11 +138,16 @@ router.post('/', authenticateToken, checkAdmin, async (req, res) => {
       return res.status(200).json({
         message: '학급은 생성되었으나 채팅방 설정 중 오류가 발생했습니다.',
         invite_code,
+        classroom_id, // 🔥 추가: classroom_id 반환
         partial_error: true
       });
     }
 
-    res.json({ message: '학급 생성 완료', invite_code });
+    res.json({ 
+      message: '학급 생성 완료', 
+      invite_code,
+      classroom_id // 🔥 추가: classroom_id 반환
+    });
   } catch (err) {
     console.error('🔥 학급 생성 오류:', err);
     res.status(500).json({ error: '서버 오류', details: err.message });

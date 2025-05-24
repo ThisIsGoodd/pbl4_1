@@ -140,7 +140,7 @@ function PostWritePage() {
   return (
     <div style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
       <h1 style={{ marginBottom: '2rem', fontSize: '2rem', fontWeight: 'bold' }}>
-        {isAdmin && schoolId && !classroomId ? '학교 전체 공지 작성' : '게시글 작성'}
+        {isAdmin && schoolId && !classroomId ? '학교 전체 공지 작성' : '공지사항 작성'}
       </h1>
 
       {/* 🆕 학교 전체 관리자인 경우 학교 정보 표시 */}

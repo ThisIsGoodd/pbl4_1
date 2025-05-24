@@ -34,7 +34,7 @@ router.post('/upload-image', authenticateToken, upload.single('image'), async (r
   }
 });
 
-// ✅ 게시글 작성 - 학교 전체 관리자 지원 및 학교 전체 공지 알림 수정
+// 게시글 작성 부분만 수정 (posts.js에서 해당 부분)
 router.post('/', authenticateToken, upload.array('files', 10), async (req, res) => {
   const { classroom_id, school_wide, title, content } = req.body;
   const { user_id, role, is_admin, school_id: userSchoolId } = req.user;
@@ -79,12 +79,12 @@ router.post('/', authenticateToken, upload.array('files', 10), async (req, res) 
       finalSchoolWide = school_wide === 'true';
     }
 
-    // 게시글 저장
+    // 게시글 저장 (category 제거)
     const [result] = await db.query(
       `INSERT INTO posts 
-        (author_id, title, content, category, created_at, views, classroom_id, school_wide, likes) 
-        VALUES (?, ?, ?, ?, NOW(), 0, ?, ?, 0)`,
-      [user_id, title, content, '공지사항', targetClassroomId, finalSchoolWide]
+        (author_id, title, content, created_at, views, classroom_id, school_wide, likes) 
+        VALUES (?, ?, ?, NOW(), 0, ?, ?, 0)`,
+      [user_id, title, content, targetClassroomId, finalSchoolWide]
     );
 
     const postId = result.insertId;

@@ -8,8 +8,20 @@ function AdminMainPage() {
   const [schoolPosts, setSchoolPosts] = useState([]);
   const [schoolSchedules, setSchoolSchedules] = useState([]);
   const [todayEvents, setTodayEvents] = useState([]);
+  const [schoolName, setSchoolName] = useState('');
   const [loading, setLoading] = useState(true);
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const token = localStorage.getItem('token');
+
+  // 반응형 처리
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const isMobile = windowWidth <= 768;
+  const isTablet = windowWidth > 768 && windowWidth <= 1024;
 
   useEffect(() => {
     if (!user || !token || !user.school_id) return;
@@ -19,7 +31,18 @@ function AdminMainPage() {
 
   const fetchSchoolData = async () => {
     try {
-      // 🏫 학급 목록 조회 (단체사진 포함)
+      // 학교 이름 가져오기
+      if (user.school_id) {
+        const schoolRes = await fetch(`http://localhost:3001/api/schools/${user.school_id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (schoolRes.ok) {
+          const schoolData = await schoolRes.json();
+          setSchoolName(schoolData.name || '학교');
+        }
+      }
+
+      // 학급 목록 조회
       const classroomsRes = await fetch(`http://localhost:3001/api/admin/classrooms?school_id=${user.school_id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -28,7 +51,7 @@ function AdminMainPage() {
         setSchoolClassrooms(classroomsData.classrooms || []);
       }
 
-      // 📌 학교 전체 공지사항 조회 
+      // 학교 전체 공지사항 조회 
       const postsRes = await fetch(`http://localhost:3001/api/posts/admin`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -37,7 +60,7 @@ function AdminMainPage() {
         setSchoolPosts(postsData.posts || []);
       }
 
-      // 📅 학교 전체 일정 조회
+      // 학교 전체 일정 조회
       const schedulesRes = await fetch(`http://localhost:3001/api/schedules/admin`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -60,8 +83,9 @@ function AdminMainPage() {
 
   if (loading) {
     return (
-      <div style={{ padding: '2rem', textAlign: 'center' }}>
-        <p>⏳ 학교 데이터를 불러오는 중...</p>
+      <div style={styles.loadingContainer}>
+        <div style={styles.spinner}></div>
+        <p style={styles.loadingText}>학교 데이터를 불러오는 중...</p>
       </div>
     );
   }
@@ -69,16 +93,19 @@ function AdminMainPage() {
   if (!user) return null;
 
   return (
-    <div style={styles.container}>
+    <div style={{
+      ...styles.container,
+      padding: isMobile ? '1rem' : '2rem'
+    }}>
       <h2 style={styles.title}>
-        🏫 {user.school_name || '학교'} 관리자 메인
+        🏫 {schoolName}
       </h2>
 
       <div style={styles.layout}>
         {/* 🖼️ 왼쪽: 학급별 단체사진 갤러리 */}
         <div style={styles.leftSection}>
           <div style={styles.photoGallery}>
-            <h3 style={styles.sectionTitle}>📸 학급별 단체사진</h3>
+            <h3 style={styles.sectionTitle}>📸 학급별 사진</h3>
             {schoolClassrooms.length === 0 ? (
               <div style={styles.emptyMessage}>
                 <p>등록된 학급이 없습니다.</p>
@@ -145,7 +172,7 @@ function AdminMainPage() {
               </ul>
             )}
             <div style={{ marginTop: '1rem' }}>
-              <Link to="/posts/write" style={styles.writeButton}>
+              <Link to={`/posts/write?school_id=${user.school_id}`} style={styles.writeButton}>
                 ✏️ 학교 공지 작성
               </Link>
             </div>
@@ -230,10 +257,34 @@ function AdminMainPage() {
 
 const styles = {
   container: {
-    padding: '2rem',
-    width: '100%',
-    backgroundColor: '#f8f9fa'
+    minHeight: '100vh',
+    backgroundColor: '#f8fafc',
+    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
   },
+  
+  loadingContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: '100vh',
+    gap: '1rem'
+  },
+  
+  spinner: {
+    width: '40px',
+    height: '40px',
+    border: '3px solid #f1f5f9',
+    borderTop: '3px solid #3b82f6',
+    borderRadius: '50%',
+    animation: 'spin 1s linear infinite'
+  },
+  
+  loadingText: {
+    color: '#64748b',
+    fontSize: '1rem'
+  },
+
   title: {
     fontSize: '2rem',
     fontWeight: 'bold',

@@ -32,7 +32,7 @@ router.post('/auth/verify-admin', authenticateToken, async (req, res) => {
   }
 });
 
-// ✅ 관리자용: 교사 목록 조회
+// ✅ 관리자용: 교사 목록 조회 - 프로필 사진과 담당 학급 정보 포함
 router.get('/teachers', authenticateToken, async (req, res) => {
   const user_id = req.user.user_id;
   const { school_id } = req.query;
@@ -48,16 +48,16 @@ router.get('/teachers', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: '해당 학교의 생성자만 교사 목록을 조회할 수 있습니다.' });
     }
 
-    // 2. 교사 목록 조회
+    // 2. 교사 목록 조회 - 프로필 사진과 담당 학급 정보 포함
     const [rows] = await db.query(`
       SELECT 
-        u.user_id, u.name, u.email, u.created_at,
-        COUNT(c.classroom_id) AS classroom_count
+        u.user_id, u.name, u.email, u.created_at, u.profile_picture,
+        c.grade, c.class_number
       FROM user_schools us
       JOIN users u ON us.user_id = u.user_id
       LEFT JOIN classrooms c ON u.user_id = c.teacher_id
       WHERE us.school_id = ? AND us.role = 'teacher'
-      GROUP BY u.user_id
+      ORDER BY u.name
     `, [school_id]);
 
     res.json({ teachers: rows });
@@ -67,7 +67,7 @@ router.get('/teachers', authenticateToken, async (req, res) => {
   }
 });
 
-// ✅ 관리자용: 학급 목록 조회 - class_photo 추가
+// ✅ 관리자용: 학급 목록 조회 - 학부모 수 정확히 계산
 router.get('/classrooms', authenticateToken, async (req, res) => {
   const user_id = req.user.user_id;
   const { school_id } = req.query;
@@ -83,17 +83,18 @@ router.get('/classrooms', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: '해당 학교의 생성자만 학급 목록을 조회할 수 있습니다.' });
     }
 
-    // 2. 학급 목록 조회 - 🆕 class_photo 추가
+    // 2. 학급 목록 조회 - 🆕 학부모만 카운트하도록 수정
     const [rows] = await db.query(`
       SELECT 
         c.classroom_id, c.grade, c.class_number, c.class_photo,
         s.name as school,
         u.name as teacher_name,
-        COUNT(uc.user_id) as parent_count
+        COUNT(CASE WHEN users.role = 'parent' THEN uc.user_id END) as parent_count
       FROM classrooms c
       JOIN schools s ON c.school_id = s.school_id
       LEFT JOIN users u ON c.teacher_id = u.user_id
       LEFT JOIN user_classrooms uc ON c.classroom_id = uc.classroom_id
+      LEFT JOIN users ON uc.user_id = users.user_id
       WHERE c.school_id = ?
       GROUP BY c.classroom_id
       ORDER BY c.grade, c.class_number

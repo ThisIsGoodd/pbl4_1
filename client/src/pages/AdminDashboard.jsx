@@ -10,40 +10,96 @@ function AdminDashboard() {
   const [classrooms, setClassrooms] = useState([]);
   const [inviteCode, setInviteCode] = useState('');
   const [isCreator, setIsCreator] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const token = localStorage.getItem('token');
 
-  const parseJwt = (token) => {
-    try {
-      return JSON.parse(atob(token.split('.')[1]));
-    } catch {
-      return null;
-    }
-  };
+  // ✅ JWT 대신 API로 최신 사용자 정보 가져오기
+  const [userInfo, setUserInfo] = useState(null);
 
-  const payload = parseJwt(token);
-  const isAdmin = payload?.is_admin === true || payload?.is_admin === 1;
-  const schoolId = payload?.school_id;
-  const userId = payload?.user_id;
+  useEffect(() => {
+    const fetchUserInfo = async () => {
+      try {
+        const res = await fetch('http://localhost:3001/api/users/profile', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (res.ok && data.user) {
+          setUserInfo(data.user);
+          console.log('🔍 [AdminDashboard] 최신 사용자 정보:', data.user);
+        }
+      } catch (err) {
+        console.error('🔥 [AdminDashboard] 사용자 정보 조회 실패:', err);
+      }
+    };
+
+    if (token) {
+      fetchUserInfo();
+    }
+  }, [token]);
+
+  const isAdmin = userInfo?.is_admin === true || userInfo?.is_admin === 1;
+  const schoolId = userInfo?.school_id;
+  const userId = userInfo?.user_id;
+
+  console.log('🔍 [AdminDashboard] 디버깅 정보:', {
+    isAdmin,
+    schoolId,
+    userId,
+    userInfo
+  });
 
   // ✅ 학교 생성자인지 확인
   useEffect(() => {
-    if (!isAdmin || !schoolId || !userId) return;
+    const checkCreator = async () => {
+      if (!isAdmin || !schoolId || !userId || !userInfo) {
+        console.log('❌ [AdminDashboard] 기본 조건 미충족:', { isAdmin, schoolId, userId, userInfo: !!userInfo });
+        setLoading(false);
+        return;
+      }
 
-    fetch(`http://localhost:3001/api/schools/${schoolId}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(res => res.json())
-      .then(data => {
+      try {
+        console.log('🔍 [AdminDashboard] 학교 정보 조회 중...', schoolId);
+        
+        const res = await fetch(`http://localhost:3001/api/schools/${schoolId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        if (!res.ok) {
+          console.error('❌ [AdminDashboard] 학교 정보 조회 실패:', res.status);
+          setLoading(false);
+          return;
+        }
+
+        const data = await res.json();
+        console.log('📦 [AdminDashboard] 학교 데이터:', data);
+        console.log('🔍 [AdminDashboard] created_by 비교:', {
+          created_by: data.created_by,
+          userId: userId,
+          isEqual: data.created_by === userId
+        });
+
         if (data.created_by === userId) {
           setIsCreator(true);
+          console.log('✅ [AdminDashboard] 학교 생성자 확인됨');
+        } else {
+          console.log('❌ [AdminDashboard] 학교 생성자 아님');
         }
-      });
-  }, [schoolId, isAdmin, userId]);
+      } catch (err) {
+        console.error('🔥 [AdminDashboard] 학교 정보 조회 오류:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkCreator();
+  }, [schoolId, isAdmin, userId, token, userInfo]);
 
   // ✅ 데이터 조회
   useEffect(() => {
-    if (!isAdmin || !isCreator || !schoolId) return;
+    if (!isAdmin || !isCreator || !schoolId || loading) return;
+
+    console.log('📡 [AdminDashboard] 데이터 조회 시작:', selected);
 
     if (selected === 'teachers' || selected === 'classrooms') {
       const endpoint =
@@ -61,6 +117,9 @@ function AdminDashboard() {
           } else {
             setClassrooms(data.classrooms || []);
           }
+        })
+        .catch(err => {
+          console.error('🔥 [AdminDashboard] 데이터 조회 오류:', err);
         });
     }
 
@@ -71,12 +130,37 @@ function AdminDashboard() {
         .then(res => res.json())
         .then(data => {
           setInviteCode(data.invite_code || '');
+        })
+        .catch(err => {
+          console.error('🔥 [AdminDashboard] 인증코드 조회 오류:', err);
         });
     }
-  }, [selected, token, isAdmin, isCreator, schoolId]);
+  }, [selected, token, isAdmin, isCreator, schoolId, loading]);
+
+  if (loading) {
+    return (
+      <div style={{ padding: '2rem', textAlign: 'center' }}>
+        <p>⏳ 권한 확인 중...</p>
+      </div>
+    );
+  }
 
   if (!isAdmin || !isCreator) {
-    return <p style={{ padding: '2rem', color: 'red' }}>⛔ 전체 관리자만 접근할 수 있습니다.</p>;
+    return (
+      <div style={{ padding: '2rem', color: 'red' }}>
+        <h2>⛔ 접근 권한 없음</h2>
+        <p>전체 관리자(학교 생성자)만 접근할 수 있습니다.</p>
+        <div style={{ marginTop: '1rem', fontSize: '0.9rem', color: '#666' }}>
+          <p>디버깅 정보:</p>
+          <ul>
+            <li>관리자 여부: {isAdmin ? '✅' : '❌'}</li>
+            <li>학교 생성자 여부: {isCreator ? '✅' : '❌'}</li>
+            <li>사용자 ID: {userId}</li>
+            <li>학교 ID: {schoolId}</li>
+          </ul>
+        </div>
+      </div>
+    );
   }
 
   const handleTabClick = (tab) => {

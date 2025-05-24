@@ -1,11 +1,36 @@
+// server/routes/classrooms.js - 스키마 수정 버전
+
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const crypto = require('crypto');
 const authenticateToken = require('../authMiddleware');
 const checkAdmin = require('../checkAdmin');
+const multer = require('multer');
+const path = require('path');
 
-// ✅ 학급 생성
+// ✅ 단체사진 업로드를 위한 multer 설정
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, 'uploads/'),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const timestamp = Date.now();
+    cb(null, `class_photo_${timestamp}${ext}`);
+  }
+});
+const upload = multer({ 
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB 제한
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('이미지 파일만 업로드 가능합니다.'));
+    }
+  }
+});
+
+// ✅ 학급 생성 - school_id 사용하도록 수정
 router.post('/', authenticateToken, checkAdmin, async (req, res) => {
   const { grade, class_number } = req.body;
   const teacher_id = req.user.user_id;
@@ -17,7 +42,7 @@ router.post('/', authenticateToken, checkAdmin, async (req, res) => {
 
   try {
     const [existingClassroom] = await db.query(
-      'SELECT * FROM classrooms WHERE grade = ? AND class_number = ? AND school = ?',
+      'SELECT * FROM classrooms WHERE grade = ? AND class_number = ? AND school_id = ?',
       [grade, class_number, school_id]
     );
     if (existingClassroom.length > 0) {
@@ -26,7 +51,7 @@ router.post('/', authenticateToken, checkAdmin, async (req, res) => {
 
     const invite_code = Math.random().toString(36).substring(2, 8).toUpperCase();
     const [result] = await db.query(
-      'INSERT INTO classrooms (grade, class_number, invite_code, school, teacher_id, created_at) VALUES (?, ?, ?, ?, ?, NOW())',
+      'INSERT INTO classrooms (grade, class_number, invite_code, school_id, teacher_id, created_at) VALUES (?, ?, ?, ?, ?, NOW())',
       [grade, class_number, invite_code, school_id, teacher_id]
     );
     const classroom_id = result.insertId;
@@ -63,44 +88,7 @@ router.post('/', authenticateToken, checkAdmin, async (req, res) => {
   }
 });
 
-// ✅ 내가 생성한 학급 목록 조회
-router.get('/my-classrooms', authenticateToken, async (req, res) => {
-  const teacher_id = req.user.user_id;
-  try {
-    const [classrooms] = await db.query(
-      'SELECT * FROM classrooms WHERE teacher_id = ?',
-      [teacher_id]
-    );
-    res.json({ classrooms });
-  } catch (err) {
-    console.error('🔥 학급 조회 오류:', err);
-    res.status(500).json({ error: '서버 오류', details: err.message });
-  }
-});
-
-// ✅ 학급 삭제
-router.delete('/:id', authenticateToken, async (req, res) => {
-  const { id } = req.params;
-  const teacher_id = req.user.user_id;
-  try {
-    const [classroom] = await db.query(
-      'SELECT * FROM classrooms WHERE classroom_id = ? AND teacher_id = ?',
-      [id, teacher_id]
-    );
-    if (classroom.length === 0) return res.status(403).json({ error: '권한이 없습니다.' });
-
-    await db.query('DELETE FROM posts WHERE classroom_id = ?', [id]);
-    await db.query('DELETE FROM user_classrooms WHERE classroom_id = ?', [id]);
-    await db.query('DELETE FROM classrooms WHERE classroom_id = ?', [id]);
-
-    res.json({ message: '학급 삭제 완료' });
-  } catch (err) {
-    console.error('🔥 학급 삭제 오류:', err);
-    res.status(500).json({ error: '서버 오류', details: err.message });
-  }
-});
-
-// ✅ 학급 가입
+// ✅ 학급 가입 - 채팅방 참가 로직 개선
 router.post('/join-classroom', authenticateToken, async (req, res) => {
   const { invite_code } = req.body;
   const user_id = req.user.user_id;
@@ -123,39 +111,138 @@ router.post('/join-classroom', authenticateToken, async (req, res) => {
     );
     if (exists.length > 0) return res.status(400).json({ error: '이미 학급에 가입되어 있습니다.' });
 
+    // 1. 학급 가입
     await db.query(
       'INSERT INTO user_classrooms (user_id, classroom_id) VALUES (?, ?)',
       [user_id, classroom_id]
     );
 
+    // 2. 기존 그룹 채팅방 찾기
+    const [groupRoomRows] = await db.query(
+      'SELECT room_id FROM chat_rooms WHERE classroom_id = ? AND room_type = ?',
+      [classroom_id, 'group']
+    );
+
+    let groupRoomId = null;
+
+    if (groupRoomRows.length > 0) {
+      // 기존 그룹 채팅방에 참가
+      groupRoomId = groupRoomRows[0].room_id;
+      
+      // 이미 참가했는지 확인
+      const [participantExists] = await db.query(
+        'SELECT * FROM chat_participants WHERE room_id = ? AND user_id = ?',
+        [groupRoomId, user_id]
+      );
+
+      if (participantExists.length === 0) {
+        await db.query(
+          'INSERT INTO chat_participants (room_id, user_id) VALUES (?, ?)',
+          [groupRoomId, user_id]
+        );
+        console.log('✅ 기존 그룹 채팅방에 사용자 추가:', { groupRoomId, user_id });
+      }
+    } else {
+      // 그룹 채팅방이 없으면 새로 생성
+      const [newGroupRoom] = await db.query(
+        'INSERT INTO chat_rooms (room_type, classroom_id) VALUES (?, ?)',
+        ['group', classroom_id]
+      );
+      groupRoomId = newGroupRoom.insertId;
+
+      // 교사와 새 사용자 모두 추가
+      await db.query(
+        'INSERT INTO chat_participants (room_id, user_id) VALUES (?, ?), (?, ?)',
+        [groupRoomId, teacher_id, groupRoomId, user_id]
+      );
+      console.log('✅ 새 그룹 채팅방 생성 및 참가자 추가:', { groupRoomId, teacher_id, user_id });
+    }
+
+    // 3. 교사와의 1:1 채팅방 생성
     const [roomResult] = await db.query(
       'INSERT INTO chat_rooms (room_type) VALUES (?)',
       ['private']
     );
-    const room_id = roomResult.insertId;
+    const privateRoomId = roomResult.insertId;
 
     await db.query(
       'INSERT INTO chat_participants (room_id, user_id) VALUES (?, ?), (?, ?)',
-      [room_id, teacher_id, room_id, user_id]
+      [privateRoomId, teacher_id, privateRoomId, user_id]
     );
 
-    res.json({ message: '학급 가입 성공', classroom_id });
+    console.log('✅ 1:1 채팅방 생성:', { privateRoomId, teacher_id, user_id });
+
+    res.json({ 
+      message: '학급 가입 성공', 
+      classroom_id,
+      groupRoomId,
+      privateRoomId 
+    });
   } catch (err) {
     console.error('🔥 학급 가입 오류:', err);
     res.status(500).json({ error: '서버 오류', details: err.message });
   }
 });
 
-// ✅ 내가 생성한 학급 1개 반환
+// ✅ 학급 정보 조회 (학교 이름 포함) - 수정
+router.get('/:id', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const [rows] = await db.query(`
+      SELECT c.classroom_id, c.grade, c.class_number, c.invite_code, c.teacher_id, c.created_at, c.class_photo,
+             s.name AS school
+      FROM classrooms c
+      JOIN schools s ON c.school_id = s.school_id
+      WHERE c.classroom_id = ?
+    `, [id]);
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: '학급을 찾을 수 없습니다.' });
+    }
+
+    res.json(rows[0]); // 여기서 school = 학교 이름으로 반환됨
+  } catch (err) {
+    console.error('🔥 학급 조회 오류:', err);
+    res.status(500).json({ error: '서버 오류' });
+  }
+});
+
+// ✅ 내가 생성한 학급 목록 조회
+router.get('/my-classrooms', authenticateToken, async (req, res) => {
+  const teacher_id = req.user.user_id;
+  try {
+    const [classrooms] = await db.query(
+      'SELECT * FROM classrooms WHERE teacher_id = ?',
+      [teacher_id]
+    );
+    res.json({ classrooms });
+  } catch (err) {
+    console.error('🔥 학급 조회 오류:', err);
+    res.status(500).json({ error: '서버 오류', details: err.message });
+  }
+});
+
+// ✅ 내가 생성한 학급 1개 반환 (수정된 버전)
 router.get('/my-classroom', authenticateToken, async (req, res) => {
   const teacher_id = req.user.user_id;
+  
+  console.log('🔍 [my-classroom] 요청자 ID:', teacher_id);
+  
   try {
     const [rows] = await db.query(
       'SELECT * FROM classrooms WHERE teacher_id = ? LIMIT 1',
       [teacher_id]
     );
-    if (rows.length === 0) return res.status(404).json({ error: '생성한 학급이 없습니다.' });
+    
+    console.log('🔍 [my-classroom] 조회 결과:', rows);
+    
+    if (rows.length === 0) {
+      console.log('❌ [my-classroom] 생성한 학급이 없음');
+      return res.status(404).json({ error: '생성한 학급이 없습니다.' });
+    }
 
+    console.log('✅ [my-classroom] 학급 반환:', rows[0]);
     res.json({ classroom: rows[0] });
   } catch (err) {
     console.error('🔥 my-classroom 오류:', err);
@@ -212,29 +299,70 @@ router.patch('/:id/invite-code', authenticateToken, async (req, res) => {
   }
 });
 
-// ✅ 학급 정보 조회 (학교 이름 포함)
-router.get('/:id', authenticateToken, async (req, res) => {
+// ✅ 학급 삭제
+router.delete('/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
-
+  const teacher_id = req.user.user_id;
   try {
-    const [rows] = await db.query(`
-      SELECT c.classroom_id, c.grade, c.class_number, c.invite_code, c.teacher_id, c.created_at,
-             s.name AS school
-      FROM classrooms c
-      JOIN schools s ON c.school = s.school_id
-      WHERE c.classroom_id = ?
-    `, [id]);
+    const [classroom] = await db.query(
+      'SELECT * FROM classrooms WHERE classroom_id = ? AND teacher_id = ?',
+      [id, teacher_id]
+    );
+    if (classroom.length === 0) return res.status(403).json({ error: '권한이 없습니다.' });
 
-    if (rows.length === 0) {
-      return res.status(404).json({ error: '학급을 찾을 수 없습니다.' });
-    }
+    await db.query('DELETE FROM posts WHERE classroom_id = ?', [id]);
+    await db.query('DELETE FROM user_classrooms WHERE classroom_id = ?', [id]);
+    await db.query('DELETE FROM classrooms WHERE classroom_id = ?', [id]);
 
-    res.json(rows[0]); // 여기서 school = 학교 이름으로 반환됨
+    res.json({ message: '학급 삭제 완료' });
   } catch (err) {
-    console.error('🔥 학급 조회 오류:', err);
-    res.status(500).json({ error: '서버 오류' });
+    console.error('🔥 학급 삭제 오류:', err);
+    res.status(500).json({ error: '서버 오류', details: err.message });
   }
 });
 
+// ✅ 단체사진 업로드
+router.post('/:id/photo', authenticateToken, upload.single('class_photo'), async (req, res) => {
+  const classroom_id = req.params.id;
+  const teacher_id = req.user.user_id;
+
+  if (!req.file) {
+    return res.status(400).json({ error: '사진 파일이 필요합니다.' });
+  }
+
+  try {
+    // 교사 권한 확인
+    const [classroomRows] = await db.query(
+      'SELECT * FROM classrooms WHERE classroom_id = ? AND teacher_id = ?',
+      [classroom_id, teacher_id]
+    );
+
+    if (classroomRows.length === 0) {
+      return res.status(403).json({ error: '해당 학급의 교사만 사진을 업로드할 수 있습니다.' });
+    }
+
+    const photo_url = `/uploads/${req.file.filename}`;
+
+    // 학급 테이블에 사진 URL 저장
+    await db.query(
+      'UPDATE classrooms SET class_photo = ? WHERE classroom_id = ?',
+      [photo_url, classroom_id]
+    );
+
+    res.json({ 
+      message: '단체사진 업로드 완료',
+      photo_url 
+    });
+  } catch (err) {
+    console.error('🔥 사진 업로드 오류:', err);
+    res.status(500).json({ error: '서버 오류', details: err.message });
+  }
+});
+
+// 🧪 테스트용 엔드포인트
+router.get('/test', (req, res) => {
+  console.log('🧪 [TEST] 테스트 엔드포인트 호출됨');
+  res.json({ message: 'classrooms 라우터 작동 중', timestamp: new Date() });
+});
 
 module.exports = router;

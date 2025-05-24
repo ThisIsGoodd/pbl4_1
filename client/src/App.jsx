@@ -10,7 +10,6 @@ import PostDetailPage from './pages/PostDetailPage';
 import PostWritePage from './pages/PostWritePage';
 import ProfilePage from './pages/ProfilePage';
 import RoleSelectPage from './pages/RoleSelectPage';
-import JoinClassPage from './pages/JoinClassPage';
 import TeacherAuthPage from './pages/TeacherAuthPage';
 import MainPage from './pages/MainPage';
 import NotificationsPage from './pages/NotificationsPage';
@@ -19,7 +18,6 @@ import ChatPage from './pages/ChatPage';
 import SuperAdminSchoolRequestPage from './pages/SuperAdminSchoolRequestPage';
 import JoinInvitePage from './pages/JoinInvitePage';
 import JoinInfoPage from './pages/JoinInfoPage';
-import JoinCompletePage from './pages/JoinCompletePage';
 import ClassroomCreatePage from './pages/ClassroomCreatePage';
 import ClassroomDashboardPage from './pages/ClassroomDashboardPage';
 import SchoolPendingPage from './pages/SchoolPendingPage';
@@ -27,6 +25,8 @@ import RequestSchoolPage from './pages/RequestSchoolPage';
 import SuperAdminSchoolPage from './pages/SuperAdminSchoolPage';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminMainPage from './pages/AdminMainPage';
+import InquiryFormPage from './pages/InquiryFormPage';
+import SuperAdminInquiriesPage from './pages/SuperAdminInquiriesPage';
 
 import { useContext, useEffect } from 'react';
 
@@ -52,9 +52,6 @@ function AppRoutes() {
 
         <Route path="/select-role" element={
           <RequireAuth><RoleSelectPage /></RequireAuth>
-        } />
-        <Route path="/join-class" element={
-          <RequireAuth><JoinClassPage /></RequireAuth>
         } />
         <Route path="/posts" element={
           <RequireAuth><PostPage /></RequireAuth>
@@ -95,9 +92,6 @@ function AppRoutes() {
         <Route path="/join/info" element={
           <RequireAuth><JoinInfoPage /></RequireAuth>
         } />
-        <Route path="/join/complete" element={
-          <RequireAuth><JoinCompletePage /></RequireAuth>
-        } />
         <Route path="/classroom/create" element={
           <RequireAuth><ClassroomCreatePage /></RequireAuth>
         } />
@@ -118,6 +112,13 @@ function AppRoutes() {
         } />
         <Route path="/admin/main" element={
           <RequireAuth><AdminMainPage /></RequireAuth>
+        } />
+        {/* ✅ 문의사항 라우트 추가 */}
+        <Route path="/inquiry/form" element={
+          <RequireAuth><InquiryFormPage /></RequireAuth>
+        } />
+        <Route path="/superadmin/inquiries" element={
+          <RequireAuth><SuperAdminInquiriesPage /></RequireAuth>
         } />
       </Routes>
     </>

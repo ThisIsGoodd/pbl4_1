@@ -7,6 +7,7 @@ function Navigation() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [isCreator, setIsCreator] = useState(false);
+  const [teacherClassroomId, setTeacherClassroomId] = useState(null); // 🆕 교사 학급 ID
   const navigate = useNavigate();
   const location = useLocation();
   const token = localStorage.getItem('token');
@@ -19,9 +20,11 @@ function Navigation() {
   const isAdminCreator = Boolean(user?.is_admin && isCreator);
   const classroomId = user?.joined_classrooms?.[0]?.classroom_id;
 
-  // 학교 생성자인지 확인
+  // 학교 생성자인지 확인 + 교사 학급 확인
   useEffect(() => {
     if (!user?.is_admin || !user?.school_id) return;
+    
+    // 학교 생성자 확인
     fetch(`http://localhost:3001/api/schools/${user.school_id}`, {
       headers: { Authorization: `Bearer ${token}` }
     })
@@ -31,6 +34,27 @@ function Navigation() {
           setIsCreator(true);
         }
       });
+
+    // 교사인 경우 학급 ID 확인
+    if (user.role === 'teacher') {
+      fetch('http://localhost:3001/api/classrooms/my-classroom', {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+        .then(res => {
+          if (res.ok) {
+            return res.json();
+          }
+          return null;
+        })
+        .then(data => {
+          if (data?.classroom?.classroom_id) {
+            setTeacherClassroomId(data.classroom.classroom_id);
+          }
+        })
+        .catch(err => {
+          console.log('교사 학급 조회 실패:', err);
+        });
+    }
   }, [user]);
 
   // 알림 개수 (실시간 갱신)
@@ -75,18 +99,24 @@ function Navigation() {
     }
 
     if (isTeacher && isAdminCreator) {
-      return navigate('/admin/main');
+      return navigate('/admindashboard');
     }
 
     if (isTeacher) {
+      // 전체 관리자(학교 생성자)가 아닌 일반 교사
       try {
         const res = await fetch('http://localhost:3001/api/classrooms/my-classroom', {
           headers: { Authorization: `Bearer ${token}` }
         });
-        const data = await res.json();
+        
         if (res.ok) {
+          const data = await res.json();
           navigate(`/classroom/dashboard?classroom_id=${data.classroom.classroom_id}`);
+        } else if (res.status === 404) {
+          // 학급이 없는 경우에만 생성 페이지로
+          navigate('/classroom/create');
         } else {
+          console.warn('학급 조회 오류:', res.status);
           navigate('/classroom/create');
         }
       } catch {
@@ -110,16 +140,36 @@ function Navigation() {
           <>
             <Link to="/superadmin/school-requests" style={styles.link}>학교 요청</Link>
             <Link to="/superadmin/schools" style={styles.link}>학교 목록</Link>
+            <Link to="/superadmin/inquiries" style={styles.link}>문의사항 관리</Link>
           </>
         )}
 
         {/* 학교 전체 관리자 메뉴 */}
         {!isSuperAdmin && isAdminCreator && (
-          <Link to="/admindashboard?tab=codes" style={styles.link}>관리</Link>
+          <>
+            <Link to="/admindashboard?tab=codes" style={styles.link}>관리</Link>
+            <Link to="/inquiry/form" style={styles.link}>문의하기</Link>
+          </>
+        )}
+
+        {/* 일반 교사 메뉴 (학급 생성자) */}
+        {!isSuperAdmin && !isAdminCreator && isTeacher && teacherClassroomId && (
+          <>
+            <Link to={`/classroom/dashboard?classroom_id=${teacherClassroomId}`} style={styles.link}>학급 관리</Link>
+            <Link to="/inquiry/form" style={styles.link}>문의하기</Link>
+          </>
+        )}
+
+        {/* 일반 교사 메뉴 (학급 미생성) */}
+        {!isSuperAdmin && !isAdminCreator && isTeacher && !teacherClassroomId && (
+          <>
+            <Link to="/classroom/create" style={styles.link}>학급 생성</Link>
+            <Link to="/inquiry/form" style={styles.link}>문의하기</Link>
+          </>
         )}
 
         {/* 일반 사용자 메뉴 (학급 있음) */}
-        {!isSuperAdmin && !isAdminCreator && isJoinedClass && (
+        {!isSuperAdmin && !isAdminCreator && !isTeacher && isJoinedClass && (
           <>
             <Link to={`/posts?classroom_id=${classroomId}`} style={styles.link}>게시판</Link>
             <Link to={`/schedules?classroom_id=${classroomId}`} style={styles.link}>일정</Link>
@@ -127,7 +177,13 @@ function Navigation() {
               <Link to={`/chat?classroom_id=${classroomId}`} style={styles.link}>채팅</Link>
             )}
             <Link to={`/settings?classroom_id=${classroomId}`} style={styles.link}>마이페이지</Link>
+            <Link to="/inquiry/form" style={styles.link}>문의하기</Link>
           </>
+        )}
+
+        {/* 학급 미가입 사용자도 문의 가능 */}
+        {!isSuperAdmin && !isAdminCreator && !isTeacher && !isJoinedClass && !isJoinPage && (
+          <Link to="/inquiry/form" style={styles.link}>문의하기</Link>
         )}
       </div>
 

@@ -9,13 +9,5 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
-  server: {
-    proxy: {
-      '/api': {
-        target: 'http://localhost:3001', // 🔧 백엔드 주소
-        changeOrigin: true,
-        rewrite: (path) => path, // ✅ /api 경로 유지 (삭제 안함!)
-      },
-    },
-  },
+  // 프록시 설정 제거 - 직접 URL 사용으로 통일
 });

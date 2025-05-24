@@ -4,7 +4,7 @@ function GoogleLoginButton({ onSuccess }) {
   useEffect(() => {
     if (window.google) {
       window.google.accounts.id.initialize({
-        client_id: '701008683168-eoqi92nqvhp6qk5mfr927hrbrpeujup0.apps.googleusercontent.com',
+        client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
         callback: onSuccess,
         ux_mode: 'popup'
       });

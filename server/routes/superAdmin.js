@@ -93,7 +93,6 @@ router.post('/school-requests/:requestId/approve', authenticateToken, checkSuper
   }
 });
 
-
 // ✅ 전체 학교 목록 조회
 router.get('/schools', authenticateToken, checkSuperAdmin, async (req, res) => {
   try {
@@ -128,6 +127,7 @@ router.get('/schools', authenticateToken, checkSuperAdmin, async (req, res) => {
   }
 });
 
+// ✅ 학교 삭제 (스키마 수정 반영)
 router.delete('/schools/:schoolId', authenticateToken, checkSuperAdmin, async (req, res) => {
   const schoolId = req.params.schoolId;
 
@@ -135,7 +135,7 @@ router.delete('/schools/:schoolId', authenticateToken, checkSuperAdmin, async (r
   try {
     await conn.beginTransaction();
 
-    // 1. 해당 학교의 학급 목록 조회
+    // 1. 해당 학교의 학급 목록 조회 (수정된 스키마 반영)
     const [classroomRows] = await conn.query(
       'SELECT classroom_id FROM classrooms WHERE school_id = ?',
       [schoolId]
@@ -146,9 +146,10 @@ router.delete('/schools/:schoolId', authenticateToken, checkSuperAdmin, async (r
       const idList = classroomIds.join(',');
 
       // 2. 학급 기반 종속 데이터 삭제
-      await conn.query(`DELETE FROM classroom_users WHERE classroom_id IN (${idList})`);
+      await conn.query(`DELETE FROM user_classrooms WHERE classroom_id IN (${idList})`);
       await conn.query(`DELETE FROM posts WHERE classroom_id IN (${idList})`);
-      await conn.query(`DELETE FROM comments WHERE classroom_id IN (${idList})`);
+      await conn.query(`DELETE FROM comments WHERE post_id IN 
+        (SELECT post_id FROM posts WHERE classroom_id IN (${idList}))`);
       await conn.query(`DELETE FROM schedules WHERE classroom_id IN (${idList})`);
       await conn.query(`DELETE FROM chat_messages WHERE room_id IN 
         (SELECT room_id FROM chat_rooms WHERE classroom_id IN (${idList}))`);
@@ -166,7 +167,13 @@ router.delete('/schools/:schoolId', authenticateToken, checkSuperAdmin, async (r
     await conn.query('DELETE FROM school_admin_codes WHERE school_id = ?', [schoolId]);
     await conn.query('DELETE FROM school_logs WHERE school_id = ?', [schoolId]);
 
-    // 5. 학교 자체 삭제
+    // 5. 사용자 테이블에서 해당 학교 참조 제거
+    await conn.query(
+      'UPDATE users SET school_id = NULL, is_admin = 0 WHERE school_id = ?',
+      [schoolId]
+    );
+
+    // 6. 학교 자체 삭제
     await conn.query('DELETE FROM schools WHERE school_id = ?', [schoolId]);
 
     await conn.commit();

@@ -50,6 +50,7 @@ const notificationRoutes = require('./routes/notifications');
 const notificationSettingsRoutes = require('./routes/notificationSettings');
 const chatRoutes = require('./routes/chat');
 const superAdminRoutes = require('./routes/superAdmin');
+const inquiryRoutes = require('./routes/inquiries'); // ✅ 추가
 const { createNotification } = require('./utils/notify');
 
 // ✅ 라우터 등록 (경로 명확하게 분리)
@@ -64,6 +65,7 @@ app.use('/api/schools', schoolRoutes);                // 학교/초대코드
 app.use('/api/notifications', notificationRoutes);    // 알림 목록
 app.use('/api/notification-settings', notificationSettingsRoutes); // 알림 설정
 app.use('/api/chat', chatRoutes);                     // 채팅
+app.use('/api/inquiries', inquiryRoutes);             // ✅ 문의사항 (추가)
 console.log('✅ superAdmin 라우터 등록됨');
 app.use('/api/superadmin', superAdminRoutes);         // 개발자 전용
 

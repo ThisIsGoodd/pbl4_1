@@ -5,10 +5,33 @@ const authenticateToken = require('../authMiddleware');
 const { createNotification } = require('../utils/notify');
 
 /**
+ * ✅ 댓글 조회 (특정 게시글의 모든 댓글)
+ */
+router.get('/posts/:postId', authenticateToken, async (req, res) => {
+  const { postId } = req.params;
+  
+  try {
+    const [comments] = await db.query(
+      `SELECT comments.*, users.name AS author_name
+       FROM comments
+       JOIN users ON comments.author_id = users.user_id
+       WHERE comments.post_id = ?
+       ORDER BY comments.created_at ASC`,
+      [postId]
+    );
+
+    res.json({ comments });
+  } catch (err) {
+    console.error('🔥 댓글 조회 오류:', err);
+    res.status(500).json({ error: '서버 오류', details: err.message });
+  }
+});
+
+/**
  * ✅ 댓글 작성 (게시글 제목 포함 알림)
  */
-router.post('/posts/:id/comments', authenticateToken, async (req, res) => {
-  const postId = req.params.id;
+router.post('/posts/:postId', authenticateToken, async (req, res) => {
+  const { postId } = req.params;
   const { content } = req.body;
   const authorId = req.user.user_id;
 
@@ -48,40 +71,10 @@ router.post('/posts/:id/comments', authenticateToken, async (req, res) => {
 });
 
 /**
- * ✅ 댓글 삭제
- */
-router.delete('/comments/:id', authenticateToken, async (req, res) => {
-  const commentId = req.params.id;
-  const userId = req.user.user_id;
-
-  try {
-    const [rows] = await db.query(
-      'SELECT * FROM comments WHERE comment_id = ?',
-      [commentId]
-    );
-
-    if (rows.length === 0) {
-      return res.status(404).json({ error: '댓글이 존재하지 않습니다.' });
-    }
-
-    const comment = rows[0];
-    if (comment.author_id !== userId) {
-      return res.status(403).json({ error: '본인의 댓글만 삭제할 수 있습니다.' });
-    }
-
-    await db.query('DELETE FROM comments WHERE comment_id = ?', [commentId]);
-    res.json({ message: '댓글 삭제 완료' });
-  } catch (err) {
-    console.error('🔥 댓글 삭제 오류:', err);
-    res.status(500).json({ error: '서버 오류', details: err.message });
-  }
-});
-
-/**
  * ✅ 댓글 수정
  */
-router.patch('/comments/:id', authenticateToken, async (req, res) => {
-  const commentId = req.params.id;
+router.patch('/:commentId', authenticateToken, async (req, res) => {
+  const { commentId } = req.params;
   const { content } = req.body;
   const userId = req.user.user_id;
 
@@ -112,6 +105,36 @@ router.patch('/comments/:id', authenticateToken, async (req, res) => {
     res.json({ message: '댓글 수정 완료' });
   } catch (err) {
     console.error('🔥 댓글 수정 오류:', err);
+    res.status(500).json({ error: '서버 오류', details: err.message });
+  }
+});
+
+/**
+ * ✅ 댓글 삭제
+ */
+router.delete('/:commentId', authenticateToken, async (req, res) => {
+  const { commentId } = req.params;
+  const userId = req.user.user_id;
+
+  try {
+    const [rows] = await db.query(
+      'SELECT * FROM comments WHERE comment_id = ?',
+      [commentId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: '댓글이 존재하지 않습니다.' });
+    }
+
+    const comment = rows[0];
+    if (comment.author_id !== userId) {
+      return res.status(403).json({ error: '본인의 댓글만 삭제할 수 있습니다.' });
+    }
+
+    await db.query('DELETE FROM comments WHERE comment_id = ?', [commentId]);
+    res.json({ message: '댓글 삭제 완료' });
+  } catch (err) {
+    console.error('🔥 댓글 삭제 오류:', err);
     res.status(500).json({ error: '서버 오류', details: err.message });
   }
 });

@@ -4,7 +4,7 @@ const db = require('../db');
 const authenticateToken = require('../authMiddleware');
 const { createNotification } = require('../utils/notify');
 
-// ✅ 일정 추가
+// ✅ 일정 추가 - 수정된 버전
 router.post('/', authenticateToken, async (req, res) => {
   const { title, description, start_date, end_date, school_wide = false } = req.body;
   const { user_id } = req.user;
@@ -14,12 +14,13 @@ router.post('/', authenticateToken, async (req, res) => {
   }
 
   try {
+    // 🔥 수정: user_classrooms와 classrooms를 통해 school_id 가져오기
     const [[user]] = await db.query(
-      `SELECT u.classroom_id, us.school_id
-       FROM users u
-       LEFT JOIN classrooms c ON u.classroom_id = c.classroom_id
-       LEFT JOIN user_schools us ON us.user_id = u.user_id AND us.role = 'teacher'
-       WHERE u.user_id = ?`,
+      `SELECT uc.classroom_id, c.school_id
+       FROM user_classrooms uc
+       JOIN classrooms c ON uc.classroom_id = c.classroom_id
+       WHERE uc.user_id = ?
+       LIMIT 1`,
       [user_id]
     );
 
@@ -31,8 +32,8 @@ router.post('/', authenticateToken, async (req, res) => {
 
     const [result] = await db.query(
       `INSERT INTO schedules 
-        (title, description, start_date, end_date, created_at, created_by, classroom_id, school_id, grade, school_wide) 
-       VALUES (?, ?, ?, ?, NOW(), ?, ?, ?, NULL, ?)`,
+        (title, description, start_date, end_date, created_at, created_by, classroom_id, school_id, school_wide) 
+       VALUES (?, ?, ?, ?, NOW(), ?, ?, ?, ?)`,
       [title, description, start_date, end_date, user_id, classroom_id, school_id, school_wide]
     );
 
@@ -41,9 +42,8 @@ router.post('/', authenticateToken, async (req, res) => {
     res.json({ message: '일정 추가 완료', schedule_id: scheduleId });
 
     const [parents] = await db.query(
-      `SELECT user_id FROM users 
-       WHERE classroom_id = ? AND role = 'student'`,
-      [classroom_id]
+      `SELECT user_id FROM user_classrooms WHERE classroom_id = ? AND user_id != ?`,
+      [classroom_id, user_id]
     );
 
     for (const p of parents) {
@@ -61,25 +61,23 @@ router.post('/', authenticateToken, async (req, res) => {
   }
 });
 
-// ✅ 일정 조회
+// ✅ 일정 조회 - 수정된 버전
 router.get('/', authenticateToken, async (req, res) => {
   const { user_id } = req.user;
+  const { classroom_id } = req.query;
 
   try {
-    const [[user]] = await db.query(
-      `SELECT u.classroom_id, us.school_id
-       FROM users u
-       LEFT JOIN user_schools us ON us.user_id = u.user_id
-       WHERE u.user_id = ?
-       LIMIT 1`,
-      [user_id]
+    // 🔥 수정: classroom_id로 school_id 찾기
+    const [[classroomInfo]] = await db.query(
+      `SELECT school_id FROM classrooms WHERE classroom_id = ?`,
+      [classroom_id]
     );
 
-    if (!user || !user.classroom_id) {
-      return res.status(400).json({ error: '학급에 가입되어 있지 않습니다.' });
+    if (!classroomInfo) {
+      return res.status(400).json({ error: '학급 정보가 없습니다.' });
     }
 
-    const { classroom_id, school_id } = user;
+    const { school_id } = classroomInfo;
 
     const [scheduleRows] = await db.query(
       `SELECT schedule_id, title, description, 
@@ -98,7 +96,7 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // ✅ 일정 수정
-router.put('/schedules/:id', authenticateToken, async (req, res) => {
+router.put('/:id', authenticateToken, async (req, res) => {
   const schedule_id = req.params.id;
   const { title, description, start_date, end_date } = req.body;
   const user_id = req.user.user_id;
@@ -117,14 +115,15 @@ router.put('/schedules/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: '일정을 찾을 수 없습니다.' });
     }
 
-    const [[user]] = await db.query(
-      'SELECT classroom_id FROM users WHERE user_id = ?',
+    // 권한 체크: 작성자이거나 같은 학급의 교사
+    const [[userClassroom]] = await db.query(
+      'SELECT classroom_id FROM user_classrooms WHERE user_id = ? LIMIT 1',
       [user_id]
     );
 
     if (
       schedule.created_by !== user_id &&
-      user?.classroom_id !== schedule.classroom_id
+      userClassroom?.classroom_id !== schedule.classroom_id
     ) {
       return res.status(403).json({ error: '일정 수정 권한이 없습니다.' });
     }
@@ -142,7 +141,7 @@ router.put('/schedules/:id', authenticateToken, async (req, res) => {
 });
 
 // ✅ 일정 삭제
-router.delete('/schedules/:id', authenticateToken, async (req, res) => {
+router.delete('/:id', authenticateToken, async (req, res) => {
   const schedule_id = req.params.id;
   const user_id = req.user.user_id;
 
@@ -156,14 +155,15 @@ router.delete('/schedules/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: '일정을 찾을 수 없습니다.' });
     }
 
-    const [[user]] = await db.query(
-      'SELECT classroom_id FROM users WHERE user_id = ?',
+    // 권한 체크: 작성자이거나 같은 학급의 교사
+    const [[userClassroom]] = await db.query(
+      'SELECT classroom_id FROM user_classrooms WHERE user_id = ? LIMIT 1',
       [user_id]
     );
 
     if (
       schedule.created_by !== user_id &&
-      user?.classroom_id !== schedule.classroom_id
+      userClassroom?.classroom_id !== schedule.classroom_id
     ) {
       return res.status(403).json({ error: '일정 삭제 권한이 없습니다.' });
     }

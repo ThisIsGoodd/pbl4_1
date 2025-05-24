@@ -6,10 +6,15 @@ function MainPage() {
   const { user } = useContext(AuthContext);
   const [searchParams] = useSearchParams();
   const [classroomId, setClassroomId] = useState(null);
-  const [classroomInfo, setClassroomInfo] = useState(null); // ✅ 추가
+  const [classroomInfo, setClassroomInfo] = useState(null);
   const [posts, setPosts] = useState([]);
   const [todayEvents, setTodayEvents] = useState([]);
+  const [classPhoto, setClassPhoto] = useState('');
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const navigate = useNavigate();
+
+  const token = localStorage.getItem('token');
+  const isTeacher = user?.role === 'teacher';
 
   useEffect(() => {
     const id = searchParams.get('classroom_id');
@@ -23,7 +28,6 @@ function MainPage() {
 
   useEffect(() => {
     if (!classroomId) return;
-    const token = localStorage.getItem('token');
 
     // ✅ 학급 정보 가져오기
     fetch(`http://localhost:3001/api/classrooms/${classroomId}`, {
@@ -32,6 +36,10 @@ function MainPage() {
       .then(res => res.json())
       .then(data => {
         setClassroomInfo(data);
+        // 기존 단체사진 URL 설정
+        if (data.class_photo) {
+          setClassPhoto(`http://localhost:3001${data.class_photo}`);
+        }
       })
       .catch(err => {
         console.error('학급 정보 불러오기 실패:', err);
@@ -40,7 +48,6 @@ function MainPage() {
 
   useEffect(() => {
     if (!user || !classroomId) return;
-    const token = localStorage.getItem('token');
 
     // ✅ 공지사항 요청
     fetch(`http://localhost:3001/api/posts?classroom_id=${classroomId}`, {
@@ -68,6 +75,51 @@ function MainPage() {
       });
   }, [user, classroomId]);
 
+  // ✅ 단체사진 업로드 핸들러
+  const handlePhotoUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // 파일 크기 체크 (5MB 제한)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('파일 크기는 5MB 이하여야 합니다.');
+      return;
+    }
+
+    // 이미지 파일인지 확인
+    if (!file.type.startsWith('image/')) {
+      alert('이미지 파일만 업로드 가능합니다.');
+      return;
+    }
+
+    setUploadingPhoto(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('class_photo', file);
+
+      const res = await fetch(`http://localhost:3001/api/classrooms/${classroomId}/photo`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setClassPhoto(`http://localhost:3001${data.photo_url}`);
+        alert('단체사진이 업로드되었습니다!');
+      } else {
+        alert(data.error || '업로드 실패');
+      }
+    } catch (err) {
+      console.error('사진 업로드 오류:', err);
+      alert('업로드 중 오류가 발생했습니다.');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
   if (user === undefined) return null;
 
   return (
@@ -82,15 +134,64 @@ function MainPage() {
         {/* 왼쪽 영역 */}
         <div style={styles.left}>
           <div style={styles.photoBox}>
-            <img
-              src="/class_photo.jpg"
-              alt="단체사진"
-              onError={(e) => {
-                e.target.style.display = 'none';
-                e.target.parentNode.innerHTML = '<div style="text-align:center;color:#777;">단체 사진 없음</div>';
-              }}
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            />
+            {classPhoto ? (
+              <img
+                src={classPhoto}
+                alt="단체사진"
+                style={{ 
+                  width: '100%', 
+                  height: '100%', 
+                  objectFit: 'cover',
+                  borderRadius: '8px'
+                }}
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  setClassPhoto('');
+                }}
+              />
+            ) : (
+              <div style={{ 
+                textAlign: 'center', 
+                color: '#777',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '100%'
+              }}>
+                <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📸</div>
+                <div>단체 사진 없음</div>
+                {isTeacher && (
+                  <div style={{ marginTop: '1rem', fontSize: '0.9rem' }}>
+                    아래 버튼으로 사진을 업로드하세요
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 교사만 업로드 버튼 표시 */}
+            {isTeacher && (
+              <div style={styles.uploadButtonContainer}>
+                <input
+                  type="file"
+                  id="photoUpload"
+                  accept="image/*"
+                  onChange={handlePhotoUpload}
+                  style={{ display: 'none' }}
+                  disabled={uploadingPhoto}
+                />
+                <label 
+                  htmlFor="photoUpload" 
+                  style={{
+                    ...styles.uploadButton,
+                    opacity: uploadingPhoto ? 0.7 : 1,
+                    cursor: uploadingPhoto ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  {uploadingPhoto ? '업로드 중...' : classPhoto ? '📷 사진 변경' : '📷 사진 업로드'}
+                </label>
+              </div>
+            )}
           </div>
 
           <div style={styles.noticeBox}>
@@ -166,15 +267,35 @@ const styles = {
     border: '1px solid #ccc',
     backgroundColor: '#f8f8f8',
     display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center'
+    flexDirection: 'column',
+    position: 'relative',
+    borderRadius: '8px',
+    overflow: 'hidden'
+  },
+  uploadButtonContainer: {
+    position: 'absolute',
+    bottom: '10px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    zIndex: 2
+  },
+  uploadButton: {
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    color: 'white',
+    padding: '8px 16px',
+    borderRadius: '20px',
+    fontSize: '0.9rem',
+    border: 'none',
+    display: 'inline-block',
+    textDecoration: 'none'
   },
   noticeBox: {
     flex: 4,
     border: '1px solid #ccc',
     padding: '1rem',
     backgroundColor: '#fff',
-    overflowY: 'auto'
+    overflowY: 'auto',
+    borderRadius: '8px'
   },
   right: {
     flex: 4,
@@ -183,7 +304,8 @@ const styles = {
     backgroundColor: '#fff',
     display: 'flex',
     flexDirection: 'column',
-    justifyContent: 'space-between'
+    justifyContent: 'space-between',
+    borderRadius: '8px'
   },
   calendarPlaceholder: {
     flex: 1,
@@ -193,7 +315,8 @@ const styles = {
     marginTop: '1rem',
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    borderRadius: '8px'
   }
 };
 

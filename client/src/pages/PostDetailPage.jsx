@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { getCurrentUserId, getToken } from '../utils/jwt';
 
 function PostDetailPage() {
   const { id } = useParams();
@@ -18,12 +19,11 @@ function PostDetailPage() {
   const [editPostContent, setEditPostContent] = useState('');
   const [editSchoolWide, setEditSchoolWide] = useState(false);
   const [hasLiked, setHasLiked] = useState(false);
-  const token = localStorage.getItem('token');
+  const token = getToken();
 
   useEffect(() => {
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    setMyUserId(payload?.user_id || null);
-  }, [token]);
+    setMyUserId(getCurrentUserId());
+  }, []);
 
   useEffect(() => {
     const viewKey = `viewed_post_${id}`;
@@ -54,12 +54,6 @@ function PostDetailPage() {
       headers: { Authorization: `Bearer ${token}` }
     });
     const data = await res.json();
-    console.log('=== 디버깅 정보 ===');
-    console.log('전체 응답 데이터:', data);
-    console.log('post 객체:', data.post);
-    console.log('제목 값:', data.post?.title);
-    console.log('제목 길이:', data.post?.title?.length);
-    console.log('제목 문자 코드:', data.post?.title?.split('').map(char => char.charCodeAt(0)));
     
     if (res.ok) {
       const fullPost = { ...data.post, attachments: data.attachments || [] };
@@ -68,7 +62,7 @@ function PostDetailPage() {
   };
 
   const fetchComments = async () => {
-    const res = await fetch(`http://localhost:3001/api/posts/${id}/comments`, {
+    const res = await fetch(`http://localhost:3001/api/comments/posts/${id}`, {
       headers: { Authorization: `Bearer ${token}` }
     });
     const data = await res.json();
@@ -134,7 +128,7 @@ function PostDetailPage() {
 
   const handleCommentSubmit = async () => {
     if (!newComment.trim()) return;
-    await fetch(`http://localhost:3001/api/posts/${id}/comments`, {
+    await fetch(`http://localhost:3001/api/comments/posts/${id}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -170,14 +164,21 @@ function PostDetailPage() {
   };
 
   if (!post) return <p>로딩 중...</p>;
-  console.log('렌더링 시점 post.title:', post.title);
-  console.log('렌더링 시점 전체 post:', post);
+
   return (
     <div style={{ padding: '2rem' }}>
       {isEditingPost ? (
         <>
-          <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
-          <textarea value={editPostContent} onChange={(e) => setEditPostContent(e.target.value)} />
+          <input 
+            value={editTitle} 
+            onChange={(e) => setEditTitle(e.target.value)}
+            style={{ width: '100%', padding: '0.5rem', marginBottom: '1rem' }}
+          />
+          <textarea 
+            value={editPostContent} 
+            onChange={(e) => setEditPostContent(e.target.value)}
+            style={{ width: '100%', minHeight: '200px', padding: '0.5rem', marginBottom: '1rem' }}
+          />
           <div style={{ marginTop: '1rem' }}>
             <label>
               <input
@@ -196,20 +197,21 @@ function PostDetailPage() {
               /> 학교 전체 게시글
             </label>
           </div>
-          <button onClick={handlePostEditSave}>저장</button>
-          <button onClick={() => setIsEditingPost(false)}>취소</button>
+          <div style={{ marginTop: '1rem' }}>
+            <button onClick={handlePostEditSave}>저장</button>
+            <button onClick={() => setIsEditingPost(false)} style={{ marginLeft: '0.5rem' }}>취소</button>
+          </div>
         </>
       ) : (
         <>
           <h1 style={{ fontFamily: 'Arial, sans-serif' }}>
             {post.title}
-            {console.log('school_wide 값:', post.school_wide)}
             {post.school_wide === true && (
-            <span style={{ marginLeft: '10px', color: '#3366cc', fontSize: '1rem' }}>
-              [학교 전체]
-            </span>
-          )}
-</h1>
+              <span style={{ marginLeft: '10px', color: '#3366cc', fontSize: '1rem' }}>
+                [학교 전체]
+              </span>
+            )}
+          </h1>
           <p><strong>작성자:</strong> {post.author_name}</p>
           <p><strong>작성일:</strong> {new Date(post.created_at).toLocaleString()}</p>
           <p><strong>조회수:</strong> {post.views}</p>
@@ -255,31 +257,54 @@ function PostDetailPage() {
         </>
       )}
 
-      <hr />
+      <hr style={{ margin: '2rem 0' }} />
       <h3>댓글</h3>
-      <textarea value={newComment} onChange={(e) => setNewComment(e.target.value)} />
+      <textarea 
+        value={newComment} 
+        onChange={(e) => setNewComment(e.target.value)}
+        placeholder="댓글을 입력하세요..."
+        style={{ width: '100%', minHeight: '80px', padding: '0.5rem', marginBottom: '0.5rem' }}
+      />
       <button onClick={handleCommentSubmit}>댓글 작성</button>
 
-      <ul>
+      <ul style={{ listStyle: 'none', padding: 0, marginTop: '1rem' }}>
         {comments.map(comment => (
-          <li key={comment.comment_id}>
-            <strong>{comment.author_name}</strong> ({new Date(comment.created_at).toLocaleString()})<br />
+          <li key={comment.comment_id} style={{ 
+            marginBottom: '1rem', 
+            padding: '1rem', 
+            border: '1px solid #eee', 
+            borderRadius: '4px' 
+          }}>
+            <strong>{comment.author_name}</strong> 
+            <span style={{ color: '#666', fontSize: '0.9rem', marginLeft: '0.5rem' }}>
+              ({new Date(comment.created_at).toLocaleString()})
+            </span>
+            <br />
             {editCommentId === comment.comment_id ? (
               <>
-                <textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} />
+                <textarea 
+                  value={editContent} 
+                  onChange={(e) => setEditContent(e.target.value)}
+                  style={{ width: '100%', minHeight: '60px', padding: '0.5rem', margin: '0.5rem 0' }}
+                />
                 <button onClick={handleCommentEditSave}>저장</button>
-                <button onClick={() => setEditCommentId(null)}>취소</button>
+                <button onClick={() => setEditCommentId(null)} style={{ marginLeft: '0.5rem' }}>취소</button>
               </>
             ) : (
               <>
-                <p>{comment.content}</p>
+                <p style={{ margin: '0.5rem 0' }}>{comment.content}</p>
                 {comment.author_id === myUserId && (
                   <>
                     <button onClick={() => {
                       setEditCommentId(comment.comment_id);
                       setEditContent(comment.content);
                     }}>수정</button>
-                    <button onClick={() => handleCommentDelete(comment.comment_id)} style={{ color: 'red' }}>삭제</button>
+                    <button 
+                      onClick={() => handleCommentDelete(comment.comment_id)} 
+                      style={{ marginLeft: '0.5rem', color: 'red' }}
+                    >
+                      삭제
+                    </button>
                   </>
                 )}
               </>

@@ -12,7 +12,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// ✅ 프로필 조회 (복수 학급 대응)
+// ✅ 프로필 조회 (복수 학급 대응) - 스키마 변경 반영
 router.get('/profile', authenticateToken, async (req, res) => {
   const user_id = req.user.user_id;
 
@@ -31,13 +31,13 @@ router.get('/profile', authenticateToken, async (req, res) => {
 
     const user = userRows[0];
 
-    // 2. 가입된 학급 리스트 조회
+    // 2. 가입된 학급 리스트 조회 (수정된 스키마 반영)
     const [classRows] = await db.query(`
       SELECT 
         c.classroom_id, c.grade, c.class_number, s.name as school
       FROM user_classrooms uc
       JOIN classrooms c ON uc.classroom_id = c.classroom_id
-      JOIN schools s ON c.school = s.school_id
+      JOIN schools s ON c.school_id = s.school_id
       WHERE uc.user_id = ?
     `, [user_id]);
 

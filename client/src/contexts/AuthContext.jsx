@@ -7,6 +7,27 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(undefined);
   const navigate = useNavigate();
 
+  // ✅ 토큰 새로고침 함수
+  const refreshToken = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return null;
+
+    try {
+      const res = await fetch('http://localhost:3001/api/users/profile', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+
+      if (data.user) {
+        setUser(data.user);
+        return data.user;
+      }
+    } catch (err) {
+      console.error('토큰 새로고침 실패:', err);
+    }
+    return null;
+  };
+
   useEffect(() => {
     const fetchUserAndRedirect = async () => {
       const token = localStorage.getItem('token');
@@ -22,6 +43,7 @@ export function AuthProvider({ children }) {
         const data = await res.json();
 
         if (!data.user) {
+          console.log('🔄 사용자 데이터 없음 - 토큰 제거');
           localStorage.removeItem('token');
           setUser(null);
           return;
@@ -48,9 +70,25 @@ export function AuthProvider({ children }) {
         }
 
         if (user.role === 'teacher') {
-          // ✅ 전체 관리자일 경우 (created_by는 admin 페이지에서 판단)
+          // ✅ 전체 관리자(학교 생성자)인지 확인
           if (user.is_admin && user.school_id) {
             try {
+              // 학교 생성자인지 확인
+              const schoolRes = await fetch(`http://localhost:3001/api/schools/${user.school_id}`, {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              
+              if (schoolRes.ok) {
+                const schoolData = await schoolRes.json();
+                
+                // 학교 생성자라면 관리 대시보드로
+                if (schoolData.created_by === user.user_id) {
+                  navigate('/admindashboard');
+                  return;
+                }
+              }
+
+              // 학교 생성자가 아닌 일반 교사 - 학급 확인
               const res = await fetch('http://localhost:3001/api/classrooms/my-classroom', {
                 headers: { Authorization: `Bearer ${token}` },
               });
@@ -59,7 +97,13 @@ export function AuthProvider({ children }) {
                 const result = await res.json();
                 navigate(`/classroom/dashboard?classroom_id=${result.classroom.classroom_id}`);
               } else {
-                navigate('/classroom/create');
+                // 404 오류는 학급이 없다는 뜻이므로 학급 생성 페이지로
+                if (res.status === 404) {
+                  navigate('/classroom/create');
+                } else {
+                  console.warn('학급 조회 중 오류:', res.status);
+                  navigate('/classroom/create');
+                }
               }
               return;
             } catch (e) {
@@ -112,8 +156,15 @@ export function AuthProvider({ children }) {
         navigate('/main');
       } catch (err) {
         console.error('🔥 사용자 정보 확인 실패:', err);
+        
+        // JWT 만료 등의 인증 오류 시 자동 로그아웃
+        if (err.message?.includes('jwt') || err.message?.includes('token')) {
+          console.log('🔄 토큰 관련 오류 - 자동 로그아웃');
+        }
+        
         localStorage.removeItem('token');
         setUser(null);
+        navigate('/');
       }
     };
 
@@ -127,7 +178,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, setUser, logout }}>
+    <AuthContext.Provider value={{ user, setUser, logout, refreshToken }}>
       {children}
     </AuthContext.Provider>
   );

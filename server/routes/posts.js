@@ -34,7 +34,7 @@ router.post('/upload-image', authenticateToken, upload.single('image'), async (r
   }
 });
 
-// ✅ 게시글 작성 (수정된 버전)
+// ✅ 게시글 작성 - 학교 전체 공지 알림 수정
 router.post('/', authenticateToken, upload.array('files', 10), async (req, res) => {
   const { classroom_id, school_wide, title, content } = req.body;
   const { user_id, role } = req.user;
@@ -54,16 +54,7 @@ router.post('/', authenticateToken, upload.array('files', 10), async (req, res) 
   }
 
   try {
-    // school_wide 체크를 위한 검증 (필요시)
-    if (school_wide === 'true' || school_wide === true) {
-      const [[schoolRow]] = await db.query(
-        'SELECT school_id FROM user_schools WHERE user_id = ? AND role = "teacher" LIMIT 1',
-        [user_id]
-      );
-      if (!schoolRow) return res.status(400).json({ error: '학교 정보 없음' });
-    }
-
-    // 🔥 수정: school_id 컬럼 제거
+    // 게시글 저장
     const [result] = await db.query(
       `INSERT INTO posts 
         (author_id, title, content, category, created_at, views, classroom_id, school_wide, likes) 
@@ -76,7 +67,6 @@ router.post('/', authenticateToken, upload.array('files', 10), async (req, res) 
 
     // 첨부파일 저장
     for (const file of files) {
-      // original_name을 제대로 인코딩해서 저장
       const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
       
       await db.query(
@@ -88,20 +78,20 @@ router.post('/', authenticateToken, upload.array('files', 10), async (req, res) 
 
     // 알림 전송 (학급 또는 학교 전체)
     if (school_wide === 'true') {
-      // 🏫 학교 전체 공지 - 같은 학교 모든 학생에게 알림
-      const [[schoolRow]] = await db.query(
-        'SELECT school_id FROM user_schools WHERE user_id = ? AND role = "teacher" LIMIT 1',
-        [user_id]
+      // 🏫 학교 전체 공지 - 같은 학교의 모든 학급 학생에게 알림
+      const [[classroomRow]] = await db.query(
+        'SELECT school_id FROM classrooms WHERE classroom_id = ? LIMIT 1',
+        [classroom_id]
       );
       
-      if (schoolRow) {
+      if (classroomRow) {
+        const school_id = classroomRow.school_id;
         const [schoolUsers] = await db.query(
           `SELECT DISTINCT uc.user_id 
           FROM user_classrooms uc
           JOIN classrooms c ON uc.classroom_id = c.classroom_id
-          WHERE c.school = (SELECT name FROM schools WHERE school_id = ?) 
-          AND uc.user_id != ?`,
-          [schoolRow.school_id, user_id]
+          WHERE c.school_id = ? AND uc.user_id != ?`,
+          [school_id, user_id]
         );
 
         for (const u of schoolUsers) {
@@ -141,7 +131,7 @@ router.post('/', authenticateToken, upload.array('files', 10), async (req, res) 
   }
 });
 
-// 🔥 게시글 목록 조회도 수정 필요
+// 🔥 게시글 목록 조회 - 수정된 버전
 router.get('/', authenticateToken, async (req, res) => {
   const { user_id } = req.user;
   const { search, classroom_id } = req.query;
@@ -158,13 +148,20 @@ router.get('/', authenticateToken, async (req, res) => {
     );
     const school_id = schoolRow?.school_id || null;
 
-    // 🔥 수정: posts 테이블에 school_id가 없으므로 JOIN으로 처리
+    // 🔥 수정: 학교 전체 공지를 위한 JOIN 쿼리 수정
     let query = `
-      SELECT posts.*, users.name AS author_name
+      SELECT DISTINCT posts.*, users.name AS author_name
       FROM posts
       JOIN users ON posts.author_id = users.user_id
-      LEFT JOIN user_schools us ON posts.author_id = us.user_id
-      WHERE (posts.classroom_id = ? OR (us.school_id = ? AND posts.school_wide = TRUE))
+      WHERE (
+        posts.classroom_id = ? 
+        OR (
+          posts.school_wide = TRUE 
+          AND posts.classroom_id IN (
+            SELECT classroom_id FROM classrooms WHERE school_id = ?
+          )
+        )
+      )
     `;
     const params = [classroom_id, school_id];
 
@@ -183,7 +180,6 @@ router.get('/', authenticateToken, async (req, res) => {
     res.status(500).json({ error: '서버 오류', details: err.message });
   }
 });
-
 
 //✅ 게시글 상세 조회
 router.get('/:id', authenticateToken, async (req, res) => {
@@ -204,11 +200,6 @@ router.get('/:id', authenticateToken, async (req, res) => {
     }
 
     const post = rows[0];
-
-    // 🔍 서버 디버깅 추가
-    console.log('=== 서버에서 조회한 게시글 ===');
-    console.log('제목:', post.title);
-    console.log('제목 길이:', post.title?.length);
 
     // 첨부파일 목록 가져오기
     const [attachments] = await db.query(
@@ -406,27 +397,6 @@ router.get('/:id/like-check', authenticateToken, async (req, res) => {
   );
 
   res.json({ liked: rows.length > 0 });
-});
-
-// posts.js에 추가 필요
-router.get('/:id/comments', authenticateToken, async (req, res) => {
-  const postId = req.params.id;
-  
-  try {
-    const [comments] = await db.query(
-      `SELECT comments.*, users.name AS author_name
-       FROM comments
-       JOIN users ON comments.author_id = users.user_id
-       WHERE comments.post_id = ?
-       ORDER BY comments.created_at ASC`,
-      [postId]
-    );
-
-    res.json({ comments });
-  } catch (err) {
-    console.error('🔥 댓글 조회 오류:', err);
-    res.status(500).json({ error: '서버 오류', details: err.message });
-  }
 });
 
 module.exports = router;

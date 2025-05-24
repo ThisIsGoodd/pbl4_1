@@ -37,7 +37,7 @@ app.use(cors());
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// ✅ 라우터 불러오기
+// ✅ 라우터 불러오기 (원래대로 복원)
 const adminRoutes = require('./routes/admin');
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
@@ -50,31 +50,30 @@ const notificationRoutes = require('./routes/notifications');
 const notificationSettingsRoutes = require('./routes/notificationSettings');
 const chatRoutes = require('./routes/chat');
 const superAdminRoutes = require('./routes/superAdmin');
-const inquiryRoutes = require('./routes/inquiries'); // ✅ 추가
+const inquiryRoutes = require('./routes/inquiries');
 const { createNotification } = require('./utils/notify');
 
-// ✅ 라우터 등록 (경로 명확하게 분리)
-app.use('/api/auth', authRoutes);                      // 로그인/인증 관련
-app.use('/api/users', userRoutes);                    // 사용자 관련
-app.use('/api/admin', adminRoutes);                   // 학교 관리자 기능
-app.use('/api/classrooms', classroomRoutes);          // 학급 관련
-app.use('/api/posts', postRoutes);                    // 게시판
-app.use('/api/comments', commentRoutes);              // 댓글
-app.use('/api/schedules', scheduleRoutes);            // 일정
-app.use('/api/schools', schoolRoutes);                // 학교/초대코드
-app.use('/api/notifications', notificationRoutes);    // 알림 목록
-app.use('/api/notification-settings', notificationSettingsRoutes); // 알림 설정
-app.use('/api/chat', chatRoutes);                     // 채팅
-app.use('/api/inquiries', inquiryRoutes);             // ✅ 문의사항 (추가)
-console.log('✅ superAdmin 라우터 등록됨');
-app.use('/api/superadmin', superAdminRoutes);         // 개발자 전용
+// ✅ 라우터 등록 (원래대로 복원)
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/classrooms', classroomRoutes);
+app.use('/api/posts', postRoutes);
+app.use('/api/comments', commentRoutes);
+app.use('/api/schedules', scheduleRoutes);
+app.use('/api/schools', schoolRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/notification-settings', notificationSettingsRoutes);
+app.use('/api/chat', chatRoutes);
+app.use('/api/inquiries', inquiryRoutes);
+app.use('/api/superadmin', superAdminRoutes);
 
 // ✅ 루트 확인용 API
 app.get('/', (req, res) => {
   res.send('✅ 백엔드 서버가 잘 동작합니다!');
 });
 
-// ✅ socket.io 이벤트 처리
+// ✅ socket.io 이벤트 처리 (메시지 저장 기능 추가)
 io.on('connection', (socket) => {
   console.log('✅ 사용자 연결됨:', socket.id);
 
@@ -84,28 +83,44 @@ io.on('connection', (socket) => {
     console.log(`👉 ${socket.id}가 room_${roomId}에 참가`);
   });
 
-  // 메시지 전송
+  // 메시지 전송 (DB 저장 추가)
   socket.on('sendMessage', async ({ roomId, userId, content }) => {
     try {
-      // 1. DB 저장
-      await db.query(
-        'INSERT INTO chat_messages (room_id, sender_id, content) VALUES (?, ?, ?)',
+      console.log('💬 메시지 전송:', { roomId, userId, content });
+
+      // 1. DB에 메시지 저장 (sent_at 컬럼 사용)
+      const [result] = await db.query(
+        'INSERT INTO chat_messages (room_id, sender_id, content, sent_at) VALUES (?, ?, ?, NOW())',
         [roomId, userId, content]
       );
-  
+      
+      console.log('✅ 메시지 DB 저장 완료:', result.insertId);
+
+      // 2. 전송자 이름 조회
+      const [userRows] = await db.query(
+        'SELECT name FROM users WHERE user_id = ?',
+        [userId]
+      );
+      const senderName = userRows[0]?.name || '익명';
+
+      // 3. 실시간 메시지 전송 (DB 저장된 정보 포함)
       const message = {
+        message_id: result.insertId,
         sender_id: userId,
+        sender_name: senderName,
         content,
         sent_at: new Date()
       };
-  
-      // 2. 수신자 목록 조회 (본인 제외)
+
+      io.to(`room_${roomId}`).emit('receiveMessage', message);
+      console.log('📡 실시간 메시지 전송 완료');
+
+      // 4. 간단한 알림 생성 (기존 로직 유지)
       const [participants] = await db.query(
         `SELECT user_id FROM chat_participants WHERE room_id = ? AND user_id != ?`,
         [roomId, userId]
       );
-  
-      // 3. 각 수신자에게 알림 생성
+
       for (const participant of participants) {
         await createNotification({
           userId: participant.user_id,
@@ -114,14 +129,18 @@ io.on('connection', (socket) => {
           message: '새로운 채팅 메시지가 도착했습니다.'
         });
       }
-  
-      // 4. 소켓으로 메시지 전송
-      io.to(`room_${roomId}`).emit('receiveMessage', message);
+
+      console.log('🔔 알림 전송 완료:', participants.length, '명');
+
     } catch (err) {
-      console.error('❌ 채팅/알림 처리 오류:', err);
+      console.error('❌ 채팅 메시지 처리 오류:', err);
+      
+      // 에러 발생 시 클라이언트에 알림
+      socket.emit('messageError', {
+        error: '메시지 전송에 실패했습니다.'
+      });
     }
   });
-  
 
   socket.on('disconnect', () => {
     console.log('❌ 사용자 연결 종료:', socket.id);

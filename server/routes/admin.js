@@ -91,10 +91,10 @@ router.get('/classrooms', authenticateToken, async (req, res) => {
         u.name as teacher_name,
         COUNT(uc.user_id) as parent_count
       FROM classrooms c
-      JOIN schools s ON c.school = s.school_id
+      JOIN schools s ON c.school_id = s.school_id
       LEFT JOIN users u ON c.teacher_id = u.user_id
       LEFT JOIN user_classrooms uc ON c.classroom_id = uc.classroom_id
-      WHERE c.school = ?
+      WHERE c.school_id = ?
       GROUP BY c.classroom_id
       ORDER BY c.grade, c.class_number
     `, [school_id]);
@@ -106,9 +106,9 @@ router.get('/classrooms', authenticateToken, async (req, res) => {
   }
 });
 
-// ✅ 교사 삭제
-router.delete('/teachers/:id', authenticateToken, async (req, res) => {
-  const teacherId = req.params.id;
+// ✅ 교사 삭제 - 경로 패턴 수정
+router.delete('/teachers/:teacherId', authenticateToken, async (req, res) => {
+  const { teacherId } = req.params;  // teacherId로 변경
   const user_id = req.user.user_id;
 
   try {

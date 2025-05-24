@@ -41,25 +41,32 @@ function Navigation() {
         headers: { Authorization: `Bearer ${token}` }
       })
         .then(res => {
+          console.log('🔍 [Navigation] 교사 학급 조회 응답:', res.status);
           if (res.ok) {
             return res.json();
           }
           return null;
         })
         .then(data => {
+          console.log('🔍 [Navigation] 교사 학급 데이터:', data);
           if (data?.classroom?.classroom_id) {
             setTeacherClassroomId(data.classroom.classroom_id);
+            console.log('✅ [Navigation] 교사 학급 ID 설정:', data.classroom.classroom_id);
           }
         })
         .catch(err => {
-          console.log('교사 학급 조회 실패:', err);
+          console.log('❌ [Navigation] 교사 학급 조회 실패:', err);
         });
     }
   }, [user]);
 
   // 알림 개수 (실시간 갱신)
   useEffect(() => {
-    if (!user || !token || isSuperAdmin || isJoinPage || (!isJoinedClass && !user.is_admin)) return;
+    // 알림을 조회할 조건 확인
+    const shouldFetchNotifications = user && token && !isSuperAdmin && !isJoinPage && 
+      (isJoinedClass || (isTeacher && teacherClassroomId));
+
+    if (!shouldFetchNotifications) return;
     
     const fetchNotifications = () => {
       fetch('http://localhost:3001/api/notifications', {
@@ -82,7 +89,7 @@ function Navigation() {
     // 30초마다 알림 갱신
     const interval = setInterval(fetchNotifications, 30000);
     return () => clearInterval(interval);
-  }, [user, token, isSuperAdmin, isJoinPage, isJoinedClass]);
+  }, [user, token, isSuperAdmin, isJoinPage, isJoinedClass, teacherClassroomId]);
 
   if (!user) return null;
 
@@ -103,23 +110,29 @@ function Navigation() {
     }
 
     if (isTeacher) {
-      // 전체 관리자(학교 생성자)가 아닌 일반 교사
+      // 교사도 메인 페이지로 이동하도록 수정
       try {
+        console.log('🔍 [Navigation] 교사 메인 페이지로 이동');
+        
         const res = await fetch('http://localhost:3001/api/classrooms/my-classroom', {
           headers: { Authorization: `Bearer ${token}` }
         });
         
         if (res.ok) {
           const data = await res.json();
-          navigate(`/classroom/dashboard?classroom_id=${data.classroom.classroom_id}`);
+          console.log('✅ [Navigation] 교사 메인 페이지 이동:', data.classroom.classroom_id);
+          // 학급 대시보드 대신 메인 페이지로 이동
+          navigate(`/main?classroom_id=${data.classroom.classroom_id}`);
         } else if (res.status === 404) {
-          // 학급이 없는 경우에만 생성 페이지로
+          console.log('❌ [Navigation] 404 - 학급이 없음, 생성 페이지로 이동');
           navigate('/classroom/create');
         } else {
-          console.warn('학급 조회 오류:', res.status);
+          const errorData = await res.text();
+          console.error('❌ [Navigation] API 오류:', res.status, errorData);
           navigate('/classroom/create');
         }
-      } catch {
+      } catch (err) {
+        console.error('❌ [Navigation] 네트워크 오류:', err);
         navigate('/classroom/create');
       }
       return;
@@ -156,6 +169,10 @@ function Navigation() {
         {!isSuperAdmin && !isAdminCreator && isTeacher && teacherClassroomId && (
           <>
             <Link to={`/classroom/dashboard?classroom_id=${teacherClassroomId}`} style={styles.link}>학급 관리</Link>
+            <Link to={`/posts?classroom_id=${teacherClassroomId}`} style={styles.link}>게시판</Link>
+            <Link to={`/schedules?classroom_id=${teacherClassroomId}`} style={styles.link}>일정</Link>
+            <Link to={`/chat?classroom_id=${teacherClassroomId}`} style={styles.link}>채팅</Link>
+            <Link to={`/settings?classroom_id=${teacherClassroomId}`} style={styles.link}>마이페이지</Link>
             <Link to="/inquiry/form" style={styles.link}>문의하기</Link>
           </>
         )}
@@ -188,7 +205,31 @@ function Navigation() {
       </div>
 
       <div style={styles.rightSection}>
-        {!isSuperAdmin && !isAdminCreator && isJoinedClass && !isJoinPage && (
+        {/* 교사 알림 및 검색 */}
+        {!isSuperAdmin && !isAdminCreator && isTeacher && teacherClassroomId && (
+          <>
+            <Link to={`/notifications?classroom_id=${teacherClassroomId}`} style={{ ...styles.link, position: 'relative' }}>
+              🔔
+              {unreadCount > 0 && <span style={styles.badge}>{unreadCount}</span>}
+            </Link>
+            <input
+              type="text"
+              placeholder="공지 검색"
+              value={searchKeyword}
+              onChange={(e) => setSearchKeyword(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && searchKeyword.trim()) {
+                  navigate(`/posts?search=${encodeURIComponent(searchKeyword.trim())}&classroom_id=${teacherClassroomId}`);
+                  setSearchKeyword('');
+                }
+              }}
+              style={styles.searchInput}
+            />
+          </>
+        )}
+
+        {/* 일반 사용자 알림 및 검색 */}
+        {!isSuperAdmin && !isAdminCreator && !isTeacher && isJoinedClass && !isJoinPage && (
           <>
             <Link to={`/notifications?classroom_id=${classroomId}`} style={{ ...styles.link, position: 'relative' }}>
               🔔

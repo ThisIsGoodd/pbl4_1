@@ -24,7 +24,51 @@ router.get('/rooms', authenticateToken, async (req, res) => {
   }
 });
 
-// ✅ 메시지 전송 (읽지 않은 메시지 수 증가)
+// ✅ 채팅 메시지 조회 (sent_at 컬럼 사용 + 에러 방지)
+router.get('/rooms/:room_id/messages', authenticateToken, async (req, res) => {
+  const { room_id } = req.params;
+  const { user_id } = req.user;
+
+  try {
+    console.log('🔍 [messages] 메시지 조회 요청:', { room_id, user_id });
+
+    // 메시지 조회 (sent_at이 없으면 created_at 사용)
+    const [messages] = await db.query(
+      `SELECT 
+        cm.message_id, 
+        cm.sender_id, 
+        u.name AS sender_name, 
+        cm.content, 
+        COALESCE(cm.sent_at, cm.created_at) AS sent_at
+       FROM chat_messages cm
+       JOIN users u ON cm.sender_id = u.user_id
+       WHERE cm.room_id = ?
+       ORDER BY COALESCE(cm.sent_at, cm.created_at) ASC`,
+      [room_id]
+    );
+
+    console.log('📦 [messages] 조회된 메시지 수:', messages.length);
+
+    // 읽지 않은 메시지 수 초기화 (선택적)
+    try {
+      await db.query(
+        `INSERT INTO chat_unread (room_id, user_id, unread_count)
+         VALUES (?, ?, 0)
+         ON DUPLICATE KEY UPDATE unread_count = 0`,
+        [room_id, user_id]
+      );
+    } catch (unreadErr) {
+      console.warn('⚠️ 읽음 처리 오류 (무시):', unreadErr.message);
+    }
+
+    res.json({ messages });
+  } catch (err) {
+    console.error('❌ 메시지 조회 오류:', err);
+    res.status(500).json({ error: '서버 오류' });
+  }
+});
+
+// ✅ 메시지 전송 (API를 통한 전송도 지원)
 router.post('/messages', authenticateToken, async (req, res) => {
   const { room_id, content } = req.body;
   const { user_id } = req.user;
@@ -35,60 +79,36 @@ router.post('/messages', authenticateToken, async (req, res) => {
 
   try {
     // 메시지 저장
-    await db.query(
-      `INSERT INTO chat_messages (room_id, sender_id, content)
-       VALUES (?, ?, ?)`,
+    const [result] = await db.query(
+      `INSERT INTO chat_messages (room_id, sender_id, content, sent_at)
+       VALUES (?, ?, ?, NOW())`,
       [room_id, user_id, content]
     );
 
-    // 다른 참여자들의 읽지 않은 메시지 수 증가
-    const [participants] = await db.query(
-      `SELECT user_id FROM chat_participants WHERE room_id = ? AND user_id != ?`,
-      [room_id, user_id]
-    );
+    console.log('✅ API 메시지 저장:', result.insertId);
 
-    for (const participant of participants) {
-      await db.query(
-        `INSERT INTO chat_unread (room_id, user_id, unread_count)
-         VALUES (?, ?, 1)
-         ON DUPLICATE KEY UPDATE unread_count = unread_count + 1`,
-        [room_id, participant.user_id]
+    // 다른 참여자들의 읽지 않은 메시지 수 증가 (선택적)
+    try {
+      const [participants] = await db.query(
+        `SELECT user_id FROM chat_participants WHERE room_id = ? AND user_id != ?`,
+        [room_id, user_id]
       );
+
+      for (const participant of participants) {
+        await db.query(
+          `INSERT INTO chat_unread (room_id, user_id, unread_count)
+           VALUES (?, ?, 1)
+           ON DUPLICATE KEY UPDATE unread_count = unread_count + 1`,
+          [room_id, participant.user_id]
+        );
+      }
+    } catch (unreadErr) {
+      console.warn('⚠️ 읽지 않은 메시지 처리 오류 (무시):', unreadErr.message);
     }
 
-    res.json({ message: '메시지 전송 완료' });
+    res.json({ message: '메시지 전송 완료', message_id: result.insertId });
   } catch (err) {
     console.error('❌ 메시지 전송 오류:', err);
-    res.status(500).json({ error: '서버 오류' });
-  }
-});
-
-// ✅ 채팅 메시지 조회 (읽음 처리)
-router.get('/rooms/:room_id/messages', authenticateToken, async (req, res) => {
-  const { room_id } = req.params;
-  const { user_id } = req.user;
-
-  try {
-    const [messages] = await db.query(
-      `SELECT cm.message_id, cm.sender_id, u.name AS sender_name, cm.content, cm.sent_at
-       FROM chat_messages cm
-       JOIN users u ON cm.sender_id = u.user_id
-       WHERE cm.room_id = ?
-       ORDER BY cm.sent_at ASC`,
-      [room_id]
-    );
-
-    // 읽지 않은 메시지 수 초기화
-    await db.query(
-      `INSERT INTO chat_unread (room_id, user_id, unread_count)
-       VALUES (?, ?, 0)
-       ON DUPLICATE KEY UPDATE unread_count = 0`,
-      [room_id, user_id]
-    );
-
-    res.json({ messages });
-  } catch (err) {
-    console.error('❌ 메시지 조회 오류:', err);
     res.status(500).json({ error: '서버 오류' });
   }
 });

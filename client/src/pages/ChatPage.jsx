@@ -83,41 +83,79 @@ function ChatPage() {
     fetchRooms();
   }, [classroomId, token]);
 
-  // ✅ 메시지 수신 + 스크롤
+  // ✅ Socket.io 메시지 수신 + 에러 핸들링
   useEffect(() => {
+    // 새 메시지 수신
     socket.on('receiveMessage', (msg) => {
+      console.log('📨 새 메시지 수신:', msg);
       setMessages(prev => [...prev, msg]);
+    });
+
+    // 메시지 전송 에러 처리
+    socket.on('messageError', (error) => {
+      console.error('❌ 메시지 전송 에러:', error);
+      alert(`메시지 전송 실패: ${error.error}`);
     });
 
     return () => {
       socket.off('receiveMessage');
+      socket.off('messageError');
     };
   }, []);
 
+  // ✅ 메시지 목록 자동 스크롤
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // ✅ 채팅방 클릭 핸들러 (markRoomAsRead 추가)
   const handleRoomClick = async (room) => {
+    console.log('🏠 채팅방 선택:', room);
+    
     setSelectedRoom(room);
+    
+    // Socket.io 방 참가
     socket.emit('joinRoom', room.room_id);
+    
+    // 🆕 읽음 처리 (중요!)
+    socket.emit('markRoomAsRead', { 
+      roomId: room.room_id, 
+      userId: userId 
+    });
+    
+    console.log('📖 읽음 처리 요청:', { roomId: room.room_id, userId });
 
     try {
+      // 기존 메시지 불러오기
       const res = await fetch(`http://localhost:3001/api/chat/rooms/${room.room_id}/messages`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
-      if (data.messages) {
+      
+      if (res.ok && data.messages) {
+        console.log('📝 기존 메시지 로드:', data.messages.length, '개');
         setMessages(data.messages);
+      } else {
+        console.error('❌ 메시지 로드 실패:', data);
+        setMessages([]);
       }
     } catch (err) {
-      console.error('메시지 불러오기 실패:', err);
+      console.error('❌ 메시지 불러오기 실패:', err);
+      setMessages([]);
     }
   };
 
+  // ✅ 메시지 전송 핸들러
   const handleSend = () => {
     if (!newMessage.trim() || !selectedRoom) return;
 
+    console.log('📤 메시지 전송:', {
+      roomId: selectedRoom.room_id,
+      userId,
+      content: newMessage
+    });
+
+    // Socket.io로 메시지 전송
     socket.emit('sendMessage', {
       roomId: selectedRoom.room_id,
       userId,
@@ -125,6 +163,14 @@ function ChatPage() {
     });
 
     setNewMessage('');
+  };
+
+  // ✅ Enter 키 처리
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
   };
 
   if (loading) {
@@ -162,7 +208,7 @@ function ChatPage() {
           {rooms.length === 0 ? (
             <p style={{ color: '#999' }}>채팅방이 없습니다.</p>
           ) : (
-            <ul>
+            <ul style={{ listStyle: 'none', padding: 0 }}>
               {rooms.map(r => (
                 <li
                   key={r.room_id}
@@ -181,6 +227,18 @@ function ChatPage() {
                   </div>
                   <div style={{ fontSize: '0.8rem', color: '#666' }}>
                     방 번호: {r.room_id}
+                    {r.unread_count > 0 && (
+                      <span style={{
+                        marginLeft: '0.5rem',
+                        backgroundColor: 'red',
+                        color: 'white',
+                        borderRadius: '50%',
+                        padding: '2px 6px',
+                        fontSize: '0.7rem'
+                      }}>
+                        {r.unread_count}
+                      </span>
+                    )}
                   </div>
                 </li>
               ))}
@@ -213,7 +271,7 @@ function ChatPage() {
                     }}>
                       <div style={{ fontSize: '0.8rem', marginBottom: '0.2rem' }}>
                         <strong>{m.sender_name || (m.sender_id === userId ? '나' : '상대방')}</strong>{' '}
-                        <small>{new Date(m.sent_at).toLocaleTimeString()}</small>
+                        <small>{new Date(m.sent_at || m.created_at).toLocaleTimeString()}</small>
                       </div>
                       <p style={{ margin: 0 }}>{m.content}</p>
                     </div>
@@ -234,7 +292,7 @@ function ChatPage() {
                 placeholder="메시지 입력..."
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+                onKeyPress={handleKeyPress}
                 style={{ 
                   flex: 1, 
                   padding: '0.5rem',

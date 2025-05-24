@@ -9,12 +9,15 @@ function PostWritePage() {
   const [title, setTitle] = useState('');
   const [files, setFiles] = useState([]);
   const [classroomInfo, setClassroomInfo] = useState(null);
-  const [postType, setPostType] = useState('classroom'); // 'classroom' or 'school'
+  const [postType, setPostType] = useState('classroom');
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [userSchoolId, setUserSchoolId] = useState(null);
 
   const token = localStorage.getItem('token');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const classroomId = searchParams.get('classroom_id');
+  const schoolId = searchParams.get('school_id'); // 🆕 학교 전체 관리자용
 
   const editor = useEditor({
     extensions: [StarterKit, Image],
@@ -26,6 +29,28 @@ function PostWritePage() {
       },
     },
   });
+
+  // 🆕 사용자 정보 추출
+  useEffect(() => {
+    const parseJwt = (token) => {
+      try {
+        return JSON.parse(atob(token.split('.')[1]));
+      } catch {
+        return null;
+      }
+    };
+    
+    const payload = parseJwt(token);
+    if (payload) {
+      setIsAdmin(payload.is_admin || false);
+      setUserSchoolId(payload.school_id || null);
+      
+      // 🆕 학교 전체 관리자인 경우 자동으로 학교 공지로 설정
+      if (payload.is_admin && schoolId && !classroomId) {
+        setPostType('school');
+      }
+    }
+  }, [token, schoolId, classroomId]);
 
   useEffect(() => {
     if (!classroomId) return;
@@ -54,8 +79,17 @@ function PostWritePage() {
     const formData = new FormData();
     formData.append('title', title);
     formData.append('content', content);
-    formData.append('classroom_id', classroomId);
-    formData.append('school_wide', postType === 'school'); // 학교 공지 여부
+    
+    // 🆕 학교 전체 관리자 처리
+    if (isAdmin && schoolId && !classroomId) {
+      // 학교 전체 관리자인 경우 classroom_id 없이 전송
+      formData.append('school_wide', 'true');
+    } else {
+      // 일반 교사인 경우
+      formData.append('classroom_id', classroomId);
+      formData.append('school_wide', postType === 'school');
+    }
+    
     for (let i = 0; i < files.length; i++) {
       formData.append('files', files[i]);
     }
@@ -69,7 +103,13 @@ function PostWritePage() {
       const data = await res.json();
       if (res.ok) {
         alert('게시글 작성 완료!');
-        navigate(`/posts?classroom_id=${classroomId}`);
+        
+        // 🆕 작성 완료 후 이동 경로 결정
+        if (isAdmin && schoolId && !classroomId) {
+          navigate('/admin/main'); // 학교 전체 관리자는 관리자 메인으로
+        } else {
+          navigate(`/posts?classroom_id=${classroomId}`); // 일반 교사는 해당 학급 게시판으로
+        }
       } else {
         alert(data.error || '작성 실패');
       }
@@ -99,9 +139,23 @@ function PostWritePage() {
 
   return (
     <div style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
-      <h1 style={{ marginBottom: '2rem', fontSize: '2rem', fontWeight: 'bold' }}>게시글 작성</h1>
+      <h1 style={{ marginBottom: '2rem', fontSize: '2rem', fontWeight: 'bold' }}>
+        {isAdmin && schoolId && !classroomId ? '학교 전체 공지 작성' : '게시글 작성'}
+      </h1>
 
-      {classroomInfo && (
+      {/* 🆕 학교 전체 관리자인 경우 학교 정보 표시 */}
+      {isAdmin && schoolId && !classroomId ? (
+        <p style={{ 
+          marginBottom: '1.5rem', 
+          fontWeight: 'bold', 
+          padding: '1rem', 
+          backgroundColor: '#e3f2fd', 
+          borderRadius: '8px',
+          border: '1px solid #90caf9'
+        }}>
+          🏫 학교 전체 공지사항으로 작성됩니다.
+        </p>
+      ) : classroomInfo ? (
         <p style={{ 
           marginBottom: '1.5rem', 
           fontWeight: 'bold', 
@@ -111,52 +165,54 @@ function PostWritePage() {
         }}>
           대상 학급: {classroomInfo.grade}학년 {classroomInfo.class_number}반 ({classroomInfo.school})
         </p>
-      )}
+      ) : null}
 
-      {/* 공지사항 유형 선택 */}
-      <div style={{ 
-        marginBottom: '1.5rem', 
-        padding: '1rem', 
-        border: '1px solid #d1d5db', 
-        borderRadius: '8px', 
-        backgroundColor: '#f9fafb' 
-      }}>
-        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>
-          공지사항 유형 선택
-        </label>
-        <div style={{ display: 'flex', gap: '1.5rem' }}>
-          <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-            <input
-              type="radio"
-              value="classroom"
-              checked={postType === 'classroom'}
-              onChange={(e) => setPostType(e.target.value)}
-              style={{ marginRight: '8px' }}
-            />
-            <span style={{ fontSize: '14px' }}>
-              📚 학급 공지사항 
-              <small style={{ color: '#6b7280', display: 'block' }}>
-                해당 학급 학생들에게만 알림
-              </small>
-            </span>
+      {/* 🆕 공지사항 유형 선택 (일반 교사만) */}
+      {!isAdmin && classroomInfo && (
+        <div style={{ 
+          marginBottom: '1.5rem', 
+          padding: '1rem', 
+          border: '1px solid #d1d5db', 
+          borderRadius: '8px', 
+          backgroundColor: '#f9fafb' 
+        }}>
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>
+            공지사항 유형 선택
           </label>
-          <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-            <input
-              type="radio"
-              value="school"
-              checked={postType === 'school'}
-              onChange={(e) => setPostType(e.target.value)}
-              style={{ marginRight: '8px' }}
-            />
-            <span style={{ fontSize: '14px' }}>
-              🏫 학교 전체 공지사항
-              <small style={{ color: '#6b7280', display: 'block' }}>
-                학교 전체 학생들에게 알림
-              </small>
-            </span>
-          </label>
+          <div style={{ display: 'flex', gap: '1.5rem' }}>
+            <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+              <input
+                type="radio"
+                value="classroom"
+                checked={postType === 'classroom'}
+                onChange={(e) => setPostType(e.target.value)}
+                style={{ marginRight: '8px' }}
+              />
+              <span style={{ fontSize: '14px' }}>
+                📚 학급 공지사항 
+                <small style={{ color: '#6b7280', display: 'block' }}>
+                  해당 학급 학생들에게만 알림
+                </small>
+              </span>
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+              <input
+                type="radio"
+                value="school"
+                checked={postType === 'school'}
+                onChange={(e) => setPostType(e.target.value)}
+                style={{ marginRight: '8px' }}
+              />
+              <span style={{ fontSize: '14px' }}>
+                🏫 학교 전체 공지사항
+                <small style={{ color: '#6b7280', display: 'block' }}>
+                  학교 전체 학생들에게 알림
+                </small>
+              </span>
+            </label>
+          </div>
         </div>
-      </div>
+      )}
 
       <input
         type="text"
@@ -241,7 +297,11 @@ function PostWritePage() {
         onMouseOver={(e) => e.target.style.backgroundColor = '#2563eb'}
         onMouseOut={(e) => e.target.style.backgroundColor = '#3b82f6'}
       >
-        {postType === 'school' ? '🏫 학교 전체 공지 작성' : '📚 학급 공지 작성'}
+        {isAdmin && schoolId && !classroomId 
+          ? '🏫 학교 전체 공지 작성' 
+          : postType === 'school' 
+          ? '🏫 학교 전체 공지 작성' 
+          : '📚 학급 공지 작성'}
       </button>
     </div>
   );

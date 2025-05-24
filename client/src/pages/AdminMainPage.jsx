@@ -173,7 +173,7 @@ function AdminMainPage() {
             )}
             
             <div style={{ marginTop: '1.5rem' }}>
-              <Link to="/schedules" style={styles.scheduleButton}>
+              <Link to={`/schedules?school_id=${user.school_id}`} style={styles.scheduleButton}>
                 📅 전체 일정 관리
               </Link>
             </div>

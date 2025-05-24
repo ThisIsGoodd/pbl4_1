@@ -34,10 +34,10 @@ router.post('/upload-image', authenticateToken, upload.single('image'), async (r
   }
 });
 
-// ✅ 게시글 작성 - 학교 전체 공지 알림 수정
+// ✅ 게시글 작성 - 학교 전체 관리자 지원 및 학교 전체 공지 알림 수정
 router.post('/', authenticateToken, upload.array('files', 10), async (req, res) => {
   const { classroom_id, school_wide, title, content } = req.body;
-  const { user_id, role } = req.user;
+  const { user_id, role, is_admin, school_id: userSchoolId } = req.user;
   const files = req.files || [];
 
   console.log('📝 게시글 작성 요청');
@@ -54,12 +54,37 @@ router.post('/', authenticateToken, upload.array('files', 10), async (req, res) 
   }
 
   try {
+    let targetClassroomId = null;
+    let finalSchoolWide = false;
+
+    // 🆕 학교 전체 관리자인 경우
+    if (is_admin && userSchoolId && !classroom_id) {
+      console.log('🏫 학교 전체 관리자의 게시글 작성');
+      
+      // 학교 전체 공지이므로 대표 학급 하나를 가져와서 classroom_id로 사용
+      const [[representativeClassroom]] = await db.query(
+        'SELECT classroom_id FROM classrooms WHERE school_id = ? LIMIT 1',
+        [userSchoolId]
+      );
+      
+      if (representativeClassroom) {
+        targetClassroomId = representativeClassroom.classroom_id;
+        finalSchoolWide = true; // 학교 전체 관리자는 무조건 학교 전체 공지
+      } else {
+        return res.status(400).json({ error: '학교에 등록된 학급이 없습니다.' });
+      }
+    } else {
+      // 일반 교사인 경우
+      targetClassroomId = classroom_id;
+      finalSchoolWide = school_wide === 'true';
+    }
+
     // 게시글 저장
     const [result] = await db.query(
       `INSERT INTO posts 
         (author_id, title, content, category, created_at, views, classroom_id, school_wide, likes) 
         VALUES (?, ?, ?, ?, NOW(), 0, ?, ?, 0)`,
-      [user_id, title, content, '공지사항', classroom_id || null, school_wide === 'true']
+      [user_id, title, content, '공지사항', targetClassroomId, finalSchoolWide]
     );
 
     const postId = result.insertId;
@@ -77,27 +102,36 @@ router.post('/', authenticateToken, upload.array('files', 10), async (req, res) 
     }
 
     // 알림 전송 (학급 또는 학교 전체)
-    if (school_wide === 'true') {
+    if (finalSchoolWide) {
       // 🏫 학교 전체 공지 - 같은 학교의 모든 학급 학생에게 알림
-      const [[classroomRow]] = await db.query(
-        'SELECT school_id FROM classrooms WHERE classroom_id = ? LIMIT 1',
-        [classroom_id]
-      );
+      let targetSchoolId;
       
-      if (classroomRow) {
-        const school_id = classroomRow.school_id;
+      if (is_admin && userSchoolId) {
+        // 학교 전체 관리자인 경우 직접 school_id 사용
+        targetSchoolId = userSchoolId;
+      } else {
+        // 일반 교사가 학교 전체 공지를 작성한 경우
+        const [[classroomRow]] = await db.query(
+          'SELECT school_id FROM classrooms WHERE classroom_id = ? LIMIT 1',
+          [targetClassroomId]
+        );
+        targetSchoolId = classroomRow?.school_id;
+      }
+      
+      if (targetSchoolId) {
         const [schoolUsers] = await db.query(
           `SELECT DISTINCT uc.user_id 
           FROM user_classrooms uc
           JOIN classrooms c ON uc.classroom_id = c.classroom_id
           WHERE c.school_id = ? AND uc.user_id != ?`,
-          [school_id, user_id]
+          [targetSchoolId, user_id]
         );
 
         for (const u of schoolUsers) {
           await createNotification({
             userId: u.user_id,
             classroomId: null, // 학교 전체 공지는 특정 학급 없음
+            schoolId: targetSchoolId,
             type: 'post',
             relatedId: postId,
             message: `새 학교 공지: "${title}"`
@@ -105,17 +139,17 @@ router.post('/', authenticateToken, upload.array('files', 10), async (req, res) 
         }
         console.log('✅ 학교 전체 알림 전송 완료:', schoolUsers.length, '명');
       }
-    } else if (classroom_id) {
+    } else if (targetClassroomId) {
       // 📚 학급 공지 - 해당 학급 학생에게만 알림
       const [classUsers] = await db.query(
         'SELECT user_id FROM user_classrooms WHERE classroom_id = ? AND user_id != ?',
-        [classroom_id, user_id]
+        [targetClassroomId, user_id]
       );
 
       for (const u of classUsers) {
         await createNotification({
           userId: u.user_id,
-          classroomId: classroom_id,
+          classroomId: targetClassroomId,
           type: 'post',
           relatedId: postId,
           message: `새 공지사항: "${title}"`
@@ -397,6 +431,40 @@ router.get('/:id/like-check', authenticateToken, async (req, res) => {
   );
 
   res.json({ liked: rows.length > 0 });
+});
+
+// ✅ 학교 전체 관리자용 공지사항 조회 추가
+router.get('/admin', authenticateToken, async (req, res) => {
+  const { user_id, is_admin, school_id: userSchoolId } = req.user;
+  const { school_id } = req.query;
+
+  try {
+    // 🆕 쿼리 파라미터로 받은 school_id 우선 사용, 없으면 토큰의 school_id 사용
+    const targetSchoolId = school_id || userSchoolId;
+
+    if (!is_admin || !targetSchoolId) {
+      return res.status(403).json({ error: '학교 관리자 권한이 없거나 학교 정보가 없습니다.' });
+    }
+
+    console.log('🔍 [posts/admin] 학교 ID:', targetSchoolId);
+
+    const [postRows] = await db.query(
+      `SELECT posts.*, users.name AS author_name
+       FROM posts
+       JOIN users ON posts.author_id = users.user_id
+       JOIN classrooms ON posts.classroom_id = classrooms.classroom_id
+       WHERE classrooms.school_id = ? AND posts.school_wide = TRUE
+       ORDER BY posts.created_at DESC`,
+      [targetSchoolId]
+    );
+
+    console.log('📝 [posts/admin] 조회된 공지사항 수:', postRows.length);
+
+    res.json({ posts: postRows });
+  } catch (err) {
+    console.error('🔥 관리자 공지사항 조회 오류:', err);
+    res.status(500).json({ error: '서버 오류', details: err.message });
+  }
 });
 
 module.exports = router;

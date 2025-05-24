@@ -162,10 +162,11 @@ function Navigation() {
           </>
         )}
 
-        {/* 🆕 학교 전체 관리자 메뉴 (메인 링크 추가) */}
+        {/* 🆕 학교 전체 관리자 메뉴 (일정 링크 수정) */}
         {!isSuperAdmin && isAdminCreator && (
           <>
             <Link to="/admin/main" style={styles.link}>메인</Link>
+            <Link to={`/schedules?school_id=${user.school_id}`} style={styles.link}>학교 일정</Link>
             <Link to="/admindashboard?tab=codes" style={styles.link}>관리</Link>
             <Link to="/inquiry/form" style={styles.link}>문의하기</Link>
           </>

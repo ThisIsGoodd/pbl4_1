@@ -1,106 +1,157 @@
 import { useEffect, useRef } from 'react';
 
 function GoogleLoginButton({ onSuccess }) {
-  const buttonRef = useRef(null);
+  const googleButtonRef = useRef(null);
+  const isInitialized = useRef(false);
 
   useEffect(() => {
-    if (window.google && buttonRef.current) {
-      // 기본 구글 버튼을 숨기고 커스텀 버튼 사용
-      window.google.accounts.id.initialize({
-        client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
-        callback: onSuccess,
-        ux_mode: 'popup'
-      });
+    const initializeGoogleSignIn = () => {
+      if (!window.google || isInitialized.current) return;
 
-      // 숨겨진 구글 버튼 렌더링
-      const hiddenDiv = document.createElement('div');
-      hiddenDiv.style.display = 'none';
-      document.body.appendChild(hiddenDiv);
+      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
       
-      window.google.accounts.id.renderButton(hiddenDiv, { 
-        theme: 'outline', 
-        size: 'large' 
-      });
-
-      // 커스텀 버튼 클릭 시 구글 로그인 실행
-      const handleCustomClick = () => {
-        window.google.accounts.id.prompt();
-      };
-
-      if (buttonRef.current) {
-        buttonRef.current.addEventListener('click', handleCustomClick);
+      if (!clientId) {
+        console.error('❌ VITE_GOOGLE_CLIENT_ID가 설정되지 않았습니다.');
+        return;
       }
 
-      return () => {
-        if (buttonRef.current) {
-          buttonRef.current.removeEventListener('click', handleCustomClick);
+      console.log('🔍 Google Client ID:', clientId);
+
+      try {
+        window.google.accounts.id.initialize({
+          client_id: clientId,
+          callback: onSuccess,
+          ux_mode: 'popup',
+          context: 'signin',
+          auto_select: false,
+          use_fedcm_for_prompt: false // FedCM 비활성화
+        });
+
+        if (googleButtonRef.current) {
+          window.google.accounts.id.renderButton(
+            googleButtonRef.current,
+            { 
+              theme: 'outline', 
+              size: 'large',
+              type: 'standard',
+              text: 'signin_with',
+              shape: 'rectangular',
+              logo_alignment: 'left',
+              width: 280
+            }
+          );
         }
-        if (document.body.contains(hiddenDiv)) {
-          document.body.removeChild(hiddenDiv);
+
+        isInitialized.current = true;
+        console.log('✅ Google Sign-In 초기화 완료');
+
+      } catch (error) {
+        console.error('❌ Google Sign-In 초기화 오류:', error);
+      }
+    };
+
+    // Google SDK가 로드될 때까지 대기
+    if (window.google && window.google.accounts) {
+      initializeGoogleSignIn();
+    } else {
+      const checkGoogle = setInterval(() => {
+        if (window.google && window.google.accounts) {
+          clearInterval(checkGoogle);
+          initializeGoogleSignIn();
         }
-      };
+      }, 100);
+
+      // 10초 후 타임아웃
+      setTimeout(() => {
+        clearInterval(checkGoogle);
+        if (!isInitialized.current) {
+          console.error('❌ Google SDK 로드 실패');
+        }
+      }, 10000);
     }
   }, [onSuccess]);
 
   return (
-    <button 
-      ref={buttonRef}
-      style={styles.googleButton}
-      onMouseOver={(e) => {
-        e.target.style.backgroundColor = '#f8f9fa';
-        e.target.style.transform = 'translateY(-1px)';
-        e.target.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
-      }}
-      onMouseOut={(e) => {
-        e.target.style.backgroundColor = '#ffffff';
-        e.target.style.transform = 'translateY(0)';
-        e.target.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)';
-      }}
-    >
-      <div style={styles.buttonContent}>
-        <img 
-          src="https://developers.google.com/identity/images/g-logo.png" 
-          alt="Google"
-          style={styles.googleIcon}
-        />
-        <span style={styles.buttonText}>Continue with Google</span>
-      </div>
-    </button>
+    <div style={styles.container}>
+      <div ref={googleButtonRef} style={styles.googleButton}></div>
+      {!isInitialized.current && (
+        <div style={styles.loadingContainer}>
+          <div style={styles.spinner}></div>
+          <p style={styles.loadingText}>
+            Google 로그인을 준비 중입니다...
+          </p>
+        </div>
+      )}
+      
+      {/* 보조 텍스트 추가 */}
+      {isInitialized.current && (
+        <p style={styles.helperText}>
+          빠르고 안전한 Google 계정으로 로그인하세요
+        </p>
+      )}
+    </div>
   );
 }
 
 const styles = {
-  googleButton: {
-    width: '100%',
-    height: '48px',
-    backgroundColor: '#ffffff',
-    border: '1.5px solid #e0e0e0',
-    borderRadius: '24px',
-    cursor: 'pointer',
+  container: {
     display: 'flex',
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    transition: 'all 0.2s ease',
-    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
+    padding: '1.5rem 0',
+    minHeight: '140px',
+    width: '100%'
   },
-  
-  buttonContent: {
+  googleButton: {
     display: 'flex',
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: '12px'
+    borderRadius: '16px',
+    overflow: 'hidden',
+    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+    transform: 'translateY(0)',
+    filter: 'drop-shadow(0 6px 20px rgba(66, 133, 244, 0.15))',
+    // 호버 효과를 위한 스타일
+    '&:hover': {
+      transform: 'translateY(-3px)',
+      filter: 'drop-shadow(0 12px 30px rgba(66, 133, 244, 0.25))'
+    }
   },
-  
-  googleIcon: {
-    width: '20px',
-    height: '20px'
+  loadingContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '2rem',
+    gap: '1.2rem'
   },
-  
-  buttonText: {
-    fontSize: '14px',
+  spinner: {
+    width: '36px',
+    height: '36px',
+    border: '3px solid #f1f5f9',
+    borderTop: '3px solid #4285f4',
+    borderRadius: '50%',
+    animation: 'spin 1s linear infinite'
+  },
+  loadingText: {
+    color: '#64748b',
+    fontSize: '0.9rem',
+    margin: 0,
+    textAlign: 'center',
     fontWeight: '500',
-    color: '#3c4043',
-    letterSpacing: '0.25px'
+    letterSpacing: '0.025em',
+    lineHeight: '1.4'
+  },
+  helperText: {
+    marginTop: '20px',
+    fontSize: '14px',
+    color: '#6b7280',
+    textAlign: 'center',
+    lineHeight: '20px',
+    margin: '20px 0 0 0',
+    fontWeight: '400',
+    opacity: 0.8
   }
 };
 

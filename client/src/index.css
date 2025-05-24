@@ -345,3 +345,84 @@ input::placeholder, textarea::placeholder {
   background-color: rgba(43, 90, 160, 0.2);
   color: var(--gray-800);
 }
+
+/* 기존 index.css 내용 하단에 추가 */
+
+/* 스피너 애니메이션 */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* 부드러운 페이드인 애니메이션 */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Google 로그인 버튼 호버 효과 - 더 예쁘게 */
+iframe[src*="accounts.google.com"] {
+  border-radius: 16px !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* Google 버튼 div에 호버 효과 적용 */
+div[data-type] {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  border-radius: 16px !important;
+  overflow: hidden !important;
+}
+
+/* 부모 div에 호버했을 때 효과 */
+div[data-type]:hover {
+  transform: translateY(-3px) !important;
+  filter: drop-shadow(0 12px 30px rgba(66, 133, 244, 0.25)) !important;
+}
+
+/* Google 버튼 내부 iframe 호버 효과 */
+div[data-type]:hover iframe {
+  transform: translateY(0) !important;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+  .mobile-friendly {
+    padding: 1rem !important;
+  }
+  
+  /* 모바일에서 Google 버튼 크기 조정 */
+  div[data-type] {
+    max-width: 100% !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .mobile-friendly {
+    padding: 0.5rem !important;
+  }
+}
+
+/* 부드러운 전환 효과 */
+* {
+  box-sizing: border-box;
+}
+
+.fade-in-up {
+  animation: fadeInUp 0.6s ease-out;
+}
+
+/* Google 버튼 추가 스타일링 */
+div[data-type="standard"] {
+  background: white !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+}
+
+div[data-type="standard"]:hover {
+  box-shadow: 0 8px 25px rgba(66, 133, 244, 0.2) !important;
+}

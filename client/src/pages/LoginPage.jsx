@@ -5,9 +5,9 @@ import { AuthContext } from '../contexts/AuthContext';
 
 function LoginPage() {
   const { setUser } = useContext(AuthContext);
-  const [windowWidth, setWindowWidth] = useState(window.innerWidth); // 🆕 윈도우 크기 추적
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
 
-  // 🆕 윈도우 크기 변화 감지
+  // 윈도우 크기 변화 감지
   useEffect(() => {
     const handleResize = () => {
       setWindowWidth(window.innerWidth);
@@ -17,13 +17,17 @@ function LoginPage() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // 🆕 윈도우 크기에 따른 로고 크기 계산
+  // 윈도우 크기에 따른 로고 크기 계산
   const getLogoSize = () => {
     if (windowWidth > 1200) return '450px';  // 대형 화면
     if (windowWidth > 768) return '400px';   // 데스크톱
     if (windowWidth > 480) return '300px';   // 태블릿
     return '250px';                          // 모바일
   };
+
+  // 윈도우 크기에 따른 레이아웃 판단
+  const isMobile = windowWidth <= 768;
+  const isTablet = windowWidth > 768 && windowWidth <= 1024;
 
   const handleGoogleLogin = async (response) => {
     const idToken = response.credential;
@@ -62,12 +66,26 @@ function LoginPage() {
   };
 
   return (
-    <div style={styles.container}>
+    <div style={{
+      ...styles.container,
+      padding: isMobile ? '1rem' : '2rem'
+    }}>
       {/* 로그인 텍스트 (왼쪽 상단) */}
-      <div style={styles.loginText}>Login</div>
+      <div style={{
+        ...styles.loginText,
+        top: isMobile ? '1rem' : '2rem',
+        left: isMobile ? '1rem' : '2rem',
+        fontSize: isMobile ? '1rem' : '1.1rem'
+      }}>
+        Login
+      </div>
       
       {/* 메인 콘텐츠 */}
-      <div style={styles.content}>
+      <div style={{
+        ...styles.content,
+        padding: isMobile ? '1rem' : '2rem',
+        maxWidth: isMobile ? '100%' : '500px'
+      }}>
         {/* 로고 영역 */}
         <div style={styles.logoSection}>
           <img 
@@ -75,17 +93,45 @@ function LoginPage() {
             alt="CLASSFEED Logo" 
             style={{
               ...styles.logoImage,
-              width: getLogoSize() // 🆕 동적 크기 적용
+              width: getLogoSize(),
+              marginBottom: isMobile ? '1.5rem' : '2rem'
             }}
           />
-          <p style={styles.subtitle}>E-가정 통신 & 소통 플랫폼</p>
+          <p style={{
+            ...styles.subtitle,
+            fontSize: isMobile ? '1rem' : '1.1rem'
+          }}>
+            E-가정 통신 & 소통 플랫폼
+          </p>
         </div>
 
         {/* 구글 로그인 버튼 */}
-        <div style={styles.loginSection}>
+        <div style={{
+          ...styles.loginSection,
+          maxWidth: isMobile ? '100%' : '320px'
+        }}>
           <GoogleLoginButton onSuccess={handleGoogleLogin} />
         </div>
+
+        {/* 추가 정보 (모바일에서만 표시) */}
+        {isMobile && (
+          <div style={styles.mobileInfo}>
+            <p style={styles.infoText}>
+              학교와 가정을 연결하는<br />
+              스마트한 소통 공간
+            </p>
+          </div>
+        )}
       </div>
+
+      {/* 푸터 (데스크톱에서만 표시) */}
+      {!isMobile && (
+        <div style={styles.footer}>
+          <p style={styles.footerText}>
+            학교와 가정을 연결하는 스마트한 소통 공간
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -97,17 +143,16 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     position: 'relative',
-    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
+    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+    transition: 'all 0.3s ease'
   },
   
   loginText: {
     position: 'absolute',
-    top: '2rem',
-    left: '2rem',
-    fontSize: '1.1rem',
     color: '#6c757d',
     fontWeight: '500',
-    zIndex: 10
+    zIndex: 10,
+    transition: 'all 0.3s ease'
   },
   
   content: {
@@ -116,35 +161,63 @@ const styles = {
     flexDirection: 'column',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: '2rem',
-    maxWidth: '500px',
     margin: '0 auto',
-    width: '100%'
+    width: '100%',
+    transition: 'all 0.3s ease'
   },
   
   logoSection: {
     textAlign: 'center',
-    marginBottom: '3rem'
+    marginBottom: '3rem',
+    animation: 'fadeInUp 0.8s ease-out'
   },
   
   logoImage: {
     height: 'auto',
-    marginBottom: '2rem',
     objectFit: 'contain',
-    maxWidth: '90vw', // 화면을 넘지 않도록 제한
-    transition: 'width 0.3s ease' // 🆕 부드러운 크기 변화
+    maxWidth: '90vw',
+    transition: 'all 0.3s ease',
+    filter: 'drop-shadow(0 4px 12px rgba(0, 0, 0, 0.1))'
   },
   
   subtitle: {
-    fontSize: '1.1rem',
     color: '#6c757d',
     margin: '0',
-    fontWeight: '400'
+    fontWeight: '400',
+    transition: 'all 0.3s ease'
   },
   
   loginSection: {
     width: '100%',
-    maxWidth: '320px'
+    animation: 'fadeInUp 0.8s ease-out 0.2s both'
+  },
+
+  mobileInfo: {
+    marginTop: '2rem',
+    textAlign: 'center',
+    animation: 'fadeInUp 0.8s ease-out 0.4s both'
+  },
+
+  infoText: {
+    fontSize: '0.9rem',
+    color: '#8e9aaf',
+    lineHeight: '1.6',
+    margin: 0
+  },
+
+  footer: {
+    position: 'absolute',
+    bottom: '2rem',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    textAlign: 'center'
+  },
+
+  footerText: {
+    fontSize: '0.9rem',
+    color: '#8e9aaf',
+    margin: 0,
+    opacity: 0.8
   }
 };
 

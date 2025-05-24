@@ -6,12 +6,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>My App</title>
 
-    <!-- ✅ 구글 OAuth SDK -->
+    <!-- ✅ 구글 OAuth SDK - 수정된 버전 -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
+    
     <!-- FullCalendar v6 CSS (CDN 방식) -->
     <link href="https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.8/main.min.css" rel="stylesheet" />
     <link href="https://cdn.jsdelivr.net/npm/@fullcalendar/daygrid@6.1.8/main.min.css" rel="stylesheet" />
 
+    <!-- 추가: Google SDK 로드 확인 스크립트 -->
+    <script>
+      window.onload = function() {
+        console.log('🔍 Google SDK 로드 상태:', !!window.google);
+        if (window.google) {
+          console.log('✅ Google SDK 로드 완료');
+        } else {
+          console.error('❌ Google SDK 로드 실패');
+        }
+      };
+    </script>
   </head>
   <body>
     <div id="root"></div>

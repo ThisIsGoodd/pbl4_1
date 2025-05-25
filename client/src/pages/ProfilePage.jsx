@@ -1,10 +1,12 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom'; // 🔥 추가: useNavigate import
+import React, { useEffect, useState, useContext } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { getToken } from '../utils/jwt';
+import { AuthContext } from '../contexts/AuthContext'; // 🔥 추가
 
 function ProfilePage() {
-  const navigate = useNavigate(); // 🔥 추가: navigate 훅 사용
+  const navigate = useNavigate();
+  const { logout } = useContext(AuthContext); // 🔥 추가: 로그아웃 함수
   const [user, setUser] = useState(null);
   const [name, setName] = useState('');
   const [childName, setChildName] = useState('');
@@ -80,8 +82,13 @@ function ProfilePage() {
       const formData = new FormData();
       formData.append('name', name);
       formData.append('child_name', childName);
-      formData.append('chat_dnd_start', chatDndStart);
-      formData.append('chat_dnd_end', chatDndEnd);
+      
+      // 🔥 수정: 선생님만 DND 시간 설정 가능
+      if (user.role === 'teacher') {
+        formData.append('chat_dnd_start', chatDndStart);
+        formData.append('chat_dnd_end', chatDndEnd);
+      }
+      
       if (image) formData.append('profile_picture', image);
 
       await axios.patch('http://localhost:3001/api/users/profile', formData, {
@@ -104,6 +111,94 @@ function ProfilePage() {
     } catch (err) {
       console.error('❌ 저장 실패:', err.response?.data || err.message);
       alert('저장 실패');
+    }
+  };
+
+  // 🔥 추가: 학급 탈퇴 (학부모용)
+  const handleLeaveClassroom = async (classroomId) => {
+    if (!window.confirm('정말로 이 학급에서 탈퇴하시겠습니까?')) return;
+
+    try {
+      const res = await axios.delete(`http://localhost:3001/api/users/leave-classroom/${classroomId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (res.status === 200) {
+        alert('학급 탈퇴가 완료되었습니다.');
+        window.location.reload();
+      }
+    } catch (err) {
+      console.error('학급 탈퇴 실패:', err);
+      alert('학급 탈퇴에 실패했습니다.');
+    }
+  };
+
+  // 🔥 추가: 학급 삭제 (선생님용)
+  const handleDeleteClassroom = async (classroomId) => {
+    if (!window.confirm('정말로 학급을 삭제하시겠습니까? 모든 데이터가 삭제됩니다.')) return;
+
+    try {
+      const res = await axios.delete(`http://localhost:3001/api/classrooms/${classroomId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (res.status === 200) {
+        alert('학급이 삭제되었습니다.');
+        navigate('/classroom/create');
+      }
+    } catch (err) {
+      console.error('학급 삭제 실패:', err);
+      alert('학급 삭제에 실패했습니다.');
+    }
+  };
+
+  // 🔥 추가: 학교 삭제 (학교 관리자용)
+  const handleDeleteSchool = async () => {
+    if (!window.confirm('정말로 학교를 삭제하시겠습니까? 모든 학급과 데이터가 삭제됩니다.')) return;
+    
+    const confirmText = prompt('삭제를 확인하려면 "학교삭제"를 입력하세요:');
+    if (confirmText !== '학교삭제') {
+      alert('삭제가 취소되었습니다.');
+      return;
+    }
+
+    try {
+      const res = await axios.delete(`http://localhost:3001/api/superadmin/schools/${user.school_id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (res.status === 200) {
+        alert('학교가 삭제되었습니다.');
+        logout(); // 로그아웃 처리
+      }
+    } catch (err) {
+      console.error('학교 삭제 실패:', err);
+      alert('학교 삭제에 실패했습니다.');
+    }
+  };
+
+  // 🔥 추가: 회원 탈퇴
+  const handleDeleteAccount = async () => {
+    if (!window.confirm('정말로 회원 탈퇴하시겠습니까? 모든 데이터가 삭제됩니다.')) return;
+    
+    const confirmText = prompt('탈퇴를 확인하려면 "회원탈퇴"를 입력하세요:');
+    if (confirmText !== '회원탈퇴') {
+      alert('탈퇴가 취소되었습니다.');
+      return;
+    }
+
+    try {
+      const res = await axios.delete('http://localhost:3001/api/users/delete-account', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (res.status === 200) {
+        alert('회원 탈퇴가 완료되었습니다.');
+        logout(); // 로그아웃 처리
+      }
+    } catch (err) {
+      console.error('회원 탈퇴 실패:', err);
+      alert('회원 탈퇴에 실패했습니다.');
     }
   };
 
@@ -147,22 +242,24 @@ function ProfilePage() {
           />
         </div>
 
-        <div style={{ marginBottom: '1rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>자녀 이름:</label>
-          <input
-            type="text"
-            placeholder="자녀 이름 입력"
-            value={childName}
-            onChange={(e) => setChildName(e.target.value)}
-            style={{ 
-              width: '100%', 
-              padding: '0.75rem', 
-              border: '1px solid #ccc',
-              borderRadius: '6px',
-              fontSize: '1rem'
-            }}
-          />
-        </div>
+        {user.role === 'parent' && (
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>자녀 이름:</label>
+            <input
+              type="text"
+              placeholder="자녀 이름 입력"
+              value={childName}
+              onChange={(e) => setChildName(e.target.value)}
+              style={{ 
+                width: '100%', 
+                padding: '0.75rem', 
+                border: '1px solid #ccc',
+                borderRadius: '6px',
+                fontSize: '1rem'
+              }}
+            />
+          </div>
+        )}
 
         <div style={{ marginBottom: '1rem' }}>
           <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>프로필 사진:</label>
@@ -191,48 +288,50 @@ function ProfilePage() {
         </div>
       </div>
 
-      {/* 채팅 방해금지 시간 설정 */}
-      <div style={{ 
-        marginBottom: '2rem', 
-        padding: '1.5rem', 
-        border: '1px solid #ddd', 
-        borderRadius: '12px',
-        backgroundColor: '#f0f8ff'
-      }}>
-        <h3 style={{ marginBottom: '1rem', color: '#333' }}>🔕 채팅 방해금지 시간</h3>
-        <p style={{ fontSize: '0.9rem', color: '#666', marginBottom: '1.5rem' }}>
-          지정된 시간에는 채팅 알림을 받지 않습니다.
-        </p>
-        
-        <div style={{ display: 'flex', gap: '2rem', alignItems: 'center', flexWrap: 'wrap' }}>
-          <div>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>시작 시간:</label>
-            <input 
-              type="time"
-              value={chatDndStart}
-              onChange={(e) => setChatDndStart(e.target.value)}
-              style={{ 
-                padding: '0.5rem',
-                border: '1px solid #ccc',
-                borderRadius: '6px'
-              }}
-            />
-          </div>
-          <div>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>종료 시간:</label>
-            <input 
-              type="time"
-              value={chatDndEnd}
-              onChange={(e) => setChatDndEnd(e.target.value)}
-              style={{ 
-                padding: '0.5rem',
-                border: '1px solid #ccc',
-                borderRadius: '6px'
-              }}
-            />
+      {/* 🔥 수정: 채팅 방해금지 시간 설정 (선생님만) */}
+      {user.role === 'teacher' && (
+        <div style={{ 
+          marginBottom: '2rem', 
+          padding: '1.5rem', 
+          border: '1px solid #ddd', 
+          borderRadius: '12px',
+          backgroundColor: '#f0f8ff'
+        }}>
+          <h3 style={{ marginBottom: '1rem', color: '#333' }}>🔕 채팅 방해금지 시간</h3>
+          <p style={{ fontSize: '0.9rem', color: '#666', marginBottom: '1.5rem' }}>
+            지정된 시간에는 채팅 알림을 받지 않습니다. (선생님만 설정 가능)
+          </p>
+          
+          <div style={{ display: 'flex', gap: '2rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <div>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>시작 시간:</label>
+              <input 
+                type="time"
+                value={chatDndStart}
+                onChange={(e) => setChatDndStart(e.target.value)}
+                style={{ 
+                  padding: '0.5rem',
+                  border: '1px solid #ccc',
+                  borderRadius: '6px'
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>종료 시간:</label>
+              <input 
+                type="time"
+                value={chatDndEnd}
+                onChange={(e) => setChatDndEnd(e.target.value)}
+                style={{ 
+                  padding: '0.5rem',
+                  border: '1px solid #ccc',
+                  borderRadius: '6px'
+                }}
+              />
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* 알림 설정 */}
       <div style={{ 
@@ -298,7 +397,7 @@ function ProfilePage() {
         </div>
       </div>
 
-       {/* 소속 정보 */}
+      {/* 소속 정보 */}
       <div style={{ 
         marginBottom: '2rem', 
         padding: '1.5rem', 
@@ -313,7 +412,7 @@ function ProfilePage() {
           marginBottom: '1rem'
         }}>
           <h3 style={{ margin: 0, color: '#333' }}>🏫 소속 정보</h3>
-          {/* 🆕 학급 변경 버튼 (학부모만) */}
+          {/* 🔥 수정: 학급 변경 버튼 (학부모만) */}
           {user.role === 'parent' && (
             <button
               onClick={() => navigate('/join/invite')}
@@ -348,9 +447,46 @@ function ProfilePage() {
                 <p style={{ margin: '0 0 0.5rem 0' }}>
                   <strong>학교:</strong> {classroom.school}
                 </p>
-                <p style={{ margin: 0 }}>
+                <p style={{ margin: '0 0 1rem 0' }}>
                   <strong>학급:</strong> {classroom.grade}학년 {classroom.class_number}반
                 </p>
+                
+                {/* 🔥 추가: 학급별 액션 버튼 */}
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  {user.role === 'parent' && (
+                    <button
+                      onClick={() => handleLeaveClassroom(classroom.classroom_id)}
+                      style={{
+                        backgroundColor: '#dc3545',
+                        color: 'white',
+                        border: 'none',
+                        padding: '0.25rem 0.5rem',
+                        borderRadius: '4px',
+                        fontSize: '0.8rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      학급 탈퇴
+                    </button>
+                  )}
+                  
+                  {user.role === 'teacher' && (
+                    <button
+                      onClick={() => handleDeleteClassroom(classroom.classroom_id)}
+                      style={{
+                        backgroundColor: '#dc3545',
+                        color: 'white',
+                        border: 'none',
+                        padding: '0.25rem 0.5rem',
+                        borderRadius: '4px',
+                        fontSize: '0.8rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      학급 삭제
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -386,6 +522,59 @@ function ProfilePage() {
         )}
       </div>
 
+      {/* 🔥 추가: 위험 영역 */}
+      <div style={{ 
+        marginBottom: '2rem', 
+        padding: '1.5rem', 
+        border: '2px solid #dc3545', 
+        borderRadius: '12px',
+        backgroundColor: '#fff5f5'
+      }}>
+        <h3 style={{ marginBottom: '1rem', color: '#dc3545' }}>⚠️ 위험 영역</h3>
+        <p style={{ fontSize: '0.9rem', color: '#666', marginBottom: '1.5rem' }}>
+          아래 작업들은 되돌릴 수 없습니다. 신중하게 결정해주세요.
+        </p>
+        
+        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+          {/* 학교 관리자: 학교 삭제 */}
+          {user.is_admin && user.school_id && (
+            <button
+              onClick={handleDeleteSchool}
+              style={{
+                backgroundColor: '#6f42c1',
+                color: 'white',
+                border: 'none',
+                padding: '0.75rem 1rem',
+                borderRadius: '6px',
+                fontSize: '0.9rem',
+                cursor: 'pointer',
+                fontWeight: 'bold'
+              }}
+            >
+              🏫 학교 삭제
+            </button>
+          )}
+          
+          {/* 모든 사용자: 회원 탈퇴 */}
+          <button
+            onClick={handleDeleteAccount}
+            style={{
+              backgroundColor: '#dc3545',
+              color: 'white',
+              border: 'none',
+              padding: '0.75rem 1rem',
+              borderRadius: '6px',
+              fontSize: '0.9rem',
+              cursor: 'pointer',
+              fontWeight: 'bold'
+            }}
+          >
+            👤 회원 탈퇴
+          </button>
+        </div>
+      </div>
+
+      {/* 저장 버튼 */}
       <button 
         onClick={handleSave}
         style={{

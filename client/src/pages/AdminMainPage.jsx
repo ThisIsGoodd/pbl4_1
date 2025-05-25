@@ -244,13 +244,14 @@ function AdminMainPage() {
           <div style={styles.quickLinks}>
             <h3 style={styles.sectionTitle}>🔗 빠른 이동</h3>
             <div style={styles.linkGrid}>
-              <Link to="/admindashboard?tab=teachers" style={styles.quickLink}>
+              {/* 🔥 수정: 모든 관리자 대시보드 링크에 school_id 추가 */}
+              <Link to={`/admindashboard?tab=teachers&school_id=${user.school_id}`} style={styles.quickLink}>
                 👨‍🏫 교사 관리
               </Link>
-              <Link to="/admindashboard?tab=classrooms" style={styles.quickLink}>
+              <Link to={`/admindashboard?tab=classrooms&school_id=${user.school_id}`} style={styles.quickLink}>
                 🏫 학급 관리
               </Link>
-              <Link to="/admindashboard?tab=codes" style={styles.quickLink}>
+              <Link to={`/admindashboard?tab=codes&school_id=${user.school_id}`} style={styles.quickLink}>
                 🔑 인증코드
               </Link>
               <Link to="/inquiry/form" style={styles.quickLink}>

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom'; // 🔥 추가: useNavigate
 
 function AdminDashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate(); // 🔥 추가
   const defaultTab = searchParams.get('tab') || 'teachers';
 
   const [selected, setSelected] = useState(defaultTab);
@@ -163,38 +164,77 @@ function AdminDashboard() {
     );
   }
 
+  // 🔥 수정: school_id 파라미터를 포함한 탭 클릭 핸들러
   const handleTabClick = (tab) => {
     setSelected(tab);
-    setSearchParams({ tab });
+    // 🔥 수정: school_id 파라미터 추가
+    setSearchParams({ tab, school_id: schoolId });
   };
 
   return (
     <div style={{ padding: '2rem' }}>
       <h2>관리자 대시보드</h2>
+      
+      {/* 🔥 수정: 현재 학교 정보 표시 */}
+      <div style={{ 
+        marginBottom: '1rem', 
+        padding: '0.5rem 1rem', 
+        backgroundColor: '#e3f2fd', 
+        borderRadius: '6px',
+        fontSize: '0.9rem'
+      }}>
+        🏫 현재 관리 중인 학교 ID: <strong>{schoolId}</strong>
+      </div>
 
       <div style={{ marginBottom: '1rem' }}>
         <button
           onClick={() => handleTabClick('teachers')}
-          style={{ marginRight: '1rem', fontWeight: selected === 'teachers' ? 'bold' : 'normal' }}
+          style={{ 
+            marginRight: '1rem', 
+            fontWeight: selected === 'teachers' ? 'bold' : 'normal',
+            backgroundColor: selected === 'teachers' ? '#007bff' : '#f8f9fa',
+            color: selected === 'teachers' ? 'white' : '#333',
+            border: '1px solid #007bff',
+            padding: '0.5rem 1rem',
+            borderRadius: '4px',
+            cursor: 'pointer'
+          }}
         >
           교사 목록
         </button>
         <button
           onClick={() => handleTabClick('classrooms')}
-          style={{ marginRight: '1rem', fontWeight: selected === 'classrooms' ? 'bold' : 'normal' }}
+          style={{ 
+            marginRight: '1rem', 
+            fontWeight: selected === 'classrooms' ? 'bold' : 'normal',
+            backgroundColor: selected === 'classrooms' ? '#007bff' : '#f8f9fa',
+            color: selected === 'classrooms' ? 'white' : '#333',
+            border: '1px solid #007bff',
+            padding: '0.5rem 1rem',
+            borderRadius: '4px',
+            cursor: 'pointer'
+          }}
         >
           학급 목록
         </button>
         <button
           onClick={() => handleTabClick('codes')}
-          style={{ fontWeight: selected === 'codes' ? 'bold' : 'normal' }}
+          style={{ 
+            fontWeight: selected === 'codes' ? 'bold' : 'normal',
+            backgroundColor: selected === 'codes' ? '#007bff' : '#f8f9fa',
+            color: selected === 'codes' ? 'white' : '#333',
+            border: '1px solid #007bff',
+            padding: '0.5rem 1rem',
+            borderRadius: '4px',
+            cursor: 'pointer'
+          }}
         >
           인증 코드
         </button>
       </div>
 
       <div>
-        {selected === 'teachers' && <TeacherList teachers={teachers} />}
+        {selected === 'teachers' && <TeacherList teachers={teachers} setTeachers={setTeachers} />}
         {selected === 'classrooms' && <ClassroomList classrooms={classrooms} />}
         {selected === 'codes' && <AuthCodeList inviteCode={inviteCode} setInviteCode={setInviteCode} />}
       </div>
@@ -202,12 +242,18 @@ function AdminDashboard() {
   );
 }
 
-function TeacherList({ teachers: initialTeachers }) {
+// 🔥 수정: TeacherList 컴포넌트 - 프로필 사진 표시 개선
+function TeacherList({ teachers: initialTeachers, setTeachers }) {
   const [search, setSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [teachers, setTeachers] = useState(initialTeachers);
+  const [teachers, setLocalTeachers] = useState(initialTeachers);
   const itemsPerPage = 10;
   const token = localStorage.getItem('token');
+
+  // 부모에서 받은 teachers 데이터 동기화
+  useEffect(() => {
+    setLocalTeachers(initialTeachers);
+  }, [initialTeachers]);
 
   const filtered = teachers.filter(t =>
     t.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -226,7 +272,9 @@ function TeacherList({ teachers: initialTeachers }) {
     });
 
     if (res.ok) {
-      setTeachers(prev => prev.filter(t => t.user_id !== userId));
+      const updatedTeachers = teachers.filter(t => t.user_id !== userId);
+      setLocalTeachers(updatedTeachers);
+      setTeachers(updatedTeachers); // 부모 상태도 업데이트
       alert('삭제 완료');
     } else {
       alert('삭제 실패');
@@ -261,39 +309,55 @@ function TeacherList({ teachers: initialTeachers }) {
           {paginated.map(t => (
             <tr key={t.user_id}>
               <td style={{ textAlign: 'center', width: '80px' }}>
-                {t.profile_picture ? (
-                  <img
-                    src={`http://localhost:3001${t.profile_picture}`}
-                    alt="프로필"
+                {/* 🔥 수정: 프로필 사진 표시 로직 개선 */}
+                <div style={{ 
+                  width: '50px', 
+                  height: '50px', 
+                  margin: '0 auto',
+                  position: 'relative',
+                  borderRadius: '50%',
+                  overflow: 'hidden',
+                  border: '2px solid #e0e0e0'
+                }}>
+                  {t.profile_picture ? (
+                    <img
+                      src={t.profile_picture.startsWith('http') 
+                        ? t.profile_picture 
+                        : `http://localhost:3001${t.profile_picture}`}
+                      alt="프로필"
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover'
+                      }}
+                      onError={(e) => {
+                        console.log('🔥 이미지 로드 실패:', t.profile_picture);
+                        e.target.style.display = 'none';
+                        e.target.parentNode.querySelector('.profile-fallback').style.display = 'flex';
+                      }}
+                      onLoad={() => {
+                        console.log('✅ 이미지 로드 성공:', t.profile_picture);
+                      }}
+                    />
+                  ) : null}
+                  <div 
+                    className="profile-fallback"
                     style={{
-                      width: '50px',
-                      height: '50px',
-                      borderRadius: '50%',
-                      objectFit: 'cover',
-                      border: '2px solid #e0e0e0'
+                      width: '100%',
+                      height: '100%',
+                      backgroundColor: '#f0f0f0',
+                      display: t.profile_picture ? 'none' : 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '1.5rem',
+                      color: '#999',
+                      position: t.profile_picture ? 'absolute' : 'static',
+                      top: 0,
+                      left: 0
                     }}
-                    onError={(e) => {
-                      e.target.style.display = 'none';
-                      e.target.nextSibling.style.display = 'flex';
-                    }}
-                  />
-                ) : null}
-                <div 
-                  style={{
-                    width: '50px',
-                    height: '50px',
-                    borderRadius: '50%',
-                    backgroundColor: '#f0f0f0',
-                    display: t.profile_picture ? 'none' : 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    margin: '0 auto',
-                    border: '2px solid #e0e0e0',
-                    fontSize: '1.5rem',
-                    color: '#999'
-                  }}
-                >
-                  👤
+                  >
+                    👤
+                  </div>
                 </div>
               </td>
               <td>{t.name}</td>
@@ -304,7 +368,19 @@ function TeacherList({ teachers: initialTeachers }) {
                   : '미배정'}
               </td>
               <td>
-                <button onClick={() => handleDelete(t.user_id)}>삭제</button>
+                <button 
+                  onClick={() => handleDelete(t.user_id)}
+                  style={{
+                    backgroundColor: '#dc3545',
+                    color: 'white',
+                    border: 'none',
+                    padding: '0.25rem 0.5rem',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  삭제
+                </button>
               </td>
             </tr>
           ))}
@@ -316,7 +392,16 @@ function TeacherList({ teachers: initialTeachers }) {
           <button
             key={i}
             onClick={() => setCurrentPage(i + 1)}
-            style={{ margin: '0 4px', fontWeight: currentPage === i + 1 ? 'bold' : 'normal' }}
+            style={{ 
+              margin: '0 4px', 
+              fontWeight: currentPage === i + 1 ? 'bold' : 'normal',
+              backgroundColor: currentPage === i + 1 ? '#007bff' : '#f8f9fa',
+              color: currentPage === i + 1 ? 'white' : '#333',
+              border: '1px solid #007bff',
+              padding: '0.25rem 0.5rem',
+              borderRadius: '4px',
+              cursor: 'pointer'
+            }}
           >
             {i + 1}
           </button>
@@ -325,6 +410,8 @@ function TeacherList({ teachers: initialTeachers }) {
     </div>
   );
 }
+
+// ClassroomList와 AuthCodeList는 기존과 동일하므로 생략 (변경사항 없음)
 
 function ClassroomList({ classrooms: initialClassrooms }) {
   const [search, setSearch] = useState('');

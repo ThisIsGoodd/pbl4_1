@@ -127,9 +127,10 @@ function SchedulePage() {
   // FullCalendar용 이벤트 데이터 변환
   const events = schedules.map((s) => ({
     id: s.schedule_id,
-    title: s.title,
+    title: s.title, // 제목만 표시
     start: s.start,
     end: s.end,
+    allDay: true, // 🆕 하루 종일 이벤트로 설정 (시간 표시 안 함)
     extendedProps: {
       description: s.description,
       schoolWide: s.school_wide,
@@ -137,7 +138,6 @@ function SchedulePage() {
     },
     color: s.school_wide ? '#9DA7E3' : '#5ADD7D'
   }));
-
   // 이벤트 클릭 핸들러
   const handleEventClick = (clickInfo) => {
     const event = clickInfo.event;
@@ -350,7 +350,7 @@ function SchedulePage() {
           <FullCalendar
             plugins={[dayGridPlugin, interactionPlugin]}
             initialView="dayGridMonth"
-            initialDate={initialDate || undefined} // 🆕 MainPage에서 온 날짜로 초기화
+            initialDate={initialDate || undefined}
             locale="ko"
             dateClick={handleDateClick}
             eventClick={handleEventClick}
@@ -366,18 +366,25 @@ function SchedulePage() {
               year: 'numeric',
               month: isMobile ? 'short' : 'long'
             }}
-            // 🆕 날짜별 색상 처리
+            // 🆕 시간 표시 관련 설정 추가
+            displayEventTime={false} // 이벤트에 시간 표시 안 함
+            eventTimeFormat={{ // 혹시 시간이 표시될 경우의 포맷
+              hour: 'numeric',
+              minute: '2-digit',
+              omitZeroMinute: true
+            }}
+            // 기존 날짜별 색상 처리
             dayCellContent={(arg) => {
               const date = arg.date;
               const dateStr = date.toISOString().split('T')[0];
-              const dayOfWeek = date.getDay(); // 0: 일요일, 6: 토요일
+              const dayOfWeek = date.getDay();
               const isHoliday = holidays2025.has(dateStr);
               
-              let color = '#333'; // 기본 평일 색상
+              let color = '#333';
               if (dayOfWeek === 0 || isHoliday) {
-                color = '#dc3545'; // 일요일 또는 공휴일 빨간색
+                color = '#dc3545';
               } else if (dayOfWeek === 6) {
-                color = '#007bff'; // 토요일 파란색
+                color = '#007bff';
               }
               
               return {

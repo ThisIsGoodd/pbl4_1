@@ -78,50 +78,79 @@ router.get('/test', (req, res) => {
   res.json({ message: 'classrooms 라우터 작동 중', timestamp: new Date() });
 });
 
-// ✅ 학급 생성 - school_id 사용하도록 수정
+// ✅ 학급 생성 - school_id 사용하도록 수정 (개선된 에러 처리)
 router.post('/', authenticateToken, checkAdmin, async (req, res) => {
   const { grade, class_number } = req.body;
   const teacher_id = req.user.user_id;
   const school_id = req.user.school_id;
 
-  if (!school_id || !grade || !class_number) {
-    return res.status(400).json({ error: '학년, 반, 학교 정보가 필요합니다.' });
+  console.log('🔍 [classrooms POST] 학급 생성 요청:', {
+    grade, class_number, teacher_id, school_id
+  });
+
+  // 🔥 개선된 유효성 검사
+  if (!school_id) {
+    return res.status(403).json({ 
+      error: '학교 정보가 없습니다. 교사 인증을 먼저 완료해주세요.' 
+    });
   }
 
-  // 🔥 추가: 서버에서도 유효성 검사
-  if (grade < 1 || grade > 6) {
-    return res.status(400).json({ error: '학년은 1학년부터 6학년까지만 가능합니다.' });
+  if (!grade || !class_number) {
+    return res.status(400).json({ 
+      error: '학년과 반 번호를 모두 입력해주세요.' 
+    });
+  }
+
+  // 🔥 숫자 변환 및 범위 검사
+  const gradeNum = parseInt(grade);
+  const classNum = parseInt(class_number);
+
+  if (isNaN(gradeNum) || gradeNum < 1 || gradeNum > 6) {
+    return res.status(400).json({ 
+      error: '학년은 1학년부터 6학년까지만 입력 가능합니다.' 
+    });
   }
   
-  if (class_number < 1 || class_number > 20) {
-    return res.status(400).json({ error: '반 번호는 1반부터 20반까지만 가능합니다.' });
+  if (isNaN(classNum) || classNum < 1 || classNum > 20) {
+    return res.status(400).json({ 
+      error: '반 번호는 1반부터 20반까지만 입력 가능합니다.' 
+    });
   }
 
   try {
+    // 🔥 기존 학급 확인 (더 자세한 메시지)
     const [existingClassroom] = await db.query(
       'SELECT * FROM classrooms WHERE grade = ? AND class_number = ? AND school_id = ?',
-      [grade, class_number, school_id]
+      [gradeNum, classNum, school_id]
     );
+    
     if (existingClassroom.length > 0) {
+      console.log('ℹ️ [classrooms POST] 기존 학급 발견:', existingClassroom[0]);
       return res.json({ 
-        message: '이미 존재하는 학급입니다.', 
+        message: `${gradeNum}학년 ${classNum}반이 이미 존재합니다. 기존 학급 정보를 사용합니다.`, 
         invite_code: existingClassroom[0].invite_code,
-        classroom_id: existingClassroom[0].classroom_id // 🔥 추가: classroom_id 반환
+        classroom_id: existingClassroom[0].classroom_id,
+        isExisting: true
       });
     }
 
+    // 🔥 새 학급 생성
     const invite_code = Math.random().toString(36).substring(2, 8).toUpperCase();
     const [result] = await db.query(
       'INSERT INTO classrooms (grade, class_number, invite_code, school_id, teacher_id, created_at) VALUES (?, ?, ?, ?, ?, NOW())',
-      [grade, class_number, invite_code, school_id, teacher_id]
+      [gradeNum, classNum, invite_code, school_id, teacher_id]
     );
     const classroom_id = result.insertId;
 
+    console.log('✅ [classrooms POST] 새 학급 생성 완료:', classroom_id);
+
+    // 🔥 교사를 해당 학급에 연결
     await db.query(
       'INSERT INTO user_classrooms (user_id, classroom_id) VALUES (?, ?)',
       [teacher_id, classroom_id]
     );
 
+    // 🔥 채팅방 생성 (에러가 발생해도 학급 생성은 성공으로 처리)
     try {
       const [chatResult] = await db.query(
         'INSERT INTO chat_rooms (room_type, classroom_id) VALUES (?, ?)',
@@ -133,24 +162,43 @@ router.post('/', authenticateToken, checkAdmin, async (req, res) => {
         'INSERT INTO chat_participants (room_id, user_id) VALUES (?, ?)',
         [room_id, teacher_id]
       );
+      console.log('✅ [classrooms POST] 채팅방 생성 완료:', room_id);
     } catch (chatErr) {
-      console.error('⚠️ 채팅방 생성 실패:', chatErr);
-      return res.status(200).json({
-        message: '학급은 생성되었으나 채팅방 설정 중 오류가 발생했습니다.',
-        invite_code,
-        classroom_id, // 🔥 추가: classroom_id 반환
-        partial_error: true
-      });
+      console.error('⚠️ [classrooms POST] 채팅방 생성 실패 (무시):', chatErr);
+      // 채팅방 생성 실패는 학급 생성 성공에 영향을 주지 않음
     }
 
     res.json({ 
-      message: '학급 생성 완료', 
+      message: `${gradeNum}학년 ${classNum}반이 성공적으로 생성되었습니다!`, 
       invite_code,
-      classroom_id // 🔥 추가: classroom_id 반환
+      classroom_id,
+      isExisting: false
     });
+
+    console.log('🎉 [classrooms POST] 학급 생성 프로세스 완료');
+
   } catch (err) {
-    console.error('🔥 학급 생성 오류:', err);
-    res.status(500).json({ error: '서버 오류', details: err.message });
+    console.error('🔥 [classrooms POST] 학급 생성 오류:', err);
+    
+    // 🔥 MySQL 에러별 구체적인 메시지
+    if (err.code === 'ER_DUP_ENTRY') {
+      res.status(400).json({ 
+        error: '이미 존재하는 학급입니다.' 
+      });
+    } else if (err.code === 'ER_NO_REFERENCED_ROW_2') {
+      res.status(400).json({ 
+        error: '유효하지 않은 학교 또는 교사 정보입니다.' 
+      });
+    } else if (err.code === 'ER_TRUNCATED_WRONG_VALUE_FOR_FIELD') {
+      res.status(400).json({ 
+        error: '입력값의 형식이 올바르지 않습니다.' 
+      });
+    } else {
+      res.status(500).json({ 
+        error: '학급 생성 중 서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
+        details: process.env.NODE_ENV === 'development' ? err.message : undefined
+      });
+    }
   }
 });
 

@@ -32,7 +32,7 @@ router.post('/auth/verify-admin', authenticateToken, async (req, res) => {
   }
 });
 
-// ✅ 관리자용: 교사 목록 조회 - 프로필 사진과 담당 학급 정보 포함
+// ✅ 관리자용: 교사 목록 조회 - 프로필 사진과 담당 학급 정보 포함 (GROUP BY 오류 해결)
 router.get('/teachers', authenticateToken, async (req, res) => {
   const user_id = req.user.user_id;
   const { school_id } = req.query;
@@ -48,23 +48,73 @@ router.get('/teachers', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: '해당 학교의 생성자만 교사 목록을 조회할 수 있습니다.' });
     }
 
-    // 2. 교사 목록 조회 - 프로필 사진과 담당 학급 정보 포함
+    // 🔥 수정: GROUP BY 오류 해결 - 집계 함수 사용
     const [rows] = await db.query(`
       SELECT 
-        u.user_id, u.name, u.email, u.created_at, u.profile_picture,
-        c.grade, c.class_number,
+        u.user_id, 
+        u.name, 
+        u.email, 
+        u.created_at, 
+        u.profile_picture,
+        MAX(c.grade) as grade,
+        MAX(c.class_number) as class_number,
         COUNT(DISTINCT c.classroom_id) as classroom_count
       FROM user_schools us
       JOIN users u ON us.user_id = u.user_id
       LEFT JOIN classrooms c ON u.user_id = c.teacher_id
       WHERE us.school_id = ? AND us.role = 'teacher'
-      GROUP BY u.user_id
+      GROUP BY u.user_id, u.name, u.email, u.created_at, u.profile_picture
       ORDER BY u.name
     `, [school_id]);
 
+    console.log('✅ [teachers GET] 교사 목록 조회 완료:', rows.length);
     res.json({ teachers: rows });
   } catch (err) {
     console.error('🔥 교사 목록 조회 오류:', err);
+    res.status(500).json({ error: '서버 오류', details: err.message });
+  }
+});
+
+// ✅ 관리자용: 학급 목록 조회 - 학부모 수 정확히 계산 (GROUP BY 오류 방지)
+router.get('/classrooms', authenticateToken, async (req, res) => {
+  const user_id = req.user.user_id;
+  const { school_id } = req.query;
+
+  try {
+    // 1. 요청자가 해당 학교의 생성자인지 확인
+    const [[schoolRow]] = await db.query(
+      'SELECT created_by FROM schools WHERE school_id = ?',
+      [school_id]
+    );
+
+    if (!schoolRow || schoolRow.created_by !== user_id) {
+      return res.status(403).json({ error: '해당 학교의 생성자만 학급 목록을 조회할 수 있습니다.' });
+    }
+
+    // 🔥 수정: GROUP BY 구문 정리
+    const [rows] = await db.query(`
+      SELECT 
+        c.classroom_id, 
+        c.grade, 
+        c.class_number, 
+        c.class_photo,
+        s.name as school,
+        u.name as teacher_name,
+        COUNT(CASE WHEN users.role = 'parent' THEN uc.user_id END) as parent_count
+      FROM classrooms c
+      JOIN schools s ON c.school_id = s.school_id
+      LEFT JOIN users u ON c.teacher_id = u.user_id
+      LEFT JOIN user_classrooms uc ON c.classroom_id = uc.classroom_id
+      LEFT JOIN users ON uc.user_id = users.user_id
+      WHERE c.school_id = ?
+      GROUP BY c.classroom_id, c.grade, c.class_number, c.class_photo, s.name, u.name
+      ORDER BY c.grade, c.class_number
+    `, [school_id]);
+
+    console.log('✅ [classrooms GET] 학급 목록 조회 완료:', rows.length);
+    res.json({ classrooms: rows });
+  } catch (err) {
+    console.error('🔥 학급 목록 조회 오류:', err);
     res.status(500).json({ error: '서버 오류', details: err.message });
   }
 });

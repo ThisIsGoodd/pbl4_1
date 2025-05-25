@@ -8,7 +8,7 @@ export function AuthProvider({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // ✅ 토큰 새로고침 함수
+  // ✅ 토큰 새로고침 함수 (개선됨)
   const refreshToken = async () => {
     const token = localStorage.getItem('token');
     if (!token) return null;
@@ -20,11 +20,12 @@ export function AuthProvider({ children }) {
       const data = await res.json();
 
       if (data.user) {
+        console.log('🔄 [refreshToken] 사용자 정보 갱신:', data.user);
         setUser(data.user);
         return data.user;
       }
     } catch (err) {
-      console.error('토큰 새로고침 실패:', err);
+      console.error('🔥 [refreshToken] 토큰 새로고침 실패:', err);
     }
     return null;
   };
@@ -129,19 +130,20 @@ export function AuthProvider({ children }) {
                 
                 // 학교 생성자라면 관리 대시보드로
                 if (schoolData.created_by === user.user_id) {
-                  navigate('/admindashboard');
+                  navigate('/admin/main');
                   return;
                 }
               }
 
-              // 학교 생성자가 아닌 일반 교사 - 학급 확인
+              // 🔥 개선: 학교 생성자가 아닌 일반 교사 - 학급 확인
               const res = await fetch('http://localhost:3001/api/classrooms/my-classroom', {
                 headers: { Authorization: `Bearer ${token}` },
               });
 
               if (res.ok) {
                 const result = await res.json();
-                navigate(`/classroom/dashboard?classroom_id=${result.classroom.classroom_id}`);
+                console.log('🏫 [AuthContext] 교사의 학급 정보:', result.classroom);
+                navigate(`/main?classroom_id=${result.classroom.classroom_id}`); // 🔥 수정: 메인으로 이동
               } else {
                 // 404 오류는 학급이 없다는 뜻이므로 학급 생성 페이지로
                 if (res.status === 404) {

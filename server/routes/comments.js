@@ -5,14 +5,16 @@ const authenticateToken = require('../authMiddleware');
 const { createNotification } = require('../utils/notify');
 
 /**
- * ✅ 댓글 조회 (특정 게시글의 모든 댓글)
+ * ✅ 댓글 조회 (특정 게시글의 모든 댓글) - 숨김 처리 반영
  */
 router.get('/posts/:postId', authenticateToken, async (req, res) => {
   const { postId } = req.params;
+  const { user_id, role } = req.user;
   
   try {
+    // 🔥 수정: is_hidden 컬럼 추가 조회
     const [comments] = await db.query(
-      `SELECT comments.*, users.name AS author_name
+      `SELECT comments.*, users.name AS author_name, users.role AS author_role
        FROM comments
        JOIN users ON comments.author_id = users.user_id
        WHERE comments.post_id = ?
@@ -20,7 +22,18 @@ router.get('/posts/:postId', authenticateToken, async (req, res) => {
       [postId]
     );
 
-    res.json({ comments });
+    // 🔥 사용자 역할에 따른 댓글 필터링
+    let filteredComments;
+    
+    if (role === 'teacher') {
+      // 선생님은 모든 댓글을 볼 수 있음 (숨겨진 댓글도 포함)
+      filteredComments = comments;
+    } else {
+      // 학부모는 숨겨지지 않은 댓글만 볼 수 있음
+      filteredComments = comments.filter(comment => !comment.is_hidden);
+    }
+
+    res.json({ comments: filteredComments });
   } catch (err) {
     console.error('🔥 댓글 조회 오류:', err);
     res.status(500).json({ error: '서버 오류', details: err.message });
@@ -135,6 +148,60 @@ router.delete('/:commentId', authenticateToken, async (req, res) => {
     res.json({ message: '댓글 삭제 완료' });
   } catch (err) {
     console.error('🔥 댓글 삭제 오류:', err);
+    res.status(500).json({ error: '서버 오류', details: err.message });
+  }
+});
+
+/**
+ * 🆕 댓글 숨김/표시 (선생님 전용)
+ */
+router.patch('/:commentId/hide', authenticateToken, async (req, res) => {
+  const { commentId } = req.params;
+  const { is_hidden } = req.body;
+  const { user_id, role } = req.user;
+
+  // 선생님만 댓글을 숨길 수 있음
+  if (role !== 'teacher') {
+    return res.status(403).json({ error: '선생님만 댓글을 숨길 수 있습니다.' });
+  }
+
+  try {
+    // 댓글이 존재하는지 확인
+    const [commentRows] = await db.query(
+      'SELECT * FROM comments WHERE comment_id = ?',
+      [commentId]
+    );
+
+    if (commentRows.length === 0) {
+      return res.status(404).json({ error: '댓글이 존재하지 않습니다.' });
+    }
+
+    // 댓글이 속한 게시글의 학급에서 해당 선생님이 권한이 있는지 확인
+    const [postRows] = await db.query(
+      `SELECT p.classroom_id, c.teacher_id 
+       FROM posts p
+       JOIN classrooms c ON p.classroom_id = c.classroom_id
+       WHERE p.post_id = ?`,
+      [commentRows[0].post_id]
+    );
+
+    if (postRows.length === 0 || postRows[0].teacher_id !== user_id) {
+      return res.status(403).json({ error: '해당 학급의 선생님만 댓글을 관리할 수 있습니다.' });
+    }
+
+    // 댓글 숨김 상태 업데이트
+    await db.query(
+      'UPDATE comments SET is_hidden = ? WHERE comment_id = ?',
+      [is_hidden, commentId]
+    );
+
+    const action = is_hidden ? '숨김' : '표시';
+    res.json({ message: `댓글 ${action} 처리가 완료되었습니다.` });
+
+    console.log(`✅ 댓글 ${action} 처리: 댓글 ID ${commentId}, 선생님 ID ${user_id}`);
+
+  } catch (err) {
+    console.error('🔥 댓글 숨김 처리 오류:', err);
     res.status(500).json({ error: '서버 오류', details: err.message });
   }
 });

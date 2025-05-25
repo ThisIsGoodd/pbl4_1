@@ -14,6 +14,7 @@ function PostDetailPage() {
   const [editCommentId, setEditCommentId] = useState(null);
   const [editContent, setEditContent] = useState('');
   const [myUserId, setMyUserId] = useState(null);
+  const [myRole, setMyRole] = useState(null); // 🆕 사용자 역할 추가
   const [isEditingPost, setIsEditingPost] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editPostContent, setEditPostContent] = useState('');
@@ -23,7 +24,19 @@ function PostDetailPage() {
 
   useEffect(() => {
     setMyUserId(getCurrentUserId());
-  }, []);
+    
+    // 🆕 JWT에서 사용자 역할 추출
+    const parseJwt = (token) => {
+      try {
+        return JSON.parse(atob(token.split('.')[1]));
+      } catch {
+        return null;
+      }
+    };
+    
+    const payload = parseJwt(token);
+    setMyRole(payload?.role || null);
+  }, [token]);
 
   useEffect(() => {
     const viewKey = `viewed_post_${id}`;
@@ -163,6 +176,34 @@ function PostDetailPage() {
     fetchComments();
   };
 
+  // 🆕 댓글 숨김/표시 처리 (선생님 전용)
+  const handleCommentHide = async (commentId, isCurrentlyHidden) => {
+    const action = isCurrentlyHidden ? '표시' : '숨김';
+    if (!window.confirm(`이 댓글을 ${action} 처리하시겠습니까?`)) return;
+
+    try {
+      const res = await fetch(`http://localhost:3001/api/comments/${commentId}/hide`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ is_hidden: !isCurrentlyHidden })
+      });
+
+      if (res.ok) {
+        alert(`댓글 ${action} 처리가 완료되었습니다.`);
+        fetchComments(); // 댓글 목록 새로고침
+      } else {
+        const errorData = await res.json();
+        alert(`${action} 처리 실패: ${errorData.error}`);
+      }
+    } catch (err) {
+      console.error('댓글 숨김 처리 오류:', err);
+      alert('처리 중 오류가 발생했습니다.');
+    }
+  };
+
   if (!post) return <p>로딩 중...</p>;
 
   return (
@@ -273,12 +314,42 @@ function PostDetailPage() {
             marginBottom: '1rem', 
             padding: '1rem', 
             border: '1px solid #eee', 
-            borderRadius: '4px' 
+            borderRadius: '4px',
+            // 🆕 숨겨진 댓글 스타일
+            backgroundColor: comment.is_hidden ? '#f8f8f8' : 'white',
+            opacity: comment.is_hidden ? 0.7 : 1
           }}>
+            {/* 🆕 숨겨진 댓글 표시 */}
+            {comment.is_hidden && myRole === 'teacher' && (
+              <div style={{ 
+                color: '#dc3545', 
+                fontSize: '0.9rem', 
+                marginBottom: '0.5rem',
+                fontWeight: 'bold'
+              }}>
+                🚫 숨겨진 댓글 (선생님에게만 보임)
+              </div>
+            )}
+            
             <strong>{comment.author_name}</strong> 
             <span style={{ color: '#666', fontSize: '0.9rem', marginLeft: '0.5rem' }}>
               ({new Date(comment.created_at).toLocaleString()})
             </span>
+            
+            {/* 🆕 댓글 작성자 역할 표시 */}
+            {comment.author_role === 'teacher' && (
+              <span style={{ 
+                marginLeft: '0.5rem', 
+                backgroundColor: '#007bff', 
+                color: 'white', 
+                padding: '2px 6px', 
+                borderRadius: '10px', 
+                fontSize: '0.7rem' 
+              }}>
+                선생님
+              </span>
+            )}
+            
             <br />
             {editCommentId === comment.comment_id ? (
               <>
@@ -293,20 +364,40 @@ function PostDetailPage() {
             ) : (
               <>
                 <p style={{ margin: '0.5rem 0' }}>{comment.content}</p>
-                {comment.author_id === myUserId && (
-                  <>
-                    <button onClick={() => {
-                      setEditCommentId(comment.comment_id);
-                      setEditContent(comment.content);
-                    }}>수정</button>
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                  {/* 작성자 본인 버튼들 */}
+                  {comment.author_id === myUserId && (
+                    <>
+                      <button onClick={() => {
+                        setEditCommentId(comment.comment_id);
+                        setEditContent(comment.content);
+                      }}>수정</button>
+                      <button 
+                        onClick={() => handleCommentDelete(comment.comment_id)} 
+                        style={{ color: 'red' }}
+                      >
+                        삭제
+                      </button>
+                    </>
+                  )}
+                  
+                  {/* 🆕 선생님 전용 숨김/표시 버튼 */}
+                  {myRole === 'teacher' && comment.author_id !== myUserId && (
                     <button 
-                      onClick={() => handleCommentDelete(comment.comment_id)} 
-                      style={{ marginLeft: '0.5rem', color: 'red' }}
+                      onClick={() => handleCommentHide(comment.comment_id, comment.is_hidden)}
+                      style={{ 
+                        backgroundColor: comment.is_hidden ? '#28a745' : '#ffc107',
+                        color: comment.is_hidden ? 'white' : 'black',
+                        border: 'none',
+                        padding: '4px 8px',
+                        borderRadius: '4px',
+                        fontSize: '0.8rem'
+                      }}
                     >
-                      삭제
+                      {comment.is_hidden ? '👁️ 표시' : '🚫 숨김'}
                     </button>
-                  </>
-                )}
+                  )}
+                </div>
               </>
             )}
           </li>

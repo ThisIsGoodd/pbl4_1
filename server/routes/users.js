@@ -89,16 +89,131 @@ router.patch('/join-classroom', authenticateToken, async (req, res) => {
     return res.status(400).json({ message: 'classroom_id가 필요합니다.' });
   }
 
+  const conn = await db.getConnection();
   try {
-    await db.query(
-      'INSERT IGNORE INTO user_classrooms (user_id, classroom_id) VALUES (?, ?)',
+    await conn.beginTransaction();
+
+    // 1. 이미 가입했는지 확인
+    const [exists] = await conn.query(
+      'SELECT * FROM user_classrooms WHERE user_id = ? AND classroom_id = ?',
       [req.user.user_id, classroom_id]
     );
 
-    res.json({ message: '학급 연결 완료' });
+    if (exists.length > 0) {
+      return res.status(400).json({ message: '이미 학급에 가입되어 있습니다.' });
+    }
+
+    // 2. 학급 정보 및 교사 정보 조회
+    const [classroomRows] = await conn.query(
+      'SELECT teacher_id, grade, class_number FROM classrooms WHERE classroom_id = ?',
+      [classroom_id]
+    );
+
+    if (classroomRows.length === 0) {
+      return res.status(404).json({ message: '해당 학급을 찾을 수 없습니다.' });
+    }
+
+    const { teacher_id, grade, class_number } = classroomRows[0];
+
+    // 3. 학급 가입
+    await conn.query(
+      'INSERT INTO user_classrooms (user_id, classroom_id) VALUES (?, ?)',
+      [req.user.user_id, classroom_id]
+    );
+
+    console.log(`✅ [users/join-classroom] 학급 가입 완료: ${req.user.user_id} -> ${classroom_id}`);
+
+    // 4. 🆕 그룹 채팅방 처리
+    let groupRoomId = null;
+    const [groupRoomRows] = await conn.query(
+      'SELECT room_id FROM chat_rooms WHERE classroom_id = ? AND room_type = ?',
+      [classroom_id, 'group']
+    );
+
+    if (groupRoomRows.length > 0) {
+      // 기존 그룹 채팅방에 추가
+      groupRoomId = groupRoomRows[0].room_id;
+      
+      const [alreadyInGroup] = await conn.query(
+        'SELECT * FROM chat_participants WHERE room_id = ? AND user_id = ?',
+        [groupRoomId, req.user.user_id]
+      );
+
+      if (alreadyInGroup.length === 0) {
+        await conn.query(
+          'INSERT INTO chat_participants (room_id, user_id) VALUES (?, ?)',
+          [groupRoomId, req.user.user_id]
+        );
+        console.log('✅ [users/join-classroom] 그룹 채팅방 참가 완료');
+      }
+    } else {
+      // 그룹 채팅방이 없으면 생성
+      const [newGroupRoom] = await conn.query(
+        'INSERT INTO chat_rooms (room_type, classroom_id) VALUES (?, ?)',
+        ['group', classroom_id]
+      );
+      groupRoomId = newGroupRoom.insertId;
+
+      // 교사와 학부모 모두 추가
+      await conn.query(
+        'INSERT INTO chat_participants (room_id, user_id) VALUES (?, ?), (?, ?)',
+        [groupRoomId, teacher_id, groupRoomId, req.user.user_id]
+      );
+      console.log('✅ [users/join-classroom] 새 그룹 채팅방 생성 및 참가 완료');
+    }
+
+    // 5. 🆕 1:1 채팅방 생성 (교사와 학부모)
+    let privateRoomId = null;
+    
+    // 이미 1:1 채팅방이 있는지 확인
+    const [existingPrivateRoom] = await conn.query(
+      `SELECT cr.room_id 
+       FROM chat_rooms cr
+       JOIN chat_participants cp1 ON cr.room_id = cp1.room_id
+       JOIN chat_participants cp2 ON cr.room_id = cp2.room_id
+       WHERE cr.room_type = 'private' 
+         AND cp1.user_id = ? 
+         AND cp2.user_id = ?
+         AND (SELECT COUNT(*) FROM chat_participants WHERE room_id = cr.room_id) = 2`,
+      [teacher_id, req.user.user_id]
+    );
+
+    if (existingPrivateRoom.length === 0) {
+      // 새 1:1 채팅방 생성
+      const [privateRoomResult] = await conn.query(
+        'INSERT INTO chat_rooms (room_type) VALUES (?)',
+        ['private']
+      );
+      privateRoomId = privateRoomResult.insertId;
+
+      await conn.query(
+        'INSERT INTO chat_participants (room_id, user_id) VALUES (?, ?), (?, ?)',
+        [privateRoomId, teacher_id, privateRoomId, req.user.user_id]
+      );
+      console.log('✅ [users/join-classroom] 1:1 채팅방 생성 완료');
+    } else {
+      privateRoomId = existingPrivateRoom[0].room_id;
+      console.log('✅ [users/join-classroom] 기존 1:1 채팅방 사용');
+    }
+
+    await conn.commit();
+
+    res.json({ 
+      message: `${grade}학년 ${class_number}반 학급 연결이 완료되었습니다!`,
+      details: {
+        classroom_id,
+        groupRoomId,
+        privateRoomId,
+        chatRoomsSetup: true
+      }
+    });
+    
   } catch (err) {
+    await conn.rollback();
     console.error('🔥 학급 연결 오류:', err);
     res.status(500).json({ message: '서버 오류', details: err.message });
+  } finally {
+    conn.release();
   }
 });
 

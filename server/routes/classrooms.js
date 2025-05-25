@@ -209,28 +209,34 @@ router.post('/join-classroom', authenticateToken, async (req, res) => {
 
   if (!invite_code) return res.status(400).json({ error: '초대코드를 입력해주세요.' });
 
+  const conn = await db.getConnection();
   try {
+    await conn.beginTransaction();
+
     // 1. 학급 정보 조회
-    const [classroomRows] = await db.query(
-      'SELECT classroom_id, teacher_id FROM classrooms WHERE invite_code = ?',
+    const [classroomRows] = await conn.query(
+      'SELECT classroom_id, teacher_id, grade, class_number FROM classrooms WHERE invite_code = ?',
       [invite_code]
     );
-    if (classroomRows.length === 0) return res.status(404).json({ error: '유효하지 않은 초대코드입니다.' });
+    if (classroomRows.length === 0) {
+      return res.status(404).json({ error: '유효하지 않은 초대코드입니다.' });
+    }
 
-    const classroom_id = classroomRows[0].classroom_id;
-    const teacher_id = classroomRows[0].teacher_id;
+    const { classroom_id, teacher_id, grade, class_number } = classroomRows[0];
     
-    console.log('🔍 [join-classroom] 학급 정보:', { classroom_id, teacher_id, user_id });
+    console.log('🔍 [join-classroom] 학급 정보:', { classroom_id, teacher_id, user_id, grade, class_number });
 
     // 2. 이미 가입했는지 확인
-    const [exists] = await db.query(
+    const [exists] = await conn.query(
       'SELECT * FROM user_classrooms WHERE user_id = ? AND classroom_id = ?',
       [user_id, classroom_id]
     );
-    if (exists.length > 0) return res.status(400).json({ error: '이미 학급에 가입되어 있습니다.' });
+    if (exists.length > 0) {
+      return res.status(400).json({ error: '이미 학급에 가입되어 있습니다.' });
+    }
 
     // 3. 학급 가입
-    await db.query(
+    await conn.query(
       'INSERT INTO user_classrooms (user_id, classroom_id) VALUES (?, ?)',
       [user_id, classroom_id]
     );
@@ -238,7 +244,7 @@ router.post('/join-classroom', authenticateToken, async (req, res) => {
 
     // 4. 그룹 채팅방 처리 (수정된 버전)
     let groupRoomId = null;
-    const [groupRoomRows] = await db.query(
+    const [groupRoomRows] = await conn.query(
       'SELECT room_id FROM chat_rooms WHERE classroom_id = ? AND room_type = ?',
       [classroom_id, 'group']
     );
@@ -249,13 +255,13 @@ router.post('/join-classroom', authenticateToken, async (req, res) => {
       console.log('🔍 [join-classroom] 기존 그룹 채팅방 발견:', groupRoomId);
       
       // 이미 참가했는지 확인
-      const [participantExists] = await db.query(
+      const [participantExists] = await conn.query(
         'SELECT * FROM chat_participants WHERE room_id = ? AND user_id = ?',
         [groupRoomId, user_id]
       );
 
       if (participantExists.length === 0) {
-        await db.query(
+        await conn.query(
           'INSERT INTO chat_participants (room_id, user_id) VALUES (?, ?)',
           [groupRoomId, user_id]
         );
@@ -264,72 +270,118 @@ router.post('/join-classroom', authenticateToken, async (req, res) => {
         console.log('ℹ️ [join-classroom] 이미 그룹 채팅방에 참가 중');
       }
     } else {
-      // 그룹 채팅방이 없으면 새로 생성하고 모든 멤버 추가
+      // 그룹 채팅방이 없으면 새로 생성
       console.log('🔧 [join-classroom] 새 그룹 채팅방 생성');
-      const [newGroupRoom] = await db.query(
+      const [newGroupRoom] = await conn.query(
         'INSERT INTO chat_rooms (room_type, classroom_id) VALUES (?, ?)',
         ['group', classroom_id]
       );
       groupRoomId = newGroupRoom.insertId;
 
-      // 해당 학급의 모든 멤버 조회 (교사 + 기존 학부모 + 새 학부모)
-      const [allMembers] = await db.query(
-        `SELECT DISTINCT uc.user_id
-         FROM user_classrooms uc
-         WHERE uc.classroom_id = ?
-         UNION
-         SELECT teacher_id as user_id FROM classrooms WHERE classroom_id = ?`,
-        [classroom_id, classroom_id]
+      // 교사를 그룹 채팅방에 추가
+      await conn.query(
+        'INSERT INTO chat_participants (room_id, user_id) VALUES (?, ?)',
+        [groupRoomId, teacher_id]
       );
 
-      console.log('🔍 [join-classroom] 그룹 채팅방에 추가할 모든 멤버:', allMembers);
+      // 새 학부모를 그룹 채팅방에 추가
+      await conn.query(
+        'INSERT INTO chat_participants (room_id, user_id) VALUES (?, ?)',
+        [groupRoomId, user_id]
+      );
+      
+      console.log('✅ [join-classroom] 새 그룹 채팅방 생성 및 멤버 추가 완료');
+    }
 
-      // 모든 멤버를 그룹 채팅방에 추가
-      if (allMembers.length > 0) {
-        const participantValues = allMembers.map(member => 
-          `(${groupRoomId}, ${member.user_id})`
-        ).join(', ');
-        
-        await db.query(
-          `INSERT INTO chat_participants (room_id, user_id) VALUES ${participantValues}`
+    // 5. 🆕 기존 학부모들도 그룹 채팅방에 추가 (누락된 경우 대비)
+    const [existingParents] = await conn.query(
+      `SELECT DISTINCT uc.user_id
+       FROM user_classrooms uc
+       JOIN users u ON uc.user_id = u.user_id
+       WHERE uc.classroom_id = ? AND u.role = 'parent' AND uc.user_id != ?`,
+      [classroom_id, user_id]
+    );
+
+    for (const parent of existingParents) {
+      const [alreadyInGroup] = await conn.query(
+        'SELECT * FROM chat_participants WHERE room_id = ? AND user_id = ?',
+        [groupRoomId, parent.user_id]
+      );
+
+      if (alreadyInGroup.length === 0) {
+        await conn.query(
+          'INSERT INTO chat_participants (room_id, user_id) VALUES (?, ?)',
+          [groupRoomId, parent.user_id]
         );
-        console.log('✅ [join-classroom] 새 그룹 채팅방에 모든 멤버 추가 완료');
+        console.log(`✅ [join-classroom] 기존 학부모 ${parent.user_id}를 그룹 채팅방에 추가`);
       }
     }
 
-    // 5. 1:1 채팅방 생성 (교사와 학부모)
-    const [privateRoomResult] = await db.query(
-      'INSERT INTO chat_rooms (room_type) VALUES (?)',
-      ['private']
+    // 6. 🆕 1:1 채팅방 생성 (교사와 새 학부모) - 중복 방지
+    let privateRoomId = null;
+    
+    // 이미 1:1 채팅방이 있는지 확인
+    const [existingPrivateRoom] = await conn.query(
+      `SELECT cr.room_id 
+       FROM chat_rooms cr
+       JOIN chat_participants cp1 ON cr.room_id = cp1.room_id
+       JOIN chat_participants cp2 ON cr.room_id = cp2.room_id
+       WHERE cr.room_type = 'private' 
+         AND cp1.user_id = ? 
+         AND cp2.user_id = ?
+         AND (SELECT COUNT(*) FROM chat_participants WHERE room_id = cr.room_id) = 2`,
+      [teacher_id, user_id]
     );
-    const privateRoomId = privateRoomResult.insertId;
 
-    await db.query(
-      'INSERT INTO chat_participants (room_id, user_id) VALUES (?, ?), (?, ?)',
-      [privateRoomId, teacher_id, privateRoomId, user_id]
-    );
-    console.log('✅ [join-classroom] 1:1 채팅방 생성:', privateRoomId);
+    if (existingPrivateRoom.length > 0) {
+      privateRoomId = existingPrivateRoom[0].room_id;
+      console.log('🔍 [join-classroom] 기존 1:1 채팅방 발견:', privateRoomId);
+    } else {
+      // 새 1:1 채팅방 생성
+      const [privateRoomResult] = await conn.query(
+        'INSERT INTO chat_rooms (room_type) VALUES (?)',
+        ['private']
+      );
+      privateRoomId = privateRoomResult.insertId;
 
-    // 6. 생성된 채팅방 확인
+      // 교사와 학부모를 1:1 채팅방에 추가
+      await conn.query(
+        'INSERT INTO chat_participants (room_id, user_id) VALUES (?, ?), (?, ?)',
+        [privateRoomId, teacher_id, privateRoomId, user_id]
+      );
+      console.log('✅ [join-classroom] 새 1:1 채팅방 생성:', privateRoomId);
+    }
+
+    await conn.commit();
+
+    // 7. 생성된 채팅방 확인 및 통계
     const [finalRooms] = await db.query(
       `SELECT cr.room_id, cr.room_type, cr.classroom_id
        FROM chat_rooms cr
        JOIN chat_participants cp ON cr.room_id = cp.room_id
-       WHERE cp.user_id = ? AND (cr.classroom_id = ? OR cr.classroom_id IS NULL)`,
-      [user_id, classroom_id]
+       WHERE cp.user_id = ? AND (cr.classroom_id = ? OR cr.room_id = ?)`,
+      [user_id, classroom_id, privateRoomId]
     );
     console.log('🔍 [join-classroom] 최종 채팅방 목록:', finalRooms);
 
     res.json({ 
-      message: '학급 가입 성공', 
+      message: `${grade}학년 ${class_number}반 가입이 완료되었습니다!`, 
       classroom_id,
       groupRoomId,
       privateRoomId,
-      totalRooms: finalRooms.length
+      totalRooms: finalRooms.length,
+      details: {
+        groupChatJoined: !!groupRoomId,
+        privateChatCreated: !!privateRoomId
+      }
     });
+
   } catch (err) {
+    await conn.rollback();
     console.error('🔥 학급 가입 오류:', err);
     res.status(500).json({ error: '서버 오류', details: err.message });
+  } finally {
+    conn.release();
   }
 });
 

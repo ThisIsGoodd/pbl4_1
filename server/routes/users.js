@@ -123,4 +123,121 @@ router.patch('/update-role', authenticateToken, async (req, res) => {
   }
 });
 
+// ✅ 학급 탈퇴 (학부모용)
+router.delete('/leave-classroom/:classroomId', authenticateToken, async (req, res) => {
+  const { classroomId } = req.params;
+  const { user_id } = req.user;
+
+  try {
+    // 1. 해당 학급에 속해 있는지 확인
+    const [memberCheck] = await db.query(
+      'SELECT * FROM user_classrooms WHERE user_id = ? AND classroom_id = ?',
+      [user_id, classroomId]
+    );
+
+    if (memberCheck.length === 0) {
+      return res.status(404).json({ error: '해당 학급에 속해 있지 않습니다.' });
+    }
+
+    // 2. 채팅방 참가자에서 제거
+    const [chatRooms] = await db.query(
+      'SELECT room_id FROM chat_rooms WHERE classroom_id = ?',
+      [classroomId]
+    );
+
+    for (const room of chatRooms) {
+      await db.query(
+        'DELETE FROM chat_participants WHERE room_id = ? AND user_id = ?',
+        [room.room_id, user_id]
+      );
+    }
+
+    // 3. 학급에서 제거
+    await db.query(
+      'DELETE FROM user_classrooms WHERE user_id = ? AND classroom_id = ?',
+      [user_id, classroomId]
+    );
+
+    // 4. 관련 알림 삭제
+    await db.query(
+      'DELETE FROM notifications WHERE user_id = ? AND classroom_id = ?',
+      [user_id, classroomId]
+    );
+
+    res.json({ message: '학급 탈퇴가 완료되었습니다.' });
+  } catch (err) {
+    console.error('🔥 학급 탈퇴 오류:', err);
+    res.status(500).json({ error: '서버 오류', details: err.message });
+  }
+});
+
+// ✅ 회원 탈퇴
+router.delete('/delete-account', authenticateToken, async (req, res) => {
+  const { user_id } = req.user;
+
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    // 1. 사용자가 생성한 학급들의 ID 조회
+    const [ownedClassrooms] = await conn.query(
+      'SELECT classroom_id FROM classrooms WHERE teacher_id = ?',
+      [user_id]
+    );
+
+    // 2. 사용자가 생성한 학급들과 관련된 모든 데이터 삭제
+    for (const classroom of ownedClassrooms) {
+      const classroomId = classroom.classroom_id;
+      
+      // 해당 학급의 채팅방들 삭제
+      const [chatRooms] = await conn.query(
+        'SELECT room_id FROM chat_rooms WHERE classroom_id = ?',
+        [classroomId]
+      );
+
+      for (const room of chatRooms) {
+        await conn.query('DELETE FROM chat_messages WHERE room_id = ?', [room.room_id]);
+        await conn.query('DELETE FROM chat_participants WHERE room_id = ?', [room.room_id]);
+      }
+      
+      await conn.query('DELETE FROM chat_rooms WHERE classroom_id = ?', [classroomId]);
+      
+      // 학급 관련 데이터 삭제
+      await conn.query('DELETE FROM posts WHERE classroom_id = ?', [classroomId]);
+      await conn.query('DELETE FROM schedules WHERE classroom_id = ?', [classroomId]);
+      await conn.query('DELETE FROM user_classrooms WHERE classroom_id = ?', [classroomId]);
+      await conn.query('DELETE FROM notifications WHERE classroom_id = ?', [classroomId]);
+    }
+
+    // 3. 사용자가 생성한 학급들 삭제
+    await conn.query('DELETE FROM classrooms WHERE teacher_id = ?', [user_id]);
+
+    // 4. 사용자 관련 데이터 삭제
+    await conn.query('DELETE FROM user_classrooms WHERE user_id = ?', [user_id]);
+    await conn.query('DELETE FROM user_schools WHERE user_id = ?', [user_id]);
+    await conn.query('DELETE FROM post_likes WHERE user_id = ?', [user_id]);
+    await conn.query('DELETE FROM post_views WHERE user_id = ?', [user_id]);
+    await conn.query('DELETE FROM comments WHERE author_id = ?', [user_id]);
+    await conn.query('DELETE FROM posts WHERE author_id = ?', [user_id]);
+    await conn.query('DELETE FROM schedules WHERE created_by = ?', [user_id]);
+    await conn.query('DELETE FROM notifications WHERE user_id = ?', [user_id]);
+    await conn.query('DELETE FROM notification_settings WHERE user_id = ?', [user_id]);
+    await conn.query('DELETE FROM chat_participants WHERE user_id = ?', [user_id]);
+    await conn.query('DELETE FROM chat_messages WHERE sender_id = ?', [user_id]);
+    await conn.query('DELETE FROM chat_unread WHERE user_id = ?', [user_id]);
+
+    // 5. 마지막으로 사용자 계정 삭제
+    await conn.query('DELETE FROM users WHERE user_id = ?', [user_id]);
+
+    await conn.commit();
+    res.json({ message: '회원 탈퇴가 완료되었습니다.' });
+  } catch (err) {
+    await conn.rollback();
+    console.error('🔥 회원 탈퇴 오류:', err);
+    res.status(500).json({ error: '서버 오류', details: err.message });
+  } finally {
+    conn.release();
+  }
+});
+
 module.exports = router;

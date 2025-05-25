@@ -406,25 +406,60 @@ router.patch('/:id/invite-code', authenticateToken, async (req, res) => {
   }
 });
 
-// ✅ 학급 삭제
+// ✅ 학급 삭제 (개선된 버전)
 router.delete('/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   const teacher_id = req.user.user_id;
+  
+  const conn = await db.getConnection();
   try {
-    const [classroom] = await db.query(
+    await conn.beginTransaction();
+
+    // 1. 권한 확인
+    const [classroom] = await conn.query(
       'SELECT * FROM classrooms WHERE classroom_id = ? AND teacher_id = ?',
       [id, teacher_id]
     );
-    if (classroom.length === 0) return res.status(403).json({ error: '권한이 없습니다.' });
+    
+    if (classroom.length === 0) {
+      return res.status(403).json({ error: '권한이 없습니다.' });
+    }
 
-    await db.query('DELETE FROM posts WHERE classroom_id = ?', [id]);
-    await db.query('DELETE FROM user_classrooms WHERE classroom_id = ?', [id]);
-    await db.query('DELETE FROM classrooms WHERE classroom_id = ?', [id]);
+    // 2. 채팅방 관련 데이터 삭제
+    const [chatRooms] = await conn.query(
+      'SELECT room_id FROM chat_rooms WHERE classroom_id = ?',
+      [id]
+    );
 
+    for (const room of chatRooms) {
+      await conn.query('DELETE FROM chat_messages WHERE room_id = ?', [room.room_id]);
+      await conn.query('DELETE FROM chat_participants WHERE room_id = ?', [room.room_id]);
+      await conn.query('DELETE FROM chat_unread WHERE room_id = ?', [room.room_id]);
+    }
+    
+    await conn.query('DELETE FROM chat_rooms WHERE classroom_id = ?', [id]);
+
+    // 3. 학급 관련 데이터 삭제
+    await conn.query('DELETE FROM comments WHERE post_id IN (SELECT post_id FROM posts WHERE classroom_id = ?)', [id]);
+    await conn.query('DELETE FROM post_likes WHERE post_id IN (SELECT post_id FROM posts WHERE classroom_id = ?)', [id]);
+    await conn.query('DELETE FROM post_views WHERE post_id IN (SELECT post_id FROM posts WHERE classroom_id = ?)', [id]);
+    await conn.query('DELETE FROM attachments WHERE post_id IN (SELECT post_id FROM posts WHERE classroom_id = ?)', [id]);
+    await conn.query('DELETE FROM posts WHERE classroom_id = ?', [id]);
+    await conn.query('DELETE FROM schedules WHERE classroom_id = ?', [id]);
+    await conn.query('DELETE FROM notifications WHERE classroom_id = ?', [id]);
+    await conn.query('DELETE FROM user_classrooms WHERE classroom_id = ?', [id]);
+    
+    // 4. 학급 삭제
+    await conn.query('DELETE FROM classrooms WHERE classroom_id = ?', [id]);
+
+    await conn.commit();
     res.json({ message: '학급 삭제 완료' });
   } catch (err) {
+    await conn.rollback();
     console.error('🔥 학급 삭제 오류:', err);
     res.status(500).json({ error: '서버 오류', details: err.message });
+  } finally {
+    conn.release();
   }
 });
 

@@ -7,7 +7,7 @@
 3. 선생님이 학부모의 댓글을 비공개 처리 할 수 있도록 
 (완료료)
 4. 선생님이 학교 전체 공지사항 등록하는거 선택하는 버튼이 필요함
-
+(완료료)
 5. 학교 전체 관리자가 학교 전체 일정을 동록할 때 에러 발생, 그리고 학교 관리자가 작성하는 학교 공지인데, 버튼은 학급 공지 작성 버튼으로 나옴
 🔥 게시글 작성 오류: Error: Incorrect integer value: 'null' for column 'classroom_id' at row 1
     at PromisePool.query (/home/junseong2/myapp/server/node_modules/mysql2/lib/promise/pool.js:36:22)
@@ -28,7 +28,7 @@
   sqlState: 'HY000',
   sqlMessage: "Incorrect integer value: 'null' for column 'classroom_id' at row 1"
 }
-
+(완료)
 6. 첨부파일 다운로드 클릭시 http://localhost:3001/uploads/file_1748143957123_532.txt
 링크 이동은 하지막 다운로드는 안됨
 

@@ -4,7 +4,7 @@ const db = require('../db');
 const authenticateToken = require('../authMiddleware');
 const { createNotification } = require('../utils/notify');
 
-// ✅ 일정 추가 - 학교 전체 관리자와 학급 교사 모두 지원
+// ✅ 일정 추가 - 학교 전체 관리자와 학급 교사 모두 지원 (수정된 버전)
 router.post('/', authenticateToken, async (req, res) => {
   const { title, description, start_date, end_date, school_wide = false, classroom_id } = req.body;
   const { user_id, is_admin, school_id: userSchoolId } = req.user;
@@ -33,18 +33,9 @@ router.post('/', authenticateToken, async (req, res) => {
         targetClassroomId = classroom_id;
         finalSchoolWide = school_wide === true || school_wide === 'true';
       } else {
-        // classroom_id가 없는 경우 (학교 전체 일정)
+        // 🔥 수정: classroom_id가 없는 경우 (학교 전체 일정) - NULL 대신 0 사용
         finalSchoolWide = true;
-        
-        // 대표 학급 찾기 (알림용)
-        const [representativeClassroom] = await db.query(
-          'SELECT classroom_id FROM classrooms WHERE school_id = ? LIMIT 1',
-          [userSchoolId]
-        );
-        
-        if (representativeClassroom.length > 0) {
-          targetClassroomId = representativeClassroom[0].classroom_id;
-        }
+        targetClassroomId = null; // NULL로 설정하되 DB 저장 시 처리
       }
     } else {
       // 🔥 일반 교사의 경우
@@ -70,12 +61,21 @@ router.post('/', authenticateToken, async (req, res) => {
       targetClassroomId, targetSchoolId, finalSchoolWide
     });
 
-    // 🔥 일정 저장
+    // 🔥 일정 저장 - NULL 처리 개선
     const [result] = await db.query(
       `INSERT INTO schedules 
         (title, description, start_date, end_date, created_at, created_by, classroom_id, school_id, school_wide) 
        VALUES (?, ?, ?, ?, NOW(), ?, ?, ?, ?)`,
-      [title, description, start_date, end_date, user_id, targetClassroomId, targetSchoolId, finalSchoolWide]
+      [
+        title, 
+        description, 
+        start_date, 
+        end_date, 
+        user_id, 
+        targetClassroomId, // NULL이면 NULL로 저장됨
+        targetSchoolId, 
+        finalSchoolWide
+      ]
     );
 
     const scheduleId = result.insertId;

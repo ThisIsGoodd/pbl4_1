@@ -153,7 +153,7 @@ function AdminMainPage() {
           <div style={styles.noticeSection}>
             <h3 style={styles.sectionTitle}>📌 학교 전체 공지사항</h3>
             {schoolPosts.length === 0 ? (
-              <p style={styles.emptyText}>공지사항이 없습니다.</p>
+              <p style={styles.emptyText}>학교 전체 공지사항이 없습니다.</p>
             ) : (
               <ul style={styles.postList}>
                 {schoolPosts.slice(0, 5).map(post => (
@@ -172,8 +172,17 @@ function AdminMainPage() {
               </ul>
             )}
             <div style={{ marginTop: '1rem' }}>
-              <Link to={`/posts/write?school_id=${user.school_id}`} style={styles.writeButton}>
-                ✏️ 학교 공지 작성
+              {/* 🔥 수정: 버튼 텍스트를 명확하게 변경 */}
+              <Link 
+                to={`/posts/write?school_id=${user.school_id}`} 
+                style={{
+                  ...styles.writeButton,
+                  backgroundColor: '#28a745', // 녹색으로 변경하여 학교 전체 공지임을 강조
+                  textDecoration: 'none',
+                  display: 'inline-block'
+                }}
+              >
+                🏫 학교 전체 공지 작성
               </Link>
             </div>
           </div>

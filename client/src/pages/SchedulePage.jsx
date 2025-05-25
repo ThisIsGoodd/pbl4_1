@@ -307,17 +307,18 @@ function SchedulePage() {
           textAlign: isMobile ? 'center' : 'left'
         }}>
           {schoolId && isAdmin 
-            ? '학교 전체 일정 관리'
+            ? '🏫 학교 전체 일정 관리'  // 🔥 수정: 이모지 추가
             : classroomInfo 
-            ? `${classroomInfo.grade}학년 ${classroomInfo.class_number}반 일정` 
+            ? `📚 ${classroomInfo.grade}학년 ${classroomInfo.class_number}반 일정` // 🔥 수정: 이모지 추가
             : '일정 관리'}
         </h1>
-        {/* 🆕 임시: 학교 관리자용 강제 버튼 표시 */}
-        {(myRole === 'teacher' || isAdmin || schoolId) && (
+        {/* 🔥 수정: 버튼 텍스트와 조건 개선 */}
+        {(myRole === 'teacher' || isAdmin) && (  // 🔥 수정: 조건 간소화
           <button 
             style={{
               ...styles.addButton,
-              width: isMobile ? '100%' : 'auto'
+              width: isMobile ? '100%' : 'auto',
+              backgroundColor: schoolId && isAdmin ? '#28a745' : '#007bff'  // 🔥 추가: 색상 구분
             }}
             onClick={() => {
               console.log('🔍 일정 추가 버튼 클릭:', { myRole, isAdmin, schoolId, classroomId });
@@ -331,7 +332,10 @@ function SchedulePage() {
               setIsModalOpen(true);
             }}
           >
-            ➕ 일정 추가
+            {/* 🔥 수정: 버튼 텍스트를 상황에 맞게 표시 */}
+            {schoolId && isAdmin 
+              ? '🏫 학교 전체 일정 추가'
+              : '📅 일정 추가'}
           </button>
         )}
       </div>
@@ -634,7 +638,7 @@ function SchedulePage() {
               {/* 🆕 학교 전체/학급 일정 선택 (일반 교사만 표시) */}
               {myRole === 'teacher' && classroomId && !schoolId && (
                 <div style={styles.formGroup}>
-                  <label style={styles.label}>일정 범위 선택</label>
+                  <label style={styles.label}>📍 일정 범위 선택</label>
                   <div style={{ display: 'flex', gap: '1rem', flexDirection: isMobile ? 'column' : 'row' }}>
                     <label style={{
                       ...styles.radioLabel,
@@ -649,6 +653,9 @@ function SchedulePage() {
                         style={styles.radio}
                       />
                       📚 학급 일정 (우리 학급에만 표시)
+                      <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.2rem' }}>
+                        {classroomInfo?.grade}학년 {classroomInfo?.class_number}반 학생들만 볼 수 있습니다
+                      </div>
                     </label>
                     <label style={{
                       ...styles.radioLabel,
@@ -663,15 +670,22 @@ function SchedulePage() {
                         style={styles.radio}
                       />
                       🏫 학교 전체 일정 (모든 학급에 표시)
+                      <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.2rem' }}>
+                        학교 전체 학급의 모든 학생과 학부모가 볼 수 있습니다
+                      </div>
                     </label>
                   </div>
                 </div>
               )}
 
               {/* 🆕 학교 전체 관리자 안내 메시지 */}
-              {schoolId && (
+              {schoolId && isAdmin && (
                 <div style={styles.adminNotice}>
                   🏫 <strong>학교 전체 관리자</strong>로서 모든 학급에 표시되는 학교 전체 일정을 작성합니다.
+                  <div style={{ fontSize: '0.9rem', marginTop: '0.5rem', color: '#2e7d32' }}>
+                    • 모든 학급의 학생과 학부모가 볼 수 있습니다<br/>
+                    • 중요한 학교 행사나 전체 공지 일정에 사용하세요
+                  </div>
                 </div>
               )}
 

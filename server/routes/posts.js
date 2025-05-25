@@ -61,7 +61,7 @@ router.post('/', authenticateToken, upload.array('files', 10), async (req, res) 
     if (is_admin && userSchoolId && !classroom_id) {
       console.log('🏫 학교 전체 관리자의 게시글 작성');
       
-      // 학교 전체 공지이므로 대표 학급 하나를 가져와서 classroom_id로 사용
+      // 🔥 수정: 학교 전체 공지이므로 대표 학급 하나를 가져와서 classroom_id로 사용
       const [[representativeClassroom]] = await db.query(
         'SELECT classroom_id FROM classrooms WHERE school_id = ? LIMIT 1',
         [userSchoolId]
@@ -75,11 +75,18 @@ router.post('/', authenticateToken, upload.array('files', 10), async (req, res) 
       }
     } else {
       // 일반 교사인 경우
+      if (!classroom_id) {
+        return res.status(400).json({ error: '학급 정보가 필요합니다.' });
+      }
       targetClassroomId = classroom_id;
       finalSchoolWide = school_wide === 'true';
     }
 
-    // 게시글 저장 (category 제거)
+    console.log('🔍 [posts POST] 최종 설정:', {
+      targetClassroomId, finalSchoolWide
+    });
+
+    // 🔥 게시글 저장 - classroom_id가 반드시 존재하도록 보장
     const [result] = await db.query(
       `INSERT INTO posts 
         (author_id, title, content, created_at, views, classroom_id, school_wide, likes) 

@@ -265,11 +265,20 @@ function PostDetailPage() {
                 {post.attachments.map(att => (
                   <li key={att.attachment_id}>
                     <a 
-                      href={`http://localhost:3001${att.file_path}`} 
-                      download={att.original_name}
-                      target="_blank" 
-                      rel="noreferrer"
+                      href={`http://localhost:3001${att.file_path}`}
+                      download={att.original_name} // 이 속성이 중요!
                       style={{ textDecoration: 'underline', color: 'blue' }}
+                      onClick={(e) => {
+                        // 🔥 강제 다운로드를 위한 JavaScript
+                        e.preventDefault();
+                        const link = document.createElement('a');
+                        link.href = `http://localhost:3001${att.file_path}`;
+                        link.download = att.original_name;
+                        link.target = '_blank';
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                      }}
                     >
                       📎 {att.original_name}
                     </a>

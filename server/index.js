@@ -35,7 +35,13 @@ const PORT = process.env.PORT || 3001;
 app.use(passport.initialize());
 app.use(cors());
 app.use(express.json());
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+  setHeaders: (res, filePath) => {
+    // 🔥 모든 uploads 파일에 다운로드 헤더 추가
+    const filename = path.basename(filePath);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  }
+}));
 
 // ✅ 라우터 불러오기
 const adminRoutes = require('./routes/admin');

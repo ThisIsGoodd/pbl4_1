@@ -22,18 +22,18 @@ function SchedulePage() {
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   
   // 🆕 한국 공휴일 데이터 (2025년)
-  const holidays2025 = new Set([
-    '2025-01-01', // 신정
-    '2025-01-28', '2025-01-29', '2025-01-30', // 설날
-    '2025-03-01', // 삼일절
-    '2025-05-05', // 어린이날
-    '2025-05-13', // 부처님오신날
-    '2025-06-06', // 현충일
-    '2025-08-15', // 광복절
-    '2025-10-03', '2025-10-06', // 추석
-    '2025-10-09', // 한글날
-    '2025-12-25'  // 크리스마스
-  ]);
+  // const holidays2025 = new Set([
+  //   '2025-01-01', // 신정
+  //   '2025-01-28', '2025-01-29', '2025-01-30', // 설날
+  //   '2025-03-01', // 삼일절
+  //   '2025-05-05', // 어린이날
+  //   '2025-05-13', // 부처님오신날
+  //   '2025-06-06', // 현충일
+  //   '2025-08-15', // 광복절
+  //   '2025-10-03', '2025-10-06', // 추석
+  //   '2025-10-09', // 한글날
+  //   '2025-12-25'  // 크리스마스
+  // ]);
   
   // 모달 관련 상태
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -378,10 +378,10 @@ function SchedulePage() {
               const date = arg.date;
               const dateStr = date.toISOString().split('T')[0];
               const dayOfWeek = date.getDay();
-              const isHoliday = holidays2025.has(dateStr);
+              //const isHoliday = holidays2025.has(dateStr);
               
               let color = '#333';
-              if (dayOfWeek === 0 || isHoliday) {
+              if (dayOfWeek === 0 /*|| isHoliday*/) {
                 color = '#dc3545';
               } else if (dayOfWeek === 6) {
                 color = '#007bff';

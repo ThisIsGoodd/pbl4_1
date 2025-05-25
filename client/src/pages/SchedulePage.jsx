@@ -70,7 +70,16 @@ function SchedulePage() {
     setMyUserId(payload?.user_id || null);
     setMyRole(payload?.role || null);
     setIsAdmin(payload?.is_admin || false);
-  }, [token]);
+    
+    // 🆕 디버깅 로그 추가
+    console.log('🔍 사용자 정보:', {
+      userId: payload?.user_id,
+      role: payload?.role, 
+      isAdmin: payload?.is_admin,
+      schoolId,
+      classroomId
+    });
+  }, [token, schoolId, classroomId]);
 
   // 학급 정보 불러오기
   useEffect(() => {
@@ -171,8 +180,17 @@ function SchedulePage() {
         school_wide: scheduleForm.schoolWide
       };
 
-      if (classroomId && !isAdmin) {
+      // 🔥 수정: 학교 전체 관리자 vs 일반 교사 구분
+      if (schoolId) {
+        // 학교 전체 관리자인 경우: classroom_id 없이 전송
+        console.log('🏫 학교 전체 관리자 일정 등록:', requestBody);
+      } else if (classroomId) {
+        // 일반 교사인 경우: classroom_id 포함
         requestBody.classroom_id = classroomId;
+        console.log('📚 학급 교사 일정 등록:', requestBody);
+      } else {
+        alert('학급 또는 학교 정보가 없습니다.');
+        return;
       }
 
       const res = await fetch('http://localhost:3001/api/schedules', {
@@ -184,6 +202,8 @@ function SchedulePage() {
         body: JSON.stringify(requestBody)
       });
 
+      console.log('📡 서버 응답 상태:', res.status);
+      
       if (res.ok) {
         alert('일정이 등록되었습니다!');
         setIsModalOpen(false);
@@ -193,14 +213,15 @@ function SchedulePage() {
           description: '',
           startDate: '',
           endDate: '',
-          schoolWide: isAdmin && schoolId
+          schoolWide: schoolId ? true : false
         });
       } else {
         const errorData = await res.json();
-        alert('일정 등록에 실패했습니다: ' + errorData.error);
+        console.error('❌ 서버 에러:', errorData);
+        alert('일정 등록에 실패했습니다: ' + (errorData.error || '알 수 없는 오류'));
       }
     } catch (err) {
-      console.error('일정 등록 오류:', err);
+      console.error('🔥 일정 등록 오류:', err);
       alert('서버 오류가 발생했습니다.');
     }
   };
@@ -257,6 +278,23 @@ function SchedulePage() {
       ...styles.container,
       padding: isMobile ? '1rem' : '2rem'
     }}>
+      {/* 🆕 디버깅 정보 임시 표시 */}
+      {process.env.NODE_ENV === 'development' && (
+        <div style={{
+          position: 'fixed',
+          top: '10px',
+          right: '10px',
+          backgroundColor: 'rgba(0,0,0,0.8)',
+          color: 'white',
+          padding: '10px',
+          borderRadius: '5px',
+          fontSize: '12px',
+          zIndex: 9999
+        }}>
+          Role: {myRole} | Admin: {isAdmin ? 'Y' : 'N'} | School: {schoolId} | Classroom: {classroomId}
+        </div>
+      )}
+      
       {/* 헤더 */}
       <div style={{
         ...styles.header,
@@ -274,19 +312,21 @@ function SchedulePage() {
             ? `${classroomInfo.grade}학년 ${classroomInfo.class_number}반 일정` 
             : '일정 관리'}
         </h1>
-        {(myRole === 'teacher' || isAdmin) && (
+        {/* 🆕 임시: 학교 관리자용 강제 버튼 표시 */}
+        {(myRole === 'teacher' || isAdmin || schoolId) && (
           <button 
             style={{
               ...styles.addButton,
               width: isMobile ? '100%' : 'auto'
             }}
             onClick={() => {
+              console.log('🔍 일정 추가 버튼 클릭:', { myRole, isAdmin, schoolId, classroomId });
               setScheduleForm({
                 title: '',
                 description: '',
                 startDate: new Date().toISOString().split('T')[0],
                 endDate: new Date().toISOString().split('T')[0],
-                schoolWide: (isAdmin && schoolId) ? true : false // 🆕 학교 전체 관리자는 기본값 true
+                schoolWide: schoolId ? true : false // 🔥 수정: schoolId 기준으로 설정
               });
               setIsModalOpen(true);
             }}
@@ -585,7 +625,7 @@ function SchedulePage() {
               </div>
 
               {/* 🆕 학교 전체/학급 일정 선택 (일반 교사만 표시) */}
-              {myRole === 'teacher' && !isAdmin && classroomId && (
+              {myRole === 'teacher' && classroomId && !schoolId && (
                 <div style={styles.formGroup}>
                   <label style={styles.label}>일정 범위 선택</label>
                   <div style={{ display: 'flex', gap: '1rem', flexDirection: isMobile ? 'column' : 'row' }}>
@@ -622,7 +662,7 @@ function SchedulePage() {
               )}
 
               {/* 🆕 학교 전체 관리자 안내 메시지 */}
-              {isAdmin && schoolId && (
+              {schoolId && (
                 <div style={styles.adminNotice}>
                   🏫 <strong>학교 전체 관리자</strong>로서 모든 학급에 표시되는 학교 전체 일정을 작성합니다.
                 </div>

@@ -9,7 +9,7 @@ function PostWritePage() {
   const [title, setTitle] = useState('');
   const [files, setFiles] = useState([]);
   const [classroomInfo, setClassroomInfo] = useState(null);
-  const [postType, setPostType] = useState('classroom');
+  const [postType, setPostType] = useState('classroom'); // 🔥 기본값을 명확히 설정
   const [isAdmin, setIsAdmin] = useState(false);
   const [userSchoolId, setUserSchoolId] = useState(null);
 
@@ -145,71 +145,155 @@ function PostWritePage() {
 
       {/* 🆕 학교 전체 관리자인 경우 학교 정보 표시 */}
       {isAdmin && schoolId && !classroomId ? (
-        <p style={{ 
+        <div style={{ 
           marginBottom: '1.5rem', 
           fontWeight: 'bold', 
           padding: '1rem', 
           backgroundColor: '#e3f2fd', 
           borderRadius: '8px',
-          border: '1px solid #90caf9'
+          border: '1px solid #90caf9',
+          textAlign: 'center'
         }}>
-          🏫 학교 전체 공지사항으로 작성됩니다.
-        </p>
+          🏫 <strong>학교 전체 공지사항</strong>으로 작성됩니다.
+          <div style={{ fontSize: '0.9rem', marginTop: '0.5rem', color: '#1565c0' }}>
+            모든 학급의 학생과 학부모가 볼 수 있습니다.
+          </div>
+        </div>
       ) : classroomInfo ? (
         <p style={{ 
           marginBottom: '1.5rem', 
           fontWeight: 'bold', 
           padding: '1rem', 
           backgroundColor: '#f3f4f6', 
-          borderRadius: '8px' 
+          borderRadius: '8px',
+          textAlign: 'center'
         }}>
-          대상 학급: {classroomInfo.grade}학년 {classroomInfo.class_number}반 ({classroomInfo.school})
+          📚 대상 학급: {classroomInfo.grade}학년 {classroomInfo.class_number}반 ({classroomInfo.school})
         </p>
       ) : null}
 
-      {/* 🆕 공지사항 유형 선택 (일반 교사만) */}
+      {/* 🔥 공지사항 유형 선택 (일반 교사만 표시 - UI 개선) */}
       {!isAdmin && classroomInfo && (
         <div style={{ 
-          marginBottom: '1.5rem', 
-          padding: '1rem', 
-          border: '1px solid #d1d5db', 
-          borderRadius: '8px', 
-          backgroundColor: '#f9fafb' 
+          marginBottom: '2rem', 
+          padding: '1.5rem', 
+          border: '2px solid #e5e7eb', 
+          borderRadius: '12px', 
+          backgroundColor: '#fafbfc' 
         }}>
-          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>
-            공지사항 유형 선택
-          </label>
-          <div style={{ display: 'flex', gap: '1.5rem' }}>
-            <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+          <h3 style={{ 
+            margin: '0 0 1rem 0', 
+            fontWeight: '600', 
+            color: '#374151', 
+            fontSize: '1.1rem',
+            textAlign: 'center'
+          }}>
+            📢 공지사항 유형을 선택하세요
+          </h3>
+          
+          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+            {/* 학급 공지 옵션 */}
+            <label style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              cursor: 'pointer',
+              padding: '1.5rem 2rem',
+              border: `3px solid ${postType === 'classroom' ? '#3b82f6' : '#e5e7eb'}`,
+              borderRadius: '12px',
+              backgroundColor: postType === 'classroom' ? '#eff6ff' : 'white',
+              transition: 'all 0.2s ease',
+              minWidth: '200px',
+              boxShadow: postType === 'classroom' ? '0 4px 12px rgba(59, 130, 246, 0.15)' : '0 2px 4px rgba(0,0,0,0.05)'
+            }}>
               <input
                 type="radio"
+                name="postType"
                 value="classroom"
                 checked={postType === 'classroom'}
                 onChange={(e) => setPostType(e.target.value)}
-                style={{ marginRight: '8px' }}
+                style={{ display: 'none' }}
               />
-              <span style={{ fontSize: '14px' }}>
-                📚 학급 공지사항 
-                <small style={{ color: '#6b7280', display: 'block' }}>
-                  해당 학급 학생들에게만 알림
-                </small>
-              </span>
+              <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>📚</div>
+              <div style={{ 
+                fontWeight: 'bold', 
+                fontSize: '1rem', 
+                color: postType === 'classroom' ? '#1d4ed8' : '#374151',
+                marginBottom: '0.5rem'
+              }}>
+                학급 공지사항
+              </div>
+              <div style={{ 
+                fontSize: '0.85rem', 
+                color: '#6b7280', 
+                textAlign: 'center',
+                lineHeight: '1.4'
+              }}>
+                우리 학급 학생들에게만<br/>표시되는 공지사항
+              </div>
             </label>
-            <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+
+            {/* 학교 전체 공지 옵션 */}
+            <label style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              cursor: 'pointer',
+              padding: '1.5rem 2rem',
+              border: `3px solid ${postType === 'school' ? '#10b981' : '#e5e7eb'}`,
+              borderRadius: '12px',
+              backgroundColor: postType === 'school' ? '#ecfdf5' : 'white',
+              transition: 'all 0.2s ease',
+              minWidth: '200px',
+              boxShadow: postType === 'school' ? '0 4px 12px rgba(16, 185, 129, 0.15)' : '0 2px 4px rgba(0,0,0,0.05)'
+            }}>
               <input
                 type="radio"
+                name="postType"
                 value="school"
                 checked={postType === 'school'}
                 onChange={(e) => setPostType(e.target.value)}
-                style={{ marginRight: '8px' }}
+                style={{ display: 'none' }}
               />
-              <span style={{ fontSize: '14px' }}>
-                🏫 학교 전체 공지사항
-                <small style={{ color: '#6b7280', display: 'block' }}>
-                  학교 전체 학생들에게 알림
-                </small>
-              </span>
+              <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🏫</div>
+              <div style={{ 
+                fontWeight: 'bold', 
+                fontSize: '1rem', 
+                color: postType === 'school' ? '#047857' : '#374151',
+                marginBottom: '0.5rem'
+              }}>
+                학교 전체 공지사항
+              </div>
+              <div style={{ 
+                fontSize: '0.85rem', 
+                color: '#6b7280', 
+                textAlign: 'center',
+                lineHeight: '1.4'
+              }}>
+                학교 전체 학급에<br/>표시되는 중요 공지사항
+              </div>
             </label>
+          </div>
+
+          {/* 🆕 선택된 유형에 따른 안내 메시지 */}
+          <div style={{
+            marginTop: '1rem',
+            padding: '0.75rem 1rem',
+            backgroundColor: postType === 'school' ? '#fef3c7' : '#dbeafe',
+            border: `1px solid ${postType === 'school' ? '#f59e0b' : '#3b82f6'}`,
+            borderRadius: '8px',
+            textAlign: 'center',
+            fontSize: '0.9rem'
+          }}>
+            {postType === 'school' ? (
+              <span style={{ color: '#92400e' }}>
+                ⚠️ <strong>학교 전체 공지</strong>는 모든 학급에 표시되므신 신중하게 작성해주세요.
+              </span>
+            ) : (
+              <span style={{ color: '#1e40af' }}>
+                ℹ️ <strong>학급 공지</strong>는 {classroomInfo?.grade}학년 {classroomInfo?.class_number}반 학생들에게만 표시됩니다.
+              </span>
+            )}
           </div>
         </div>
       )}

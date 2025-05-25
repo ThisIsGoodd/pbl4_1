@@ -17,6 +17,7 @@ function ChatPage() {
 
   const token = localStorage.getItem('token');
   const userId = JSON.parse(atob(token.split('.')[1])).user_id;
+  const userRole = JSON.parse(atob(token.split('.')[1])).role;
   const messagesEndRef = useRef(null);
 
   // ✅ 학급 정보 불러오기
@@ -173,9 +174,54 @@ function ChatPage() {
     }
   };
 
+  // 🆕 대면 상담 요청 상태
+  const [consultationForm, setConsultationForm] = useState({
+    title: '',
+    date: '',
+    time: ''
+  });
+
+  // 🆕 대면 상담 요청 핸들러 (개선된 버전)
+  const handleConsultationRequest = () => {
+    if (!selectedRoom || selectedRoom.room_type !== 'private') {
+      alert('1:1 채팅방에서만 대면 상담을 요청할 수 있습니다.');
+      return;
+    }
+
+    if (!consultationForm.title.trim() || !consultationForm.date || !consultationForm.time) {
+      alert('상담 내용, 날짜, 시간을 모두 입력해주세요.');
+      return;
+    }
+
+    if (window.confirm('선생님께 대면 상담을 요청하시겠습니까?')) {
+      const consultationMessage = `📅 대면 상담 요청
+
+📝 상담 내용: ${consultationForm.title}
+📅 희망 날짜: ${consultationForm.date}
+🕐 희망 시간: ${consultationForm.time}
+
+시간이 되실 때 상담 일정을 조율해주세요.`;
+      
+      socket.emit('sendMessage', {
+        roomId: selectedRoom.room_id,
+        userId,
+        content: consultationMessage
+      });
+
+      // 폼 초기화
+      setConsultationForm({
+        title: '',
+        date: '',
+        time: ''
+      });
+
+      alert('상담 요청이 전송되었습니다.');
+    }
+  };
+
   if (loading) {
     return (
-      <div style={{ padding: '2rem', textAlign: 'center' }}>
+      <div style={styles.loadingContainer}>
         <p>⏳ 채팅방을 불러오는 중...</p>
       </div>
     );
@@ -183,7 +229,7 @@ function ChatPage() {
 
   if (error) {
     return (
-      <div style={{ padding: '2rem', textAlign: 'center', color: 'red' }}>
+      <div style={styles.errorContainer}>
         <h3>❌ 오류 발생</h3>
         <p>{error}</p>
         <button onClick={() => window.location.reload()}>
@@ -194,125 +240,201 @@ function ChatPage() {
   }
 
   return (
-    <div style={{ padding: '1rem' }}>
-      <h2 style={{ textAlign: 'center', fontSize: '1.5rem', marginBottom: '1rem' }}>
+    <div style={styles.container}>
+      <h2 style={styles.header}>
         {classroomInfo
           ? `${classroomInfo.grade}학년 ${classroomInfo.class_number}반 채팅`
           : '채팅'}
       </h2>
 
-      <div style={{ display: 'flex', height: '70vh' }}>
-        {/* 좌측: 채팅방 목록 */}
-        <div style={{ width: '25%', borderRight: '1px solid #ccc', padding: '1rem' }}>
-          <h3>채팅방 목록</h3>
+      <div style={styles.chatContainer}>
+        {/* 왼쪽: 채팅방 목록 */}
+        <div style={styles.sidebar}>
+          <div style={styles.roomListHeader}>
+            <h3>채팅방 목록</h3>
+          </div>
+          
           {rooms.length === 0 ? (
-            <p style={{ color: '#999' }}>채팅방이 없습니다.</p>
+            <p style={styles.noRooms}>채팅방이 없습니다.</p>
           ) : (
-            <ul style={{ listStyle: 'none', padding: 0 }}>
-              {rooms.map(r => (
-                <li
-                  key={r.room_id}
+            <div style={styles.roomList}>
+              {rooms.map(room => (
+                <div
+                  key={room.room_id}
                   style={{
-                    marginBottom: '0.5rem',
-                    cursor: 'pointer',
-                    padding: '0.5rem',
-                    backgroundColor: selectedRoom?.room_id === r.room_id ? '#e6f3ff' : 'transparent',
-                    borderRadius: '4px',
-                    border: selectedRoom?.room_id === r.room_id ? '2px solid #007bff' : '1px solid #ddd'
+                    ...styles.roomItem,
+                    ...(selectedRoom?.room_id === room.room_id ? styles.roomItemActive : {})
                   }}
-                  onClick={() => handleRoomClick(r)}
+                  onClick={() => handleRoomClick(room)}
                 >
-                  <div style={{ fontWeight: selectedRoom?.room_id === r.room_id ? 'bold' : 'normal' }}>
-                    {r.room_type === 'group' ? '👥 학급 단체방' : '💬 1:1 채팅'}
+                  <div style={styles.roomIcon}>
+                    {room.room_type === 'group' ? '👥' : '💬'}
                   </div>
-                  <div style={{ fontSize: '0.8rem', color: '#666' }}>
-                    방 번호: {r.room_id}
-                    {r.unread_count > 0 && (
-                      <span style={{
-                        marginLeft: '0.5rem',
-                        backgroundColor: 'red',
-                        color: 'white',
-                        borderRadius: '50%',
-                        padding: '2px 6px',
-                        fontSize: '0.7rem'
-                      }}>
-                        {r.unread_count}
-                      </span>
+                  <div style={styles.roomInfo}>
+                    <div style={styles.roomName}>
+                      {room.room_type === 'group' ? '학급 단체방' : '1:1 채팅'}
+                    </div>
+                    {room.unread_count > 0 && (
+                      <div style={styles.unreadText}>
+                        읽지 않은 메시지 {room.unread_count}개
+                      </div>
                     )}
                   </div>
-                </li>
+                  {room.unread_count > 0 && (
+                    <div style={styles.unreadBadge}>
+                      {room.unread_count}
+                    </div>
+                  )}
+                </div>
               ))}
-            </ul>
+            </div>
+          )}
+
+          {/* 🆕 대면 상담 요청 폼 (학부모만, 1:1 채팅방에서만) */}
+          {userRole === 'parent' && selectedRoom?.room_type === 'private' && (
+            <div style={styles.consultationSection}>
+              <h4 style={styles.consultationTitle}>📅 대면 상담 요청</h4>
+              
+              <div style={styles.formGroup}>
+                <label style={styles.formLabel}>상담 내용</label>
+                <input
+                  type="text"
+                  value={consultationForm.title}
+                  onChange={(e) => setConsultationForm(prev => ({...prev, title: e.target.value}))}
+                  placeholder="상담하고 싶은 내용을 간단히 입력해주세요"
+                  style={styles.formInput}
+                  maxLength={50}
+                />
+              </div>
+
+              <div style={styles.formRow}>
+                <div style={styles.formGroup}>
+                  <label style={styles.formLabel}>희망 날짜</label>
+                  <input
+                    type="date"
+                    value={consultationForm.date}
+                    onChange={(e) => setConsultationForm(prev => ({...prev, date: e.target.value}))}
+                    style={styles.formInput}
+                    min={new Date().toISOString().split('T')[0]} // 오늘 이후만 선택 가능
+                  />
+                </div>
+                
+                <div style={styles.formGroup}>
+                  <label style={styles.formLabel}>희망 시간</label>
+                  <input
+                    type="time"
+                    value={consultationForm.time}
+                    onChange={(e) => setConsultationForm(prev => ({...prev, time: e.target.value}))}
+                    style={styles.formInput}
+                  />
+                </div>
+              </div>
+              
+              <button 
+                style={styles.consultationButton}
+                onClick={handleConsultationRequest}
+                disabled={!consultationForm.title.trim() || !consultationForm.date || !consultationForm.time}
+              >
+                📅 상담 요청하기
+              </button>
+              
+              <p style={styles.consultationNote}>
+                선생님께 대면 상담을 요청할 수 있습니다
+              </p>
+            </div>
           )}
         </div>
 
-        {/* 우측: 메시지 영역 */}
-        <div style={{ flex: 1, padding: '1rem', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ flex: 1, overflowY: 'auto', borderBottom: '1px solid #ddd', padding: '1rem' }}>
-            {selectedRoom ? (
-              <>
-                <div style={{ marginBottom: '1rem', padding: '0.5rem', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
-                  <strong>
-                    {selectedRoom.room_type === 'group' ? '👥 학급 단체방' : '💬 1:1 채팅'}
-                  </strong>
+        {/* 오른쪽: 메시지 영역 */}
+        <div style={styles.chatArea}>
+          {selectedRoom ? (
+            <>
+              {/* 채팅방 헤더 */}
+              <div style={styles.chatHeader}>
+                <div style={styles.chatHeaderIcon}>
+                  {selectedRoom.room_type === 'group' ? '👥' : '💬'}
                 </div>
-                {messages.length === 0 ? (
-                  <p style={{ textAlign: 'center', color: '#999' }}>메시지가 없습니다. 첫 메시지를 보내보세요!</p>
-                ) : (
-                  messages.map((m, i) => (
-                    <div key={i} style={{ 
-                      margin: '1rem 0',
-                      padding: '0.5rem',
-                      backgroundColor: m.sender_id === userId ? '#007bff' : '#f8f9fa',
-                      color: m.sender_id === userId ? 'white' : 'black',
-                      borderRadius: '8px',
-                      alignSelf: m.sender_id === userId ? 'flex-end' : 'flex-start',
-                      maxWidth: '70%'
-                    }}>
-                      <div style={{ fontSize: '0.8rem', marginBottom: '0.2rem' }}>
-                        <strong>{m.sender_name || (m.sender_id === userId ? '나' : '상대방')}</strong>{' '}
-                        <small>{new Date(m.sent_at || m.created_at).toLocaleTimeString()}</small>
-                      </div>
-                      <p style={{ margin: 0 }}>{m.content}</p>
-                    </div>
-                  ))
-                )}
-              </>
-            ) : (
-              <p style={{ textAlign: 'center', color: '#999' }}>채팅방을 선택해주세요.</p>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
+                <div style={styles.chatHeaderInfo}>
+                  <h4 style={styles.chatHeaderTitle}>
+                    {selectedRoom.room_type === 'group' ? '학급 단체방' : '1:1 채팅'}
+                  </h4>
+                  <span style={styles.chatHeaderSubtitle}>
+                    {selectedRoom.room_type === 'group' 
+                      ? '모든 학급 구성원과 대화' 
+                      : '선생님과의 개별 상담'}
+                  </span>
+                </div>
+              </div>
 
-          {/* 입력창 */}
-          {selectedRoom && (
-            <div style={{ display: 'flex', marginTop: '1rem', gap: '0.5rem' }}>
-              <input
-                type="text"
-                placeholder="메시지 입력..."
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                onKeyPress={handleKeyPress}
-                style={{ 
-                  flex: 1, 
-                  padding: '0.5rem',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px'
-                }}
-              />
-              <button 
-                onClick={handleSend}
-                style={{
-                  padding: '0.5rem 1rem',
-                  backgroundColor: '#007bff',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer'
-                }}
-              >
-                전송
-              </button>
+              {/* 메시지 목록 */}
+              <div style={styles.messageContainer}>
+                {messages.length === 0 ? (
+                  <div style={styles.noMessages}>
+                    <p>메시지가 없습니다. 첫 메시지를 보내보세요!</p>
+                  </div>
+                ) : (
+                  messages.map((message, index) => {
+                    const isMyMessage = message.sender_id === userId;
+                    return (
+                      <div
+                        key={index}
+                        style={{
+                          ...styles.messageWrapper,
+                          justifyContent: isMyMessage ? 'flex-end' : 'flex-start'
+                        }}
+                      >
+                        <div
+                          style={{
+                            ...styles.messageBubble,
+                            ...(isMyMessage ? styles.myMessage : styles.otherMessage)
+                          }}
+                        >
+                          {!isMyMessage && (
+                            <div style={styles.senderName}>
+                              {message.sender_name || '상대방'}
+                            </div>
+                          )}
+                          <div style={styles.messageContent}>
+                            {message.content}
+                          </div>
+                          <div style={styles.messageTime}>
+                            {new Date(message.sent_at || message.created_at).toLocaleTimeString([], {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+
+              {/* 메시지 입력창 */}
+              <div style={styles.inputContainer}>
+                <input
+                  type="text"
+                  placeholder="메시지를 입력하세요..."
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  style={styles.messageInput}
+                />
+                <button 
+                  onClick={handleSend}
+                  style={styles.sendButton}
+                  disabled={!newMessage.trim()}
+                >
+                  <span>➤</span>
+                </button>
+              </div>
+            </>
+          ) : (
+            <div style={styles.noSelection}>
+              <div style={styles.noSelectionIcon}>💬</div>
+              <h3>채팅방을 선택해주세요</h3>
+              <p>왼쪽에서 채팅방을 선택하면 대화를 시작할 수 있습니다</p>
             </div>
           )}
         </div>
@@ -320,5 +442,342 @@ function ChatPage() {
     </div>
   );
 }
+
+const styles = {
+  container: {
+    height: '100vh',
+    display: 'flex',
+    flexDirection: 'column',
+    backgroundColor: '#f8f9fa'
+  },
+  
+  header: {
+    padding: '1rem 2rem',
+    margin: 0,
+    backgroundColor: 'white',
+    borderBottom: '1px solid #e9ecef',
+    fontSize: '1.5rem',
+    fontWeight: '600',
+    color: '#495057'
+  },
+
+  loadingContainer: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: '100vh',
+    fontSize: '1.1rem',
+    color: '#6c757d'
+  },
+
+  errorContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: '100vh',
+    textAlign: 'center',
+    color: '#dc3545'
+  },
+
+  chatContainer: {
+    display: 'flex',
+    flex: 1,
+    overflow: 'hidden'
+  },
+
+  sidebar: {
+    width: '320px',
+    backgroundColor: 'white',
+    borderRight: '1px solid #e9ecef',
+    display: 'flex',
+    flexDirection: 'column'
+  },
+
+  roomListHeader: {
+    padding: '1rem',
+    borderBottom: '1px solid #e9ecef'
+  },
+
+  roomList: {
+    flex: 1,
+    overflowY: 'auto'
+  },
+
+  roomItem: {
+    display: 'flex',
+    alignItems: 'center',
+    padding: '0.75rem 1rem',
+    cursor: 'pointer',
+    borderBottom: '1px solid #f8f9fa',
+    transition: 'background-color 0.2s',
+    '&:hover': {
+      backgroundColor: '#f8f9fa'
+    }
+  },
+
+  roomItemActive: {
+    backgroundColor: '#e3f2fd',
+    borderLeft: '4px solid #2196f3'
+  },
+
+  roomIcon: {
+    fontSize: '1.5rem',
+    marginRight: '0.75rem'
+  },
+
+  roomInfo: {
+    flex: 1
+  },
+
+  roomName: {
+    fontWeight: '500',
+    fontSize: '0.95rem',
+    color: '#495057'
+  },
+
+  roomId: {
+    fontSize: '0.8rem',
+    color: '#6c757d'
+  },
+
+  unreadText: {
+    fontSize: '0.8rem',
+    color: '#dc3545',
+    fontWeight: '500'
+  },
+
+  unreadBadge: {
+    backgroundColor: '#dc3545',
+    color: 'white',
+    borderRadius: '50%',
+    width: '20px',
+    height: '20px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '0.75rem',
+    fontWeight: 'bold'
+  },
+
+  noRooms: {
+    padding: '2rem 1rem',
+    textAlign: 'center',
+    color: '#6c757d',
+    fontStyle: 'italic'
+  },
+
+  consultationSection: {
+    padding: '1rem',
+    borderTop: '1px solid #e9ecef',
+    backgroundColor: '#f8f9fa'
+  },
+
+  consultationTitle: {
+    margin: '0 0 1rem 0',
+    fontSize: '1rem',
+    fontWeight: '600',
+    color: '#495057'
+  },
+
+  formGroup: {
+    marginBottom: '1rem'
+  },
+
+  formRow: {
+    display: 'flex',
+    gap: '0.5rem'
+  },
+
+  formLabel: {
+    display: 'block',
+    marginBottom: '0.5rem',
+    fontSize: '0.85rem',
+    fontWeight: '500',
+    color: '#6c757d'
+  },
+
+  formInput: {
+    width: '100%',
+    padding: '0.5rem',
+    border: '1px solid #ced4da',
+    borderRadius: '6px',
+    fontSize: '0.9rem',
+    outline: 'none',
+    transition: 'border-color 0.2s'
+  },
+
+  consultationButton: {
+    width: '100%',
+    padding: '0.75rem',
+    backgroundColor: '#28a745',
+    color: 'white',
+    border: 'none',
+    borderRadius: '8px',
+    fontSize: '0.9rem',
+    fontWeight: '500',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s',
+    marginBottom: '0.5rem'
+  },
+
+  consultationNote: {
+    margin: 0,
+    fontSize: '0.75rem',
+    color: '#6c757d',
+    textAlign: 'center'
+  },
+
+  chatArea: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    backgroundColor: 'white'
+  },
+
+  chatHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    padding: '1rem',
+    borderBottom: '1px solid #e9ecef',
+    backgroundColor: '#f8f9fa'
+  },
+
+  chatHeaderIcon: {
+    fontSize: '1.5rem',
+    marginRight: '0.75rem'
+  },
+
+  chatHeaderInfo: {
+    flex: 1
+  },
+
+  chatHeaderTitle: {
+    margin: 0,
+    fontSize: '1.1rem',
+    fontWeight: '600',
+    color: '#495057'
+  },
+
+  chatHeaderSubtitle: {
+    fontSize: '0.85rem',
+    color: '#6c757d'
+  },
+
+  messageContainer: {
+    flex: 1,
+    overflowY: 'auto',
+    padding: '1rem',
+    backgroundColor: '#fafbfc'
+  },
+
+  noMessages: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: '100%',
+    color: '#6c757d',
+    fontStyle: 'italic'
+  },
+
+  messageWrapper: {
+    display: 'flex',
+    marginBottom: '0.75rem'
+  },
+
+  messageBubble: {
+    maxWidth: '70%',
+    borderRadius: '18px',
+    padding: '0.75rem 1rem',
+    wordWrap: 'break-word'
+  },
+
+  myMessage: {
+    backgroundColor: '#007bff',
+    color: 'white',
+    marginLeft: 'auto'
+  },
+
+  otherMessage: {
+    backgroundColor: '#e9ecef',
+    color: '#495057',
+    marginRight: 'auto'
+  },
+
+  senderName: {
+    fontSize: '0.75rem',
+    fontWeight: '500',
+    marginBottom: '0.25rem',
+    opacity: 0.8
+  },
+
+  messageContent: {
+    fontSize: '0.95rem',
+    lineHeight: '1.4',
+    marginBottom: '0.25rem'
+  },
+
+  messageTime: {
+    fontSize: '0.7rem',
+    opacity: 0.7,
+    textAlign: 'right'
+  },
+
+  noSelection: {
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: '100%',
+    color: '#6c757d',
+    textAlign: 'center'
+  },
+
+  noSelectionIcon: {
+    fontSize: '4rem',
+    marginBottom: '1rem',
+    opacity: 0.5
+  },
+
+  inputContainer: {
+    display: 'flex',
+    padding: '1rem',
+    borderTop: '1px solid #e9ecef',
+    backgroundColor: 'white',
+    gap: '0.5rem'
+  },
+
+  messageInput: {
+    flex: 1,
+    padding: '0.75rem 1rem',
+    border: '1px solid #ced4da',
+    borderRadius: '24px',
+    fontSize: '0.95rem',
+    outline: 'none',
+    transition: 'border-color 0.2s',
+    '&:focus': {
+      borderColor: '#007bff'
+    }
+  },
+
+  sendButton: {
+    width: '48px',
+    height: '48px',
+    backgroundColor: '#007bff',
+    color: 'white',
+    border: 'none',
+    borderRadius: '50%',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '1.2rem',
+    transition: 'background-color 0.2s',
+    '&:disabled': {
+      backgroundColor: '#6c757d',
+      cursor: 'not-allowed'
+    }
+  }
+};
 
 export default ChatPage;

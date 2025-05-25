@@ -1,4 +1,4 @@
-// server/routes/classrooms.js - 스키마 수정 버전
+// server/routes/classrooms.js - 스키마 수정 버전 + 멤버 삭제 기능 추가
 
 const express = require('express');
 const router = express.Router();
@@ -430,6 +430,124 @@ router.get('/:id/members', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('🔥 멤버 조회 오류:', err);
     res.status(500).json({ error: '서버 오류', details: err.message });
+  }
+});
+
+// ✅ 🆕 학급 멤버 삭제 (선생님 전용) - 16번 할 일 해결
+router.delete('/:classroomId/members/:userId', authenticateToken, async (req, res) => {
+  const { classroomId, userId } = req.params;
+  const teacher_id = req.user.user_id;
+
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    // 1. 권한 확인 (해당 학급의 선생님인지)
+    const [classroomCheck] = await conn.query(
+      'SELECT * FROM classrooms WHERE classroom_id = ? AND teacher_id = ?',
+      [classroomId, teacher_id]
+    );
+
+    if (classroomCheck.length === 0) {
+      return res.status(403).json({ error: '해당 학급의 선생님만 멤버를 삭제할 수 있습니다.' });
+    }
+
+    // 2. 삭제할 사용자가 해당 학급 멤버인지 확인
+    const [memberCheck] = await conn.query(
+      'SELECT * FROM user_classrooms WHERE user_id = ? AND classroom_id = ?',
+      [userId, classroomId]
+    );
+
+    if (memberCheck.length === 0) {
+      return res.status(404).json({ error: '해당 사용자는 이 학급의 멤버가 아닙니다.' });
+    }
+
+    // 3. 선생님 자신은 삭제할 수 없음
+    if (userId == teacher_id) {
+      return res.status(400).json({ error: '학급을 생성한 선생님은 삭제할 수 없습니다.' });
+    }
+
+    // 4. 채팅방에서 해당 사용자 제거
+    const [chatRooms] = await conn.query(
+      'SELECT room_id FROM chat_rooms WHERE classroom_id = ?',
+      [classroomId]
+    );
+
+    for (const room of chatRooms) {
+      await conn.query(
+        'DELETE FROM chat_participants WHERE room_id = ? AND user_id = ?',
+        [room.room_id, userId]
+      );
+    }
+
+    // 5. 1:1 채팅방도 제거 (교사와 해당 학부모 간)
+    const [privateRooms] = await conn.query(
+      `SELECT cr.room_id 
+       FROM chat_rooms cr
+       JOIN chat_participants cp1 ON cr.room_id = cp1.room_id
+       JOIN chat_participants cp2 ON cr.room_id = cp2.room_id
+       WHERE cr.room_type = 'private' 
+         AND cp1.user_id = ? 
+         AND cp2.user_id = ?
+         AND (SELECT COUNT(*) FROM chat_participants WHERE room_id = cr.room_id) = 2`,
+      [teacher_id, userId]
+    );
+
+    for (const room of privateRooms) {
+      await conn.query('DELETE FROM chat_messages WHERE room_id = ?', [room.room_id]);
+      await conn.query('DELETE FROM chat_participants WHERE room_id = ?', [room.room_id]);
+      await conn.query('DELETE FROM chat_unread WHERE room_id = ?', [room.room_id]);
+      await conn.query('DELETE FROM chat_rooms WHERE room_id = ?', [room.room_id]);
+    }
+
+    // 6. 해당 학급과 관련된 사용자의 알림 삭제
+    await conn.query(
+      'DELETE FROM notifications WHERE user_id = ? AND classroom_id = ?',
+      [userId, classroomId]
+    );
+
+    // 7. 사용자 관련 학급 데이터 삭제
+    await conn.query(
+      'DELETE FROM post_likes WHERE user_id = ? AND post_id IN (SELECT post_id FROM posts WHERE classroom_id = ?)',
+      [userId, classroomId]
+    );
+
+    await conn.query(
+      'DELETE FROM post_views WHERE user_id = ? AND post_id IN (SELECT post_id FROM posts WHERE classroom_id = ?)',
+      [userId, classroomId]
+    );
+
+    await conn.query(
+      'DELETE FROM comments WHERE author_id = ? AND post_id IN (SELECT post_id FROM posts WHERE classroom_id = ?)',
+      [userId, classroomId]
+    );
+
+    // 8. 학급에서 사용자 제거
+    await conn.query(
+      'DELETE FROM user_classrooms WHERE user_id = ? AND classroom_id = ?',
+      [userId, classroomId]
+    );
+
+    await conn.commit();
+
+    // 9. 사용자 정보 조회 (로그용)
+    const [userInfo] = await db.query('SELECT name FROM users WHERE user_id = ?', [userId]);
+    const userName = userInfo[0]?.name || '알 수 없음';
+
+    console.log(`✅ [classrooms/members DELETE] 학급 멤버 삭제 완료: ${userName} (${userId}) from classroom ${classroomId}`);
+
+    res.json({ 
+      message: `${userName} 학부모가 학급에서 제거되었습니다.`,
+      deleted_user_id: userId,
+      deleted_user_name: userName
+    });
+
+  } catch (err) {
+    await conn.rollback();
+    console.error('🔥 학급 멤버 삭제 오류:', err);
+    res.status(500).json({ error: '서버 오류', details: err.message });
+  } finally {
+    conn.release();
   }
 });
 

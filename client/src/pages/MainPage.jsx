@@ -9,12 +9,24 @@ function MainPage() {
   const [classroomInfo, setClassroomInfo] = useState(null);
   const [posts, setPosts] = useState([]);
   const [todayEvents, setTodayEvents] = useState([]);
+  const [allSchedules, setAllSchedules] = useState([]);
   const [classPhoto, setClassPhoto] = useState('');
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const navigate = useNavigate();
 
   const token = localStorage.getItem('token');
   const isTeacher = user?.role === 'teacher';
+
+  // 반응형 처리
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const isMobile = windowWidth <= 768;
 
   useEffect(() => {
     const id = searchParams.get('classroom_id');
@@ -36,7 +48,6 @@ function MainPage() {
       .then(res => res.json())
       .then(data => {
         setClassroomInfo(data);
-        // 기존 단체사진 URL 설정
         if (data.class_photo) {
           setClassPhoto(`http://localhost:3001${data.class_photo}`);
         }
@@ -68,6 +79,7 @@ function MainPage() {
       .then(res => res.json())
       .then(data => {
         if (data.schedules) {
+          setAllSchedules(data.schedules);
           const today = new Date().toISOString().split('T')[0];
           const filtered = data.schedules.filter(e => e.start <= today && e.end >= today);
           setTodayEvents(filtered);
@@ -80,13 +92,11 @@ function MainPage() {
     const file = event.target.files[0];
     if (!file) return;
 
-    // 파일 크기 체크 (5MB 제한)
     if (file.size > 5 * 1024 * 1024) {
       alert('파일 크기는 5MB 이하여야 합니다.');
       return;
     }
 
-    // 이미지 파일인지 확인
     if (!file.type.startsWith('image/')) {
       alert('이미지 파일만 업로드 가능합니다.');
       return;
@@ -120,41 +130,117 @@ function MainPage() {
     }
   };
 
+  // 🆕 커스텀 달력 관련 함수들
+  const getDaysInMonth = (date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayOfWeek = firstDay.getDay();
+
+    const days = [];
+    
+    // 이전 달의 마지막 날들로 빈 칸 채우기
+    for (let i = 0; i < startingDayOfWeek; i++) {
+      days.push(null);
+    }
+    
+    // 현재 달의 날들
+    for (let day = 1; day <= daysInMonth; day++) {
+      days.push(new Date(year, month, day));
+    }
+    
+    return days;
+  };
+
+  const getEventsForDate = (date) => {
+    if (!date) return [];
+    const dateStr = date.toISOString().split('T')[0];
+    return allSchedules.filter(event => {
+      return dateStr >= event.start && dateStr <= event.end;
+    });
+  };
+
+  const formatMonth = (date) => {
+    return date.toLocaleDateString('ko-KR', { 
+      year: 'numeric', 
+      month: 'long' 
+    });
+  };
+
+  const isToday = (date) => {
+    if (!date) return false;
+    const today = new Date();
+    return date.toDateString() === today.toDateString();
+  };
+
+  const isWeekend = (date) => {
+    if (!date) return false;
+    const day = date.getDay();
+    return day === 0 || day === 6; // 일요일(0) 또는 토요일(6)
+  };
+
+  const isSunday = (date) => {
+    if (!date) return false;
+    return date.getDay() === 0;
+  };
+
+  const isSaturday = (date) => {
+    if (!date) return false;
+    return date.getDay() === 6;
+  };
+
+  const goToPreviousMonth = () => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+  };
+
+  const goToNextMonth = () => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+  };
+
+  const handleDateClick = (date) => {
+    if (date) {
+      navigate(`/schedules?classroom_id=${classroomId}`);
+    }
+  };
+
   if (user === undefined) return null;
 
+  const days = getDaysInMonth(currentDate);
+
   return (
-    <div style={styles.wrapper}>
-      <h2 style={{ fontSize: '2rem', fontWeight: 'bold', textAlign: 'center', margin: '2rem 0' }}>
+    <div style={isMobile ? styles.mobileWrapper : styles.wrapper}>
+      <h2 style={{
+        ...styles.title,
+        fontSize: isMobile ? '1.5rem' : '2rem',
+        margin: isMobile ? '1rem 0' : '2rem 0'
+      }}>
         {classroomInfo
           ? `${classroomInfo.school} - ${classroomInfo.grade}학년 ${classroomInfo.class_number}반`
           : '학급 정보 불러오는 중...'}
       </h2>
 
-      <div style={styles.layout}>
+      <div style={isMobile ? styles.mobileLayout : styles.layout}>
         {/* 왼쪽 영역 */}
-        <div style={styles.left}>
-          <div style={styles.photoBox}>
+        <div style={isMobile ? styles.mobileLeft : styles.left}>
+          <div style={{
+            ...styles.photoBox,
+            minHeight: isMobile ? '200px' : '300px'
+          }}>
             {classPhoto ? (
               <img
                 src={classPhoto}
                 alt="단체사진"
-                style={styles.classPhoto} // 새로운 스타일 적용
+                style={styles.classPhoto}
                 onError={(e) => {
                   e.target.style.display = 'none';
                   setClassPhoto('');
                 }}
               />
             ) : (
-              <div style={{ 
-                textAlign: 'center', 
-                color: '#777',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                height: '100%'
-              }}>
-                <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📸</div>
+              <div style={styles.photoPlaceholder}>
+                <div style={{ fontSize: isMobile ? '2rem' : '3rem', marginBottom: '1rem' }}>📸</div>
                 <div>단체 사진 없음</div>
                 {isTeacher && (
                   <div style={{ marginTop: '1rem', fontSize: '0.9rem' }}>
@@ -188,9 +274,12 @@ function MainPage() {
             )}
           </div>
 
-          <div style={styles.noticeBox}>
+          <div style={{
+            ...styles.noticeBox,
+            minHeight: isMobile ? '150px' : 'auto'
+          }}>
             <h3>📌 최근 공지사항</h3>
-            <ul>
+            <ul style={{ listStyle: 'none', padding: 0 }}>
               {posts.length === 0 ? (
                 <li>공지사항 없음</li>
               ) : (
@@ -210,28 +299,115 @@ function MainPage() {
         </div>
 
         {/* 오른쪽 영역 */}
-        <div style={styles.right}>
-          <h3>🗓️ 오늘 일정</h3>
-          {todayEvents.length === 0 ? (
-            <p>오늘 일정 없음</p>
-          ) : (
-            <ul>
-              {todayEvents.map(ev => (
-                <li key={ev.schedule_id}>
-                  <strong>{ev.title}</strong><br />
-                  {ev.description}
-                </li>
-              ))}
-            </ul>
-          )}
-          <br />
-          <button onClick={() => navigate(`/schedules?classroom_id=${classroomId}`)}>
-            전체 캘린더 보기
-          </button>
-          <hr style={{ margin: '2rem 0' }} />
-          <h3>📅 달력 (예시 캘린더 자리)</h3>
-          <div style={styles.calendarPlaceholder}>
-            <p style={{ textAlign: 'center', color: '#999' }}>[여기에 달력이 표시됩니다]</p>
+        <div style={isMobile ? styles.mobileRight : styles.right}>
+          <div style={styles.todaySection}>
+            <h3>🗓️ 오늘 일정</h3>
+            {todayEvents.length === 0 ? (
+              <p>오늘 일정 없음</p>
+            ) : (
+              <ul style={{ listStyle: 'none', padding: 0 }}>
+                {todayEvents.map(ev => (
+                  <li key={ev.schedule_id} style={{ marginBottom: '0.5rem' }}>
+                    <strong>{ev.title}</strong><br />
+                    <small>{ev.description}</small>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <button 
+              onClick={() => navigate(`/schedules?classroom_id=${classroomId}`)}
+              style={styles.scheduleButton}
+            >
+              전체 캘린더 보기
+            </button>
+          </div>
+
+          <hr style={{ margin: '1rem 0' }} />
+          
+          {/* 🆕 커스텀 미니 캘린더 */}
+          <div style={styles.calendarSection}>
+            <h3>📅 미니 캘린더</h3>
+            <div style={styles.calendarContainer}>
+              {/* 달력 헤더 */}
+              <div style={styles.calendarHeader}>
+                <button 
+                  onClick={goToPreviousMonth}
+                  style={styles.navButton}
+                >
+                  ◀
+                </button>
+                <h4 style={styles.monthTitle}>{formatMonth(currentDate)}</h4>
+                <button 
+                  onClick={goToNextMonth}
+                  style={styles.navButton}
+                >
+                  ▶
+                </button>
+              </div>
+
+              {/* 요일 헤더 */}
+              <div style={styles.weekHeader}>
+                {['일', '월', '화', '수', '목', '금', '토'].map((day, index) => (
+                  <div key={day} style={{
+                    ...styles.weekDay,
+                    color: index === 0 ? '#dc3545' : index === 6 ? '#007bff' : '#333'
+                  }}>
+                    {day}
+                  </div>
+                ))}
+              </div>
+
+              {/* 날짜 그리드 */}
+              <div style={styles.dateGrid}>
+                {days.map((date, index) => {
+                  const events = getEventsForDate(date);
+                  const hasEvents = events.length > 0;
+                  
+                  return (
+                    <div
+                      key={index}
+                      style={{
+                        ...styles.dateCell,
+                        backgroundColor: isToday(date) ? '#fff3cd' : 'transparent',
+                        cursor: date ? 'pointer' : 'default',
+                        opacity: date ? 1 : 0.3
+                      }}
+                      onClick={() => handleDateClick(date)}
+                    >
+                      {date && (
+                        <>
+                          <span style={{
+                            ...styles.dateNumber,
+                            color: isSunday(date) ? '#dc3545' : 
+                                   isSaturday(date) ? '#007bff' : '#333',
+                            fontWeight: isToday(date) ? 'bold' : 'normal'
+                          }}>
+                            {date.getDate()}
+                          </span>
+                          {hasEvents && (
+                            <div style={styles.eventIndicator}>
+                              {events.slice(0, 2).map((event, idx) => (
+                                <div
+                                  key={idx}
+                                  style={{
+                                    ...styles.eventDot,
+                                    backgroundColor: event.school_wide ? '#9DA7E3' : '#5ADD7D'
+                                  }}
+                                  title={event.title}
+                                />
+                              ))}
+                              {events.length > 2 && (
+                                <span style={styles.moreEvents}>+{events.length - 2}</span>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -242,19 +418,42 @@ function MainPage() {
 const styles = {
   wrapper: {
     padding: '2rem',
+    width: '100%',
+    maxWidth: '1200px',
+    margin: '0 auto'
+  },
+  mobileWrapper: {
+    padding: '1rem',
     width: '100%'
+  },
+  title: {
+    fontWeight: 'bold',
+    textAlign: 'center'
   },
   layout: {
     display: 'flex',
     gap: '2rem',
     marginTop: '2rem',
-    height: '80vh'
+    minHeight: '80vh',
+    height: 'auto'
+  },
+  mobileLayout: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1rem',
+    marginTop: '1rem'
   },
   left: {
     flex: 6,
     display: 'flex',
     flexDirection: 'column',
-    gap: '2rem'
+    gap: '2rem',
+    height: 'fit-content'
+  },
+  mobileLeft: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1rem'
   },
   photoBox: {
     flex: 4,
@@ -264,14 +463,22 @@ const styles = {
     flexDirection: 'column',
     position: 'relative',
     borderRadius: '8px',
-    overflow: 'hidden', // 이미지가 박스를 벗어나지 않도록
-    minHeight: '300px' // 최소 높이 설정
+    overflow: 'hidden'
   },
   classPhoto: {
     width: '100%',
     height: '100%', 
-    objectFit: 'cover', // 비율 유지하면서 박스에 맞춤
+    objectFit: 'cover',
     borderRadius: '8px'
+  },
+  photoPlaceholder: {
+    textAlign: 'center', 
+    color: '#777',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100%'
   },
   uploadButtonContainer: {
     position: 'absolute',
@@ -303,21 +510,107 @@ const styles = {
     border: '1px solid #ccc',
     padding: '1rem',
     backgroundColor: '#fff',
+    borderRadius: '8px',
+    display: 'flex',
+    flexDirection: 'column'
+  },
+  mobileRight: {
+    border: '1px solid #ccc',
+    padding: '1rem',
+    backgroundColor: '#fff',
+    borderRadius: '8px',
+    display: 'flex',
+    flexDirection: 'column'
+  },
+  todaySection: {
+    marginBottom: '1rem'
+  },
+  scheduleButton: {
+    marginTop: '1rem',
+    padding: '0.5rem 1rem',
+    backgroundColor: '#007bff',
+    color: 'white',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer'
+  },
+  calendarSection: {
+    flex: 1
+  },
+  calendarContainer: {
+    border: '1px solid #ddd',
+    borderRadius: '8px',
+    padding: '1rem',
+    backgroundColor: '#fafafa'
+  },
+  calendarHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '1rem'
+  },
+  navButton: {
+    background: 'none',
+    border: 'none',
+    fontSize: '1.2rem',
+    cursor: 'pointer',
+    padding: '0.5rem',
+    borderRadius: '4px',
+    color: '#007bff'
+  },
+  monthTitle: {
+    margin: 0,
+    fontSize: '1.1rem',
+    fontWeight: 'bold'
+  },
+  weekHeader: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(7, 1fr)',
+    gap: '1px',
+    marginBottom: '0.5rem'
+  },
+  weekDay: {
+    textAlign: 'center',
+    padding: '0.5rem',
+    fontSize: '0.9rem',
+    fontWeight: 'bold'
+  },
+  dateGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(7, 1fr)',
+    gap: '1px',
+    backgroundColor: '#ddd'
+  },
+  dateCell: {
+    backgroundColor: 'white',
+    minHeight: '35px',
+    padding: '2px',
     display: 'flex',
     flexDirection: 'column',
-    justifyContent: 'space-between',
-    borderRadius: '8px'
-  },
-  calendarPlaceholder: {
-    flex: 1,
-    border: '1px dashed #ccc',
-    backgroundColor: '#fafafa',
-    padding: '2rem',
-    marginTop: '1rem',
-    display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: '8px'
+    position: 'relative',
+    transition: 'background-color 0.2s'
+  },
+  dateNumber: {
+    fontSize: '0.9rem',
+    marginBottom: '2px'
+  },
+  eventIndicator: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '1px',
+    alignItems: 'center'
+  },
+  eventDot: {
+    width: '6px',
+    height: '6px',
+    borderRadius: '50%',
+    flexShrink: 0
+  },
+  moreEvents: {
+    fontSize: '0.6rem',
+    color: '#666',
+    marginLeft: '2px'
   }
 };
 

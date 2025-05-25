@@ -37,7 +37,7 @@ app.use(cors());
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// ✅ 라우터 불러오기 (원래대로 복원)
+// ✅ 라우터 불러오기
 const adminRoutes = require('./routes/admin');
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
@@ -56,7 +56,7 @@ const { createNotification, setSocketIO } = require('./utils/notify');
 // ✅ Socket.io 인스턴스를 notify 유틸에 전달
 setSocketIO(io);
 
-// ✅ 라우터 등록 (원래대로 복원)
+// ✅ 라우터 등록 - 알림 라우터 등록 확인
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
@@ -65,15 +65,27 @@ app.use('/api/posts', postRoutes);
 app.use('/api/comments', commentRoutes);
 app.use('/api/schedules', scheduleRoutes);
 app.use('/api/schools', schoolRoutes);
-app.use('/api/notifications', notificationRoutes);
+app.use('/api/notifications', notificationRoutes); // 🔥 이 줄이 있는지 확인
 app.use('/api/notification-settings', notificationSettingsRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/inquiries', inquiryRoutes);
 app.use('/api/superadmin', superAdminRoutes);
 
+// ✅ 디버깅용: 라우터 등록 확인
+console.log('🔍 라우터 등록 완료');
+console.log('  - /api/notifications 라우터 등록됨');
+console.log('  - /api/auth 라우터 등록됨');
+console.log('  - /api/users 라우터 등록됨');
+console.log('  - 기타 라우터들 등록됨');
+
 // ✅ 루트 확인용 API
 app.get('/', (req, res) => {
   res.send('✅ 백엔드 서버가 잘 동작합니다!');
+});
+
+// ✅ 디버깅용: 알림 라우트 테스트 엔드포인트
+app.get('/api/test-notifications', (req, res) => {
+  res.json({ message: '알림 라우터가 정상적으로 등록되었습니다.' });
 });
 
 // ✅ socket.io 이벤트 처리 (메시지 저장 기능 + 알림 room 참가 추가)

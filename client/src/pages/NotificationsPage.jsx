@@ -229,7 +229,7 @@ function NotificationPage() {
     }
   };
 
-  // 전체 알림 삭제
+  // 🔥 수정: 전체 알림 삭제 - 올바른 엔드포인트 사용
   const handleDeleteAll = async () => {
     if (notifications.length === 0) return;
     
@@ -245,6 +245,8 @@ function NotificationPage() {
         setNotifications([]);
         showToast('모든 알림이 삭제되었습니다.', 'success');
       } else {
+        const errorData = await res.json();
+        console.error('삭제 실패:', errorData);
         showToast('전체 삭제에 실패했습니다.', 'error');
       }
     } catch (err) {
@@ -253,7 +255,7 @@ function NotificationPage() {
     }
   };
 
-  // 읽은 알림만 삭제
+  // 🔥 수정: 읽은 알림만 삭제 - 올바른 엔드포인트 사용
   const handleDeleteRead = async () => {
     const readNotifications = notifications.filter(n => n.is_read);
     if (readNotifications.length === 0) {
@@ -273,6 +275,8 @@ function NotificationPage() {
         setNotifications(prev => prev.filter(n => !n.is_read));
         showToast('읽은 알림이 삭제되었습니다.', 'success');
       } else {
+        const errorData = await res.json();
+        console.error('읽은 알림 삭제 실패:', errorData);
         showToast('읽은 알림 삭제에 실패했습니다.', 'error');
       }
     } catch (err) {

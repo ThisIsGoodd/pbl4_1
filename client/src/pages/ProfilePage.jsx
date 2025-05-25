@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom'; // 🔥 추가: useNavigate import
 import axios from 'axios';
 import { getToken } from '../utils/jwt';
 
 function ProfilePage() {
+  const navigate = useNavigate(); // 🔥 추가: navigate 훅 사용
   const [user, setUser] = useState(null);
   const [name, setName] = useState('');
   const [childName, setChildName] = useState('');

@@ -345,7 +345,7 @@ function PostDetailPage() {
             opacity: comment.is_hidden ? 0.7 : 1
           }}>
             {/* 숨겨진 댓글 표시 */}
-            {comment.is_hidden && myRole === 'teacher' ? (
+            {comment.is_hidden && myRole === 'teacher' && (
               <div style={{ 
                 color: '#dc3545', 
                 fontSize: '0.9rem', 
@@ -354,7 +354,7 @@ function PostDetailPage() {
               }}>
                 🚫 숨겨진 댓글 (선생님에게만 보임)
               </div>
-            ) : null}
+            )}
             <div style={{ marginBottom: '0.5rem' }}>
               <strong>{comment.author_name || '익명'}</strong>
               <span style={{ color: '#666', fontSize: '0.9rem', marginLeft: '0.5rem' }}>

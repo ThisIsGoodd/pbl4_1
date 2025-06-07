@@ -1,15 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useContext } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { AuthContext } from '../contexts/AuthContext'; // 🔥 추가
 
 function JoinInfoPage() {
-  const { state } = useLocation(); // role, inviteCode, classroom_id, school (== school_id), schoolName, grade, classNumber
+  const { state } = useLocation();
   const navigate = useNavigate();
-  const [schoolName, setSchoolName] = useState(state?.schoolName || ''); // 🔥 수정: state에서 바로 사용
+  const { setUser } = useContext(AuthContext); // 🔥 추가: context 접근
+  const [schoolName, setSchoolName] = useState(state?.schoolName || '');
 
-  // ✅ 학교 이름 불러오기 - schoolName이 이미 있으면 API 호출 생략
+  // 학교 이름 불러오기
   useEffect(() => {
     const fetchSchoolName = async () => {
-      // 🔥 수정: 이미 schoolName이 있으면 API 호출하지 않음
       if (state?.schoolName) {
         setSchoolName(state.schoolName);
         return;
@@ -38,7 +39,7 @@ function JoinInfoPage() {
     fetchSchoolName();
   }, [state?.school, state?.schoolName]);
 
-  // ✅ 학급 연결 API 호출 및 메인 페이지 이동
+  // 🔥 수정: 학급 연결 API 호출 및 사용자 정보 갱신
   const handleSubmit = async () => {
     if (!state?.classroom_id) return;
 
@@ -53,6 +54,22 @@ function JoinInfoPage() {
       });
 
       if (res.ok) {
+        // 🔥 추가: 사용자 정보 다시 불러와서 네비게이션 갱신
+        try {
+          const userRes = await fetch('http://localhost:3001/api/users/profile', {
+            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+          });
+
+          if (userRes.ok) {
+            const userData = await userRes.json();
+            setUser(userData.user); // 🔥 Context 상태 갱신으로 네비게이션 자동 새로고침
+            console.log('✅ 사용자 정보 갱신 완료:', userData.user);
+          }
+        } catch (userErr) {
+          console.error('사용자 정보 갱신 실패:', userErr);
+        }
+
+        // 메인 페이지로 이동
         navigate(`/main?classroom_id=${state.classroom_id}`, {
           state: {
             schoolName,

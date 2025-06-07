@@ -324,11 +324,10 @@ function PostDetailPage() {
             padding: '1rem', 
             border: '1px solid #eee', 
             borderRadius: '4px',
-            // 🆕 숨겨진 댓글 스타일
             backgroundColor: comment.is_hidden ? '#f8f8f8' : 'white',
             opacity: comment.is_hidden ? 0.7 : 1
           }}>
-            {/* 🆕 숨겨진 댓글 표시 */}
+            {/* 숨겨진 댓글 표시 */}
             {comment.is_hidden && myRole === 'teacher' && (
               <div style={{ 
                 color: '#dc3545', 
@@ -340,38 +339,42 @@ function PostDetailPage() {
               </div>
             )}
             
-            <strong>{comment.author_name}</strong> 
-            <span style={{ color: '#666', fontSize: '0.9rem', marginLeft: '0.5rem' }}>
-              ({new Date(comment.created_at).toLocaleString()})
-            </span>
-            
-            {/* 🆕 댓글 작성자 역할 표시 */}
-            {comment.author_role === 'teacher' && (
-              <span style={{ 
-                marginLeft: '0.5rem', 
-                backgroundColor: '#007bff', 
-                color: 'white', 
-                padding: '2px 6px', 
-                borderRadius: '10px', 
-                fontSize: '0.7rem' 
-              }}>
-                선생님
+            {/* 🔥 수정: 0 제거하고 깔끔하게 렌더링 */}
+            <div style={{ marginBottom: '0.5rem' }}>
+              <strong>{comment.author_name || '익명'}</strong>
+              <span style={{ color: '#666', fontSize: '0.9rem', marginLeft: '0.5rem' }}>
+                ({new Date(comment.created_at).toLocaleString()})
               </span>
-            )}
+              
+              {/* 댓글 작성자 역할 표시 */}
+              {comment.author_role === 'teacher' && (
+                <span style={{ 
+                  marginLeft: '0.5rem', 
+                  backgroundColor: '#007bff', 
+                  color: 'white', 
+                  padding: '2px 6px', 
+                  borderRadius: '10px', 
+                  fontSize: '0.7rem' 
+                }}>
+                  선생님
+                </span>
+              )}
+            </div>
             
-            <br />
             {editCommentId === comment.comment_id ? (
-              <>
+              <div>
                 <textarea 
                   value={editContent} 
                   onChange={(e) => setEditContent(e.target.value)}
                   style={{ width: '100%', minHeight: '60px', padding: '0.5rem', margin: '0.5rem 0' }}
                 />
-                <button onClick={handleCommentEditSave}>저장</button>
-                <button onClick={() => setEditCommentId(null)} style={{ marginLeft: '0.5rem' }}>취소</button>
-              </>
+                <div>
+                  <button onClick={handleCommentEditSave}>저장</button>
+                  <button onClick={() => setEditCommentId(null)} style={{ marginLeft: '0.5rem' }}>취소</button>
+                </div>
+              </div>
             ) : (
-              <>
+              <div>
                 <p style={{ margin: '0.5rem 0' }}>{comment.content}</p>
                 <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
                   {/* 작성자 본인 버튼들 */}
@@ -390,7 +393,7 @@ function PostDetailPage() {
                     </>
                   )}
                   
-                  {/* 🆕 선생님 전용 숨김/표시 버튼 */}
+                  {/* 선생님 전용 숨김/표시 버튼 */}
                   {myRole === 'teacher' && comment.author_id !== myUserId && (
                     <button 
                       onClick={() => handleCommentHide(comment.comment_id, comment.is_hidden)}
@@ -403,11 +406,11 @@ function PostDetailPage() {
                         fontSize: '0.8rem'
                       }}
                     >
-                      {comment.is_hidden ? '👁️ 표시' : '🚫 숨김'}
+                      {comment.is_hidden ? '표시' : '숨김'}
                     </button>
                   )}
                 </div>
-              </>
+              </div>
             )}
           </li>
         ))}

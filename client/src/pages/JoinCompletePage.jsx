@@ -28,7 +28,6 @@ function JoinCompletePage() {
 
   return (
     <div style={styles.container}>
-      <img src="/assets/logo.png" alt="로고" style={styles.logo} />
       <h2>🎉 가입 완료!</h2>
       <p>{state?.schoolName || '학교'}에 성공적으로 가입하셨습니다.</p>
       <button onClick={handleStart} style={styles.continueBtn}>시작하기</button>

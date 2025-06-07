@@ -194,7 +194,7 @@ function ProfilePage() {
 
       if (res.status === 200) {
         alert('회원 탈퇴가 완료되었습니다.');
-        logout(); // 로그아웃 처리
+        logout();
       }
     } catch (err) {
       console.error('회원 탈퇴 실패:', err);
@@ -556,20 +556,19 @@ function ProfilePage() {
           )}
           
           {/* 모든 사용자: 회원 탈퇴 */}
-          <button
+          <button 
             onClick={handleDeleteAccount}
-            style={{
+            style={{ 
+              marginTop: '1rem',
+              padding: '0.75rem 1.5rem',
               backgroundColor: '#dc3545',
               color: 'white',
               border: 'none',
-              padding: '0.75rem 1rem',
-              borderRadius: '6px',
-              fontSize: '0.9rem',
-              cursor: 'pointer',
-              fontWeight: 'bold'
+              borderRadius: '4px',
+              cursor: 'pointer'
             }}
           >
-            👤 회원 탈퇴
+            회원 탈퇴
           </button>
         </div>
       </div>

@@ -8,8 +8,8 @@ function Navigation() {
   const [searchKeyword, setSearchKeyword] = useState('');
   const [isCreator, setIsCreator] = useState(false);
   const [teacherClassroomId, setTeacherClassroomId] = useState(null);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // 🆕 모바일 메뉴 상태
-  const [isMobile, setIsMobile] = useState(false); // 🆕 모바일 여부
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   
   const navigate = useNavigate();
   const location = useLocation();
@@ -26,12 +26,12 @@ function Navigation() {
   const currentClassroomId = urlParams.get('classroom_id');
   const classroomId = currentClassroomId || user?.joined_classrooms?.[0]?.classroom_id;
 
-  // 🆕 화면 크기 감지
+  // 화면 크기 감지
   useEffect(() => {
     const checkScreenSize = () => {
       setIsMobile(window.innerWidth <= 768);
       if (window.innerWidth > 768) {
-        setIsMobileMenuOpen(false); // 데스크톱으로 변경 시 메뉴 닫기
+        setIsMobileMenuOpen(false);
       }
     };
 
@@ -40,7 +40,7 @@ function Navigation() {
     return () => window.removeEventListener('resize', checkScreenSize);
   }, []);
 
-  // 기존 useEffect들...
+  // 학교 생성자 확인 및 선생님 학급 조회
   useEffect(() => {
     if (!user?.is_admin || !user?.school_id) return;
     
@@ -73,94 +73,38 @@ function Navigation() {
           console.log('❌ [Navigation] 교사 학급 조회 실패:', err);
         });
     }
-  }, [user]);
+  }, [user, token]);
 
+  // 알림 개수 조회
   useEffect(() => {
-    const shouldFetchNotifications = user && token && !isSuperAdmin && !isJoinPage && 
-      (isJoinedClass || (isTeacher && teacherClassroomId));
+    if (!user || isSuperAdmin || isAdminCreator) return;
 
-    if (!shouldFetchNotifications) return;
-    
-    const fetchNotifications = () => {
-      fetch('http://localhost:3001/api/notifications', {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-        .then(res => res.json())
-        .then(data => {
-          if (data.notifications) {
-            const unread = data.notifications.filter(n => !n.is_read).length;
-            setUnreadCount(unread);
-          }
-        })
-        .catch(err => {
-          console.error('🔔 알림 실패:', err);
-        });
-    };
+    const targetClassroomId = teacherClassroomId || classroomId;
+    if (!targetClassroomId) return;
 
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000);
-    return () => clearInterval(interval);
-  }, [user, token, isSuperAdmin, isJoinPage, isJoinedClass, teacherClassroomId]);
+    fetch(`http://localhost:3001/api/notifications/unread-count?classroom_id=${targetClassroomId}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(res => res.ok ? res.json() : { count: 0 })
+      .then(data => setUnreadCount(data.count || 0))
+      .catch(() => setUnreadCount(0));
+  }, [user, teacherClassroomId, classroomId, token, isSuperAdmin, isAdminCreator]);
 
-  if (!user) return null;
-
-  const handleLogoClick = async () => {
-    setIsMobileMenuOpen(false); // 메뉴 닫기
-    if (!user || !token) return navigate('/');
-
-    if (isSuperAdmin) return navigate('/superadmin/school-requests');
-
-    // 🆕 학교 요청을 했지만 아직 승인 대기 중인 교사
-    if (isTeacher && !user.is_admin && !isAdminCreator) {
-      try {
-        const requestRes = await fetch('http://localhost:3001/api/schools/school-requests/my', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        if (requestRes.ok) {
-          // 학교 요청이 있으면 pending 페이지로
-          return navigate('/school/pending');
-        }
-      } catch (e) {
-        console.warn('학교 요청 확인 실패:', e);
-      }
+  const handleLogoClick = () => {
+    if (isSuperAdmin) {
+      navigate('/superadmin/school-requests');
+    } else if (isAdminCreator) {
+      navigate('/admin/main');
+    } else if (isTeacher && teacherClassroomId) {
+      navigate(`/classroom/dashboard?classroom_id=${teacherClassroomId}`);
+    } else if (isJoinedClass) {
+      navigate(`/main?classroom_id=${classroomId}`);
+    } else {
+      navigate('/select-role');
     }
-
-    if (isParent) {
-      if (isJoinedClass) {
-        return navigate(`/main?classroom_id=${classroomId}`);
-      }
-      return navigate('/join/invite');
-    }
-
-    if (isTeacher && isAdminCreator) {
-      return navigate('/admin/main');
-    }
-
-    if (isTeacher) {
-      try {
-        const res = await fetch('http://localhost:3001/api/classrooms/my-classroom', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        
-        if (res.ok) {
-          const data = await res.json();
-          navigate(`/main?classroom_id=${data.classroom.classroom_id}`);
-        } else if (res.status === 404) {
-          navigate('/classroom/create');
-        } else {
-          navigate('/classroom/create');
-        }
-      } catch (err) {
-        navigate('/classroom/create');
-      }
-      return;
-    }
-
-    navigate(`/main?classroom_id=${classroomId}`);
   };
 
-  // 🆕 메뉴 항목들을 컴포넌트로 분리
+  // 메뉴 아이템 컴포넌트
   const MenuItems = ({ isMobile = false }) => {
     const linkStyle = isMobile ? styles.mobileLink : styles.link;
     
@@ -178,16 +122,16 @@ function Navigation() {
         {/* 학교 전체 관리자 메뉴 */}
         {!isSuperAdmin && isAdminCreator && (
           <>
-            <Link to="/admin/main" style={styles.link}>메인</Link>
-            <Link to={`/posts?school_id=${user.school_id}`} style={styles.link}>학교 공지</Link>
-            <Link to={`/schedules?school_id=${user.school_id}`} style={styles.link}>학교 일정</Link>
-            {/* 🔥 수정: school_id 파라미터 추가 */}
-            <Link to={`/admindashboard?tab=codes&school_id=${user.school_id}`} style={styles.link}>관리</Link>
-            <Link to="/inquiry/form" style={styles.link}>문의하기</Link>
+            <Link to="/admin/main" style={linkStyle} onClick={() => setIsMobileMenuOpen(false)}>메인</Link>
+            <Link to={`/posts?school_id=${user.school_id}`} style={linkStyle} onClick={() => setIsMobileMenuOpen(false)}>학교 공지</Link>
+            <Link to={`/schedules?school_id=${user.school_id}`} style={linkStyle} onClick={() => setIsMobileMenuOpen(false)}>학교 일정</Link>
+            <Link to={`/admindashboard?tab=codes&school_id=${user.school_id}`} style={linkStyle} onClick={() => setIsMobileMenuOpen(false)}>관리</Link>
+            <Link to={`/settings?school_id=${user.school_id}`} style={linkStyle} onClick={() => setIsMobileMenuOpen(false)}>마이페이지</Link>
+            <Link to="/inquiry/form" style={linkStyle} onClick={() => setIsMobileMenuOpen(false)}>문의하기</Link>
           </>
         )}
 
-        {/* 일반 교사 메뉴 (학급 생성자) */}
+        {/* 🔥 수정: 일반 교사 메뉴 (학급 생성자) - 학교에 가입된 선생님만 */}
         {!isSuperAdmin && !isAdminCreator && isTeacher && teacherClassroomId && (
           <>
             <Link to={`/classroom/dashboard?classroom_id=${teacherClassroomId}`} style={linkStyle} onClick={() => setIsMobileMenuOpen(false)}>학급 관리</Link>
@@ -199,8 +143,8 @@ function Navigation() {
           </>
         )}
 
-        {/* 일반 교사 메뉴 (학급 미생성) */}
-        {!isSuperAdmin && !isAdminCreator && isTeacher && !teacherClassroomId && (
+        {/*일반 교사 메뉴 (학급 미생성) - 학교에 가입했지만 학급이 없는 선생님만 */}
+        {!isSuperAdmin && !isAdminCreator && isTeacher && !teacherClassroomId && !user?.is_admin && (
           <>
             <Link to="/classroom/create" style={linkStyle} onClick={() => setIsMobileMenuOpen(false)}>학급 생성</Link>
             <Link to="/inquiry/form" style={linkStyle} onClick={() => setIsMobileMenuOpen(false)}>문의하기</Link>
@@ -235,7 +179,7 @@ function Navigation() {
             <span style={styles.logoText}>CLASSFEED</span>
           </div>
 
-          {/* 🆕 데스크톱 메뉴 */}
+          {/* 데스크톱 메뉴 */}
           {!isMobile && (
             <div style={styles.desktopMenu}>
               <MenuItems />
@@ -273,7 +217,7 @@ function Navigation() {
             </>
           )}
 
-          {/* 🆕 햄버거 메뉴 버튼 (모바일) */}
+          {/* 햄버거 메뉴 버튼 (모바일) */}
           {isMobile && (
             <button
               style={styles.hamburger}
@@ -292,7 +236,7 @@ function Navigation() {
         </div>
       </nav>
 
-      {/* 🆕 모바일 메뉴 오버레이 */}
+      {/* 모바일 메뉴 오버레이 */}
       {isMobile && isMobileMenuOpen && (
         <div style={styles.mobileMenuOverlay}>
           <div style={styles.mobileMenu}>
@@ -329,7 +273,7 @@ function Navigation() {
               </div>
             )}
             
-            {/* 모바일 로그아웃 */}
+            {/* 모바일 로그아웃 버튼 */}
             <button 
               onClick={() => {
                 logout();
@@ -352,160 +296,137 @@ const styles = {
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '1rem 2rem',
-    backgroundColor: '#ffffff',
-    boxShadow: '0 2px 10px rgba(0, 0, 0, 0.08)',
-    borderBottom: '1px solid #e9ecef',
-    position: 'relative',
-    zIndex: 1000
+    backgroundColor: '#fff',
+    borderBottom: '1px solid #e0e0e0',
+    position: 'sticky',
+    top: 0,
+    zIndex: 100,
+    minHeight: '70px'
   },
   leftSection: {
     display: 'flex',
     alignItems: 'center',
-    gap: '2rem'
+    gap: '2rem',
+    flex: 1
+  },
+  logo: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    cursor: 'pointer'
+  },
+  logoText: {
+    fontSize: '1.2rem',
+    fontWeight: 'bold',
+    color: '#333'
+  },
+  desktopMenu: {
+    display: 'flex',
+    gap: '1.5rem'
   },
   rightSection: {
     display: 'flex',
     alignItems: 'center',
     gap: '1rem'
   },
-  logo: {
-    display: 'flex',
-    alignItems: 'center',
-    cursor: 'pointer',
-    gap: '0.5rem'
-  },
-  logoText: {
-    fontSize: '1.3rem',
-    fontWeight: '700',
-    color: '#2B5AA0',
-    letterSpacing: '0.5px'
-  },
-  desktopMenu: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '1.5rem'
-  },
   link: {
     textDecoration: 'none',
-    color: '#495057',
-    fontWeight: '500',
-    fontSize: '0.95rem',
+    color: '#333',
     padding: '0.5rem 1rem',
-    borderRadius: '8px',
-    transition: 'all 0.2s ease',
+    borderRadius: '4px',
+    transition: 'background-color 0.2s',
     cursor: 'pointer'
   },
+  searchInput: {
+    padding: '0.5rem',
+    border: '1px solid #ddd',
+    borderRadius: '4px',
+    width: '200px'
+  },
   logoutBtn: {
-    backgroundColor: '#f8f9fa',
-    border: '1px solid #dee2e6',
-    color: '#495057',
     padding: '0.5rem 1rem',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontWeight: '500',
-    fontSize: '0.9rem',
-    transition: 'all 0.2s ease'
+    backgroundColor: '#dc3545',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer'
   },
   badge: {
     position: 'absolute',
-    top: '-8px',
-    right: '-8px',
-    backgroundColor: '#dc3545',
+    top: '-5px',
+    right: '-5px',
+    backgroundColor: '#ff4444',
     color: 'white',
     borderRadius: '50%',
-    padding: '2px 6px',
     fontSize: '0.7rem',
+    padding: '2px 6px',
     minWidth: '18px',
-    textAlign: 'center'
+    height: '18px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center'
   },
-  searchInput: {
-    padding: '0.5rem 1rem',
-    fontSize: '0.9rem',
-    border: '1px solid #dee2e6',
-    borderRadius: '20px',
-    width: '200px',
-    outline: 'none',
-    transition: 'border-color 0.2s ease'
-  },
-  
-  // 🆕 햄버거 메뉴 스타일
+  // 모바일 스타일
   hamburger: {
     display: 'flex',
     flexDirection: 'column',
-    justifyContent: 'space-around',
-    width: '24px',
-    height: '24px',
+    gap: '3px',
     backgroundColor: 'transparent',
     border: 'none',
     cursor: 'pointer',
-    padding: '0'
+    padding: '5px'
   },
   hamburgerLine: {
-    width: '24px',
+    width: '25px',
     height: '3px',
-    backgroundColor: '#495057',
-    borderRadius: '2px',
-    transition: 'all 0.3s ease',
-    transformOrigin: '1px'
+    backgroundColor: '#333',
+    transition: 'all 0.3s ease'
   },
-  
-  // 🆕 모바일 메뉴 스타일
   mobileMenuOverlay: {
     position: 'fixed',
-    top: 0,
+    top: '70px',
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    zIndex: 999,
-    display: 'flex',
-    justifyContent: 'flex-end'
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    zIndex: 200
   },
   mobileMenu: {
-    backgroundColor: '#ffffff',
-    width: '280px',
-    height: '100vh',
-    padding: '2rem 1rem',
+    backgroundColor: 'white',
+    padding: '1rem',
     display: 'flex',
     flexDirection: 'column',
-    gap: '0.5rem',
-    boxShadow: '-2px 0 10px rgba(0, 0, 0, 0.1)',
-    overflowY: 'auto'
+    gap: '1rem',
+    borderBottom: '1px solid #e0e0e0'
   },
   mobileLink: {
     textDecoration: 'none',
-    color: '#495057',
-    fontWeight: '500',
-    fontSize: '1rem',
+    color: '#333',
     padding: '1rem',
-    borderRadius: '8px',
-    transition: 'background-color 0.2s ease',
-    borderBottom: '1px solid #f8f9fa'
+    borderBottom: '1px solid #f0f0f0',
+    display: 'block'
   },
   mobileUtilsSection: {
-    marginTop: '1rem',
+    borderTop: '1px solid #e0e0e0',
     paddingTop: '1rem',
-    borderTop: '1px solid #dee2e6'
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1rem'
   },
   mobileSearchInput: {
-    width: '100%',
-    padding: '0.75rem',
-    fontSize: '1rem',
-    border: '1px solid #dee2e6',
-    borderRadius: '8px',
-    marginTop: '0.5rem',
-    outline: 'none'
+    padding: '0.8rem',
+    border: '1px solid #ddd',
+    borderRadius: '4px',
+    width: '100%'
   },
   mobileLogoutBtn: {
-    marginTop: 'auto',
+    padding: '1rem',
     backgroundColor: '#dc3545',
     color: 'white',
     border: 'none',
-    padding: '0.75rem',
-    borderRadius: '8px',
+    borderRadius: '4px',
     cursor: 'pointer',
-    fontWeight: '500',
-    fontSize: '1rem'
+    marginTop: '1rem'
   }
 };
 

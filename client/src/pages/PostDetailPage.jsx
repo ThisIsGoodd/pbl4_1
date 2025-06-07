@@ -141,16 +141,33 @@ function PostDetailPage() {
 
   const handleCommentSubmit = async () => {
     if (!newComment.trim()) return;
-    await fetch(`http://localhost:3001/api/comments/posts/${id}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`
-      },
-      body: JSON.stringify({ content: newComment })
-    });
-    setNewComment('');
-    fetchComments();
+    
+    try {
+      const res = await fetch(`http://localhost:3001/api/comments/posts/${id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ content: newComment })
+      });
+
+      if (res.ok) {
+        console.log('✅ 댓글 작성 성공');
+        setNewComment(''); // 입력창 초기화
+        await fetchComments(); // 🔥 수정: await 추가로 댓글 목록 새로고침 보장
+        
+        // 🔥 추가: 성공 메시지 (선택사항)
+        // alert('댓글이 작성되었습니다.');
+      } else {
+        const errorData = await res.json();
+        console.error('❌ 댓글 작성 실패:', errorData);
+        alert('댓글 작성에 실패했습니다: ' + (errorData.error || '알 수 없는 오류'));
+      }
+    } catch (err) {
+      console.error('🔥 댓글 작성 오류:', err);
+      alert('댓글 작성 중 오류가 발생했습니다.');
+    }
   };
 
   const handleCommentDelete = async (commentId) => {
@@ -338,8 +355,6 @@ function PostDetailPage() {
                 🚫 숨겨진 댓글 (선생님에게만 보임)
               </div>
             )}
-            
-            {/* 🔥 수정: 0 제거하고 깔끔하게 렌더링 */}
             <div style={{ marginBottom: '0.5rem' }}>
               <strong>{comment.author_name || '익명'}</strong>
               <span style={{ color: '#666', fontSize: '0.9rem', marginLeft: '0.5rem' }}>

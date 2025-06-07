@@ -4,18 +4,28 @@ const db = require('../db');
 const authenticateToken = require('../authMiddleware');
 const { createNotification } = require('../utils/notify');
 
-// ✅ 일정 추가 - 학교 전체 관리자와 학급 교사 모두 지원 (수정된 버전)
+/**
+ * ✅ 일정 생성 - 학교 전체 관리자와 학급 교사 모두 지원
+ */
 router.post('/', authenticateToken, async (req, res) => {
-  const { title, description, start_date, end_date, school_wide = false, classroom_id } = req.body;
+  const { title, description, start_date, end_date, classroom_id, school_wide } = req.body;
   const { user_id, is_admin, school_id: userSchoolId } = req.user;
 
   console.log('🔍 [schedules POST] 요청 데이터:', {
-    title, description, start_date, end_date, school_wide, classroom_id,
+    title, description, start_date, end_date, classroom_id, school_wide, 
     user_id, is_admin, userSchoolId
   });
 
   if (!title || !start_date || !end_date) {
-    return res.status(400).json({ error: '필수 항목이 누락되었습니다.' });
+    return res.status(400).json({ error: '제목, 시작일, 종료일은 필수입니다.' });
+  }
+
+  // 🔥 수정: 날짜 검증 추가
+  const startDateTime = new Date(start_date);
+  const endDateTime = new Date(end_date);
+  
+  if (endDateTime < startDateTime) {
+    return res.status(400).json({ error: '종료일은 시작일보다 이전일 수 없습니다.' });
   }
 
   try {
@@ -23,38 +33,58 @@ router.post('/', authenticateToken, async (req, res) => {
     let targetSchoolId = null;
     let finalSchoolWide = false;
 
-    // 🆕 학교 전체 관리자인 경우 (school_id로 판단)
+    // 🔥 수정: 학교 전체 관리자 처리 개선
     if (is_admin && userSchoolId) {
-      console.log('🏫 학교 전체 관리자의 일정 등록');
-      targetSchoolId = userSchoolId;
+      console.log('🏫 [schedules POST] 학교 전체 관리자 일정 생성');
       
+      // 학교 전체 관리자는 classroom_id 없이도 일정 생성 가능
+      targetSchoolId = userSchoolId;
+      finalSchoolWide = true; // 학교 관리자가 만드는 일정은 기본적으로 학교 전체 일정
+      
+      // classroom_id가 제공된 경우에만 해당 학급 확인
       if (classroom_id) {
-        // classroom_id가 제공된 경우 (학급 일정)
+        const [classroomInfo] = await db.query(
+          'SELECT school_id FROM classrooms WHERE classroom_id = ?',
+          [classroom_id]
+        );
+
+        if (classroomInfo.length === 0) {
+          return res.status(400).json({ error: '존재하지 않는 학급입니다.' });
+        }
+
+        if (classroomInfo[0].school_id !== userSchoolId) {
+          return res.status(403).json({ error: '해당 학급에 대한 권한이 없습니다.' });
+        }
+
         targetClassroomId = classroom_id;
         finalSchoolWide = school_wide === true || school_wide === 'true';
-      } else {
-        // 🔥 수정: classroom_id가 없는 경우 (학교 전체 일정) - NULL 대신 0 사용
-        finalSchoolWide = true;
-        targetClassroomId = null; // NULL로 설정하되 DB 저장 시 처리
       }
-    } else {
+    } else if (classroom_id) {
       // 🔥 일반 교사의 경우
-      if (!classroom_id) {
-        return res.status(400).json({ error: '학급 정보가 필요합니다.' });
-      }
-
+      console.log('👩‍🏫 [schedules POST] 교사 학급 일정 생성');
+      
+      // 해당 학급의 교사인지 확인
       const [classroomInfo] = await db.query(
-        `SELECT school_id FROM classrooms WHERE classroom_id = ?`,
+        'SELECT teacher_id, school_id FROM classrooms WHERE classroom_id = ?',
         [classroom_id]
       );
 
       if (classroomInfo.length === 0) {
-        return res.status(400).json({ error: '유효하지 않은 학급입니다.' });
+        return res.status(400).json({ error: '존재하지 않는 학급입니다.' });
+      }
+
+      if (classroomInfo[0].teacher_id !== user_id) {
+        return res.status(403).json({ error: '해당 학급의 교사만 일정을 생성할 수 있습니다.' });
       }
 
       targetClassroomId = classroom_id;
       targetSchoolId = classroomInfo[0].school_id;
       finalSchoolWide = school_wide === true || school_wide === 'true';
+    } else {
+      // 🔥 수정: 학교 관리자가 아니면서 classroom_id도 없는 경우만 에러
+      if (!is_admin || !userSchoolId) {
+        return res.status(400).json({ error: '학급 정보가 필요합니다.' });
+      }
     }
 
     console.log('🔍 [schedules POST] 최종 설정:', {
@@ -249,6 +279,14 @@ router.put('/:id', authenticateToken, async (req, res) => {
     return res.status(400).json({ error: '필수 항목이 누락되었습니다.' });
   }
 
+  // 🔥 추가: 날짜 검증
+  const startDateTime = new Date(start_date);
+  const endDateTime = new Date(end_date);
+  
+  if (endDateTime < startDateTime) {
+    return res.status(400).json({ error: '종료일은 시작일보다 이전일 수 없습니다.' });
+  }
+
   try {
     const [[schedule]] = await db.query(
       'SELECT * FROM schedules WHERE schedule_id = ?',
@@ -297,7 +335,6 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     }
 
     await db.query('DELETE FROM schedules WHERE schedule_id = ?', [schedule_id]);
-
     res.json({ message: '일정 삭제 완료' });
   } catch (err) {
     console.error('🔥 일정 삭제 오류:', err);

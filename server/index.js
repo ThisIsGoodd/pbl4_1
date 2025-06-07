@@ -124,20 +124,22 @@ io.on('connection', (socket) => {
       
       console.log('✅ 메시지 DB 저장 완료:', result.insertId);
 
-      // 2. 전송자 이름 조회
+      // 2. 🔥 수정: 전송자 정보 조회 (자녀 이름 포함)
       const [userRows] = await db.query(
-        'SELECT name FROM users WHERE user_id = ?',
+        'SELECT name, role, child_name FROM users WHERE user_id = ?',
         [userId]
       );
-      const senderName = userRows[0]?.name || '익명';
+      const userInfo = userRows[0] || { name: '익명', role: null, child_name: null };
 
       // 3. 실시간 메시지 전송 (DB 저장된 정보 포함)
       const message = {
         message_id: result.insertId,
         sender_id: userId,
-        sender_name: senderName,
+        sender_name: userInfo.name,
+        sender_role: userInfo.role,
+        sender_child_name: userInfo.child_name, // 🔥 추가: 자녀 이름
         content,
-        sent_at: new Date()
+        created_at: new Date() // sent_at -> created_at으로 통일
       };
 
       io.to(`room_${roomId}`).emit('receiveMessage', message);

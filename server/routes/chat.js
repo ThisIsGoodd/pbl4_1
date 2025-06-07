@@ -24,7 +24,39 @@ router.get('/rooms', authenticateToken, async (req, res) => {
   }
 });
 
-// ✅ 채팅 메시지 조회 (sent_at 컬럼 사용 + 에러 방지)
+// 🆕 채팅방 참가자 정보 조회 (자녀 이름 포함)
+router.get('/rooms/:room_id/participants', authenticateToken, async (req, res) => {
+  const { room_id } = req.params;
+  const { user_id } = req.user;
+
+  try {
+    // 먼저 요청자가 해당 채팅방에 속해있는지 확인
+    const [accessCheck] = await db.query(
+      'SELECT 1 FROM chat_participants WHERE room_id = ? AND user_id = ?',
+      [room_id, user_id]
+    );
+
+    if (accessCheck.length === 0) {
+      return res.status(403).json({ error: '해당 채팅방에 접근 권한이 없습니다.' });
+    }
+
+    // 참가자 정보 조회 (자녀 이름 포함)
+    const [participants] = await db.query(
+      `SELECT u.user_id, u.name, u.role, u.child_name, u.profile_picture
+       FROM chat_participants cp
+       JOIN users u ON cp.user_id = u.user_id
+       WHERE cp.room_id = ?`,
+      [room_id]
+    );
+
+    res.json({ participants });
+  } catch (err) {
+    console.error('❌ 참가자 정보 조회 오류:', err);
+    res.status(500).json({ error: '서버 오류' });
+  }
+});
+
+// ✅ 채팅 메시지 조회 (자녀 이름 포함)
 router.get('/rooms/:room_id/messages', authenticateToken, async (req, res) => {
   const { room_id } = req.params;
   const { user_id } = req.user;
@@ -32,14 +64,16 @@ router.get('/rooms/:room_id/messages', authenticateToken, async (req, res) => {
   try {
     console.log('🔍 [messages] 메시지 조회 요청:', { room_id, user_id });
 
-    // 메시지 조회 (sent_at이 없으면 created_at 사용)
+    // 🔥 수정: 메시지 조회시 발신자의 자녀 이름도 포함
     const [messages] = await db.query(
       `SELECT 
         cm.message_id, 
         cm.sender_id, 
         u.name AS sender_name, 
+        u.role AS sender_role,
+        u.child_name AS sender_child_name,
         cm.content, 
-        COALESCE(cm.sent_at, cm.created_at) AS sent_at
+        COALESCE(cm.sent_at, cm.created_at) AS created_at
        FROM chat_messages cm
        JOIN users u ON cm.sender_id = u.user_id
        WHERE cm.room_id = ?

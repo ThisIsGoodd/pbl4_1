@@ -72,7 +72,6 @@ function JoinInfoPage() {
 
   return (
     <div style={styles.container}>
-      <img src="/assets/logo.png" alt="로고" style={styles.logo} />
       <h2>학교 및 학급 정보 확인</h2>
       <p>아래 정보를 확인한 후 가입을 완료하세요.</p>
 

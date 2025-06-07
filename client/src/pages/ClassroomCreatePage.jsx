@@ -131,7 +131,6 @@ function ClassroomCreatePage() {
 
   return (
     <div style={styles.container}>
-      <img src="/assets/logo.png" alt="로고" style={{ height: '40px', marginBottom: '1rem' }} />
       <h2>학급 생성</h2>
 
       {/* 🆕 안내 메시지 */}

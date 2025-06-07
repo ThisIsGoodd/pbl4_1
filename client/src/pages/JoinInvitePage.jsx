@@ -53,7 +53,6 @@ function JoinInvitePage() {
 
   return (
     <div style={styles.container}>
-      <img src="/assets/logo.png" alt="로고" style={styles.logo} />
       <h2>초대코드 입력</h2>
 
       {user?.joined_classrooms?.length > 0 && (

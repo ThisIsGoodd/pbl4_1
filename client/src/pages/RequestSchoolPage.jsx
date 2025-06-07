@@ -101,7 +101,7 @@ function RequestSchoolPage() {
           onChange={(e) => setSchoolCode(e.target.value.replace(/\D/g, '').slice(0, 7))}
           maxLength={7}
           inputMode="numeric"
-          placeholder="예: 1234567(교육부 제공 학교 코드)"
+          placeholder="예: 1234567(7자리 교육부 제공 학교 코드)"
           className="w-full px-3 py-2 mb-4 border rounded"
         />
 

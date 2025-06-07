@@ -20,6 +20,13 @@ function ChatPage() {
   const userRole = JSON.parse(atob(token.split('.')[1])).role;
   const messagesEndRef = useRef(null);
 
+  // 🆕 대면 상담 요청 상태
+  const [consultationForm, setConsultationForm] = useState({
+    title: '',
+    date: '',
+    time: ''
+  });
+
   // ✅ 학급 정보 불러오기
   useEffect(() => {
     const fetchClassroomInfo = async () => {
@@ -48,7 +55,7 @@ function ChatPage() {
     fetchClassroomInfo();
   }, [classroomId, token]);
 
-  // ✅ 채팅방 목록 불러오기
+  // ✅ 채팅방 목록 불러오기 (읽지 않은 메시지 수 포함)
   useEffect(() => {
     const fetchRooms = async () => {
       if (!classroomId) return;
@@ -56,7 +63,7 @@ function ChatPage() {
       try {
         console.log('🔍 채팅방 목록 요청:', classroomId);
         
-        const res = await fetch(`http://localhost:3001/api/chat/rooms?classroom_id=${classroomId}`, {
+        const res = await fetch(`http://localhost:3001/api/chat/rooms`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         
@@ -66,8 +73,13 @@ function ChatPage() {
         console.log('📦 채팅방 데이터:', data);
         
         if (res.ok) {
-          setRooms(data.rooms || []);
-          if (data.rooms && data.rooms.length === 0) {
+          // 해당 학급과 관련된 채팅방만 필터링
+          const filteredRooms = (data.rooms || []).filter(room => 
+            room.classroom_id == classroomId || room.room_type === 'private'
+          );
+          setRooms(filteredRooms);
+          
+          if (filteredRooms.length === 0) {
             setError('채팅방이 없습니다. 학급에 제대로 가입되었는지 확인해주세요.');
           }
         } else {
@@ -82,6 +94,10 @@ function ChatPage() {
     };
 
     fetchRooms();
+    
+    // 주기적으로 채팅방 목록 새로고침 (읽지 않은 메시지 수 업데이트)
+    const interval = setInterval(fetchRooms, 10000); // 10초마다
+    return () => clearInterval(interval);
   }, [classroomId, token]);
 
   // ✅ Socket.io 메시지 수신 + 에러 핸들링
@@ -90,6 +106,15 @@ function ChatPage() {
     socket.on('receiveMessage', (msg) => {
       console.log('📨 새 메시지 수신:', msg);
       setMessages(prev => [...prev, msg]);
+      
+      // 다른 방의 메시지인 경우 읽지 않은 메시지 수 업데이트
+      if (!selectedRoom || selectedRoom.room_id !== msg.room_id) {
+        setRooms(prev => prev.map(room => 
+          room.room_id === msg.room_id 
+            ? { ...room, unread_count: (room.unread_count || 0) + 1 }
+            : room
+        ));
+      }
     });
 
     // 메시지 전송 에러 처리
@@ -102,14 +127,14 @@ function ChatPage() {
       socket.off('receiveMessage');
       socket.off('messageError');
     };
-  }, []);
+  }, [selectedRoom]);
 
   // ✅ 메시지 목록 자동 스크롤
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // ✅ 채팅방 클릭 핸들러 (markRoomAsRead 추가)
+  // ✅ 채팅방 클릭 핸들러 (읽음 처리)
   const handleRoomClick = async (room) => {
     console.log('🏠 채팅방 선택:', room);
     
@@ -118,13 +143,12 @@ function ChatPage() {
     // Socket.io 방 참가
     socket.emit('joinRoom', room.room_id);
     
-    // 🆕 읽음 처리 (중요!)
-    socket.emit('markRoomAsRead', { 
-      roomId: room.room_id, 
-      userId: userId 
-    });
-    
-    console.log('📖 읽음 처리 요청:', { roomId: room.room_id, userId });
+    // 읽지 않은 메시지 수 초기화 (로컬 상태)
+    setRooms(prev => prev.map(r => 
+      r.room_id === room.room_id 
+        ? { ...r, unread_count: 0 }
+        : r
+    ));
 
     try {
       // 기존 메시지 불러오기
@@ -174,14 +198,7 @@ function ChatPage() {
     }
   };
 
-  // 🆕 대면 상담 요청 상태
-  const [consultationForm, setConsultationForm] = useState({
-    title: '',
-    date: '',
-    time: ''
-  });
-
-  // 🆕 대면 상담 요청 핸들러 (개선된 버전)
+  // 🆕 대면 상담 요청 핸들러
   const handleConsultationRequest = () => {
     if (!selectedRoom || selectedRoom.room_type !== 'private') {
       alert('1:1 채팅방에서만 대면 상담을 요청할 수 있습니다.');
@@ -216,6 +233,15 @@ function ChatPage() {
       });
 
       alert('상담 요청이 전송되었습니다.');
+    }
+  };
+
+  // 🆕 채팅방 이름 생성 함수
+  const getRoomDisplayName = (room) => {
+    if (room.room_type === 'group') {
+      return '학급 단체방';
+    } else {
+      return '1:1 채팅';
     }
   };
 
@@ -272,7 +298,7 @@ function ChatPage() {
                   </div>
                   <div style={styles.roomInfo}>
                     <div style={styles.roomName}>
-                      {room.room_type === 'group' ? '학급 단체방' : '1:1 채팅'}
+                      {getRoomDisplayName(room)}
                     </div>
                     {room.unread_count > 0 && (
                       <div style={styles.unreadText}>
@@ -290,8 +316,8 @@ function ChatPage() {
             </div>
           )}
 
-          {/* 🆕 대면 상담 요청 폼 (학부모만, 1:1 채팅방에서만) */}
-          {userRole === 'parent' && selectedRoom?.room_type === 'private' && (
+          {/* 🆕 대면 상담 요청 폼 (학부모만) */}
+          {userRole === 'parent' && (
             <div style={styles.consultationSection}>
               <h4 style={styles.consultationTitle}>📅 대면 상담 요청</h4>
               
@@ -331,15 +357,21 @@ function ChatPage() {
               </div>
               
               <button 
-                style={styles.consultationButton}
+                style={{
+                  ...styles.consultationButton,
+                  opacity: (!consultationForm.title.trim() || !consultationForm.date || !consultationForm.time || !selectedRoom || selectedRoom.room_type !== 'private') ? 0.5 : 1,
+                  cursor: (!consultationForm.title.trim() || !consultationForm.date || !consultationForm.time || !selectedRoom || selectedRoom.room_type !== 'private') ? 'not-allowed' : 'pointer'
+                }}
                 onClick={handleConsultationRequest}
-                disabled={!consultationForm.title.trim() || !consultationForm.date || !consultationForm.time}
+                disabled={!consultationForm.title.trim() || !consultationForm.date || !consultationForm.time || !selectedRoom || selectedRoom.room_type !== 'private'}
               >
                 📅 상담 요청하기
               </button>
               
               <p style={styles.consultationNote}>
-                선생님께 대면 상담을 요청할 수 있습니다
+                {!selectedRoom ? '1:1 채팅방을 선택하세요' : 
+                 selectedRoom.room_type !== 'private' ? '1:1 채팅방에서만 상담 요청 가능' :
+                 '선생님께 대면 상담을 요청할 수 있습니다'}
               </p>
             </div>
           )}
@@ -356,7 +388,7 @@ function ChatPage() {
                 </div>
                 <div style={styles.chatHeaderInfo}>
                   <h4 style={styles.chatHeaderTitle}>
-                    {selectedRoom.room_type === 'group' ? '학급 단체방' : '1:1 채팅'}
+                    {getRoomDisplayName(selectedRoom)}
                   </h4>
                   <span style={styles.chatHeaderSubtitle}>
                     {selectedRoom.room_type === 'group' 
@@ -536,15 +568,11 @@ const styles = {
     color: '#495057'
   },
 
-  roomId: {
-    fontSize: '0.8rem',
-    color: '#6c757d'
-  },
-
   unreadText: {
     fontSize: '0.8rem',
     color: '#dc3545',
-    fontWeight: '500'
+    fontWeight: '500',
+    marginTop: '0.25rem'
   },
 
   unreadBadge: {
@@ -699,7 +727,7 @@ const styles = {
   },
 
   otherMessage: {
-    backgroundColor: '#e9ecef',
+    backgroundColor: '#e9ecef', // 🔥 수정: 배경색을 더 진하게 변경
     color: '#495057',
     marginRight: 'auto'
   },
@@ -714,7 +742,8 @@ const styles = {
   messageContent: {
     fontSize: '0.95rem',
     lineHeight: '1.4',
-    marginBottom: '0.25rem'
+    marginBottom: '0.25rem',
+    whiteSpace: 'pre-wrap' // 줄바꿈 유지
   },
 
   messageTime: {

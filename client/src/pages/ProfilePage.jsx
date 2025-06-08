@@ -537,7 +537,7 @@ function ProfilePage() {
         
         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
           {/* 학교 관리자: 학교 삭제 */}
-          {user.is_admin && user.school_id && (
+          {user.is_admin && user.school_id ? (
             <button
               onClick={handleDeleteSchool}
               style={{
@@ -553,7 +553,7 @@ function ProfilePage() {
             >
               🏫 학교 삭제
             </button>
-          )}
+          ) : null}
           
           {/* 모든 사용자: 회원 탈퇴 */}
           <button 

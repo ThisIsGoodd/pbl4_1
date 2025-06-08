@@ -6,6 +6,7 @@ import { AuthContext } from '../contexts/AuthContext';
 function LoginPage() {
   const { setUser } = useContext(AuthContext);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  const navigate = useNavigate();
 
   // 윈도우 크기 변화 감지
   useEffect(() => {
@@ -52,7 +53,31 @@ function LoginPage() {
         if (profileRes.ok && profileData.user) {
           setUser(profileData.user);
           alert('로그인 성공!');
-          window.location.reload();
+          
+          // 역할 확인 후 적절한 페이지로 이동
+          const user = profileData.user;
+          setTimeout(() => {
+            if (!user.role) {
+              navigate('/select-role');
+            } else if (user.role === 'superadmin') {
+              navigate('/superadmin/school-requests');
+            } else if (user.role === 'parent') {
+              if (user.joined_classrooms?.length > 0) {
+                const firstClassroom = user.joined_classrooms[0];
+                navigate(`/main?classroom_id=${firstClassroom.classroom_id}`);
+              } else {
+                navigate('/join/invite');
+              }
+            } else if (user.role === 'teacher') {
+              if (user.is_admin) {
+                navigate('/admindashboard');
+              } else if (user.classroom_id) {
+                navigate(`/main?classroom_id=${user.classroom_id}`);
+              } else {
+                navigate('/classroom/create');
+              }
+            }
+          }, 100); // 약간의 딜레이로 상태 업데이트 완료 후 이동
         } else {
           alert('사용자 정보 불러오기 실패');
         }

@@ -113,43 +113,36 @@ export function AuthProvider({ children }) {
           const currentClassroomId = urlParams.get('classroom_id');
           
           if (currentClassroomId) {
-            console.log('📍 교사 - URL에 classroom_id 있음 - 현재 페이지 유지');
+            console.log('📍 URL에 classroom_id 있음 - 현재 페이지 유지');
             return;
           }
 
-          // ✅ 전체 관리자(학교 생성자)인지 확인
-          if (user.is_admin && user.school_id) {
+          // ✅ 관리자인 교사는 관리자 대시보드로
+          if (user.is_admin) {
+            navigate('/admindashboard');
+            return;
+          }
+
+          // ✅ 학급이 있는 교사는 해당 학급으로
+          if (user.classroom_id) {
+            navigate(`/main?classroom_id=${user.classroom_id}`);
+            return;
+          }
+
+          // ✅ 학급이 없는 교사 → 학교에 인증됐는지 확인
+          if (user.school_id) {
             try {
-              // 학교 생성자인지 확인
-              const schoolRes = await fetch(`http://localhost:3001/api/schools/${user.school_id}`, {
-                headers: { Authorization: `Bearer ${token}` },
-              });
-              
-              if (schoolRes.ok) {
-                const schoolData = await schoolRes.json();
-                
-                // 학교 생성자라면 관리 대시보드로
-                if (schoolData.created_by === user.user_id) {
-                  navigate('/admin/main');
-                  return;
-                }
-              }
-
-              // 🔥 개선: 학교 생성자가 아닌 일반 교사 - 학급 확인
-              const res = await fetch('http://localhost:3001/api/classrooms/my-classroom', {
+              // 내 학급 조회 시도
+              const classroomRes = await fetch('http://localhost:3001/api/classrooms/my-classroom', {
                 headers: { Authorization: `Bearer ${token}` },
               });
 
-              if (res.ok) {
-                const result = await res.json();
-                console.log('🏫 [AuthContext] 교사의 학급 정보:', result.classroom);
-                navigate(`/main?classroom_id=${result.classroom.classroom_id}`); // 🔥 수정: 메인으로 이동
-              } else {
-                // 404 오류는 학급이 없다는 뜻이므로 학급 생성 페이지로
-                if (res.status === 404) {
-                  navigate('/classroom/create');
+              if (classroomRes.ok) {
+                const classroomData = await classroomRes.json();
+                if (classroomData.classroom?.classroom_id) {
+                  navigate(`/main?classroom_id=${classroomData.classroom.classroom_id}`);
                 } else {
-                  console.warn('학급 조회 중 오류:', res.status);
+                  console.warn('학급 조회 중 오류:', classroomRes.status);
                   navigate('/classroom/create');
                 }
               }
@@ -176,7 +169,7 @@ export function AuthProvider({ children }) {
           }
 
           // 인증도, 요청도 없음
-          navigate('/teacher/auth');
+          navigate('/teacher-auth');
           return;
         }
 

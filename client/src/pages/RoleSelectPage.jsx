@@ -40,7 +40,6 @@ function RoleSelectPage() {
 
   return (
     <div style={{ padding: '2rem', textAlign: 'center' }}>
-      <img src="/assets/logo.png" alt="로고" style={{ height: '40px', marginBottom: '1rem' }} />
       <h2>당신의 역할을 선택하세요</h2>
 
       <button

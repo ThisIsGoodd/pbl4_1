@@ -15,6 +15,11 @@ function Navigation() {
   const location = useLocation();
   const token = localStorage.getItem('token');
 
+  // 로그인 페이지에서만 네비게이션을 숨김
+  if (location.pathname === '/' || location.pathname === '/login') {
+    return null;
+  }
+
   const isSuperAdmin = user?.role === 'superadmin';
   const isTeacher = user?.role === 'teacher';
   const isParent = user?.role === 'parent';
@@ -85,56 +90,52 @@ function Navigation() {
     fetch(`http://localhost:3001/api/notifications/unread-count?classroom_id=${targetClassroomId}`, {
       headers: { Authorization: `Bearer ${token}` }
     })
-      .then(res => res.ok ? res.json() : { count: 0 })
+      .then(res => res.ok ? res.json() : Promise.reject())
       .then(data => setUnreadCount(data.count || 0))
       .catch(() => setUnreadCount(0));
   }, [user, teacherClassroomId, classroomId, token, isSuperAdmin, isAdminCreator]);
 
-  const handleLogoClick = () => {
-    if (isSuperAdmin) {
-      navigate('/superadmin/school-requests');
-    } else if (isAdminCreator) {
-      navigate('/admin/main');
-    } else if (isTeacher && teacherClassroomId) {
-      navigate(`/classroom/dashboard?classroom_id=${teacherClassroomId}`);
-    } else if (isJoinedClass) {
-      navigate(`/main?classroom_id=${classroomId}`);
-    } else {
-      navigate('/select-role');
-    }
+  const handleSearch = () => {
+    if (!searchKeyword.trim()) return;
+    
+    const targetClassroomId = teacherClassroomId || classroomId;
+    navigate(`/posts?search=${encodeURIComponent(searchKeyword.trim())}&classroom_id=${targetClassroomId}`);
+    setSearchKeyword('');
   };
 
-  // 메뉴 아이템 컴포넌트
   const MenuItems = ({ isMobile = false }) => {
     const linkStyle = isMobile ? styles.mobileLink : styles.link;
-    
+
     return (
       <>
-        {/* 슈퍼관리자 메뉴 */}
+        {/* 슈퍼어드민 메뉴 */}
         {isSuperAdmin && (
           <>
-            <Link to="/superadmin/school-requests" style={linkStyle} onClick={() => setIsMobileMenuOpen(false)}>학교 요청</Link>
-            <Link to="/superadmin/schools" style={linkStyle} onClick={() => setIsMobileMenuOpen(false)}>학교 목록</Link>
-            <Link to="/superadmin/inquiries" style={linkStyle} onClick={() => setIsMobileMenuOpen(false)}>문의사항 관리</Link>
+            <Link to="/superadmin/school-requests" style={linkStyle} onClick={() => setIsMobileMenuOpen(false)}>
+              학교 신청 관리
+            </Link>
+            <Link to="/superadmin/schools" style={linkStyle} onClick={() => setIsMobileMenuOpen(false)}>
+              학교 관리
+            </Link>
+            <Link to="/superadmin/inquiries" style={linkStyle} onClick={() => setIsMobileMenuOpen(false)}>
+              문의 관리
+            </Link>
           </>
         )}
 
-        {/* 학교 전체 관리자 메뉴 */}
-        {!isSuperAdmin && isAdminCreator && (
+        {/* 학교 관리자 (생성자) 메뉴 */}
+        {isAdminCreator && (
           <>
-            <Link to="/admin/main" style={linkStyle} onClick={() => setIsMobileMenuOpen(false)}>메인</Link>
-            <Link to={`/posts?school_id=${user.school_id}`} style={linkStyle} onClick={() => setIsMobileMenuOpen(false)}>학교 공지</Link>
-            <Link to={`/schedules?school_id=${user.school_id}`} style={linkStyle} onClick={() => setIsMobileMenuOpen(false)}>학교 일정</Link>
-            <Link to={`/admindashboard?tab=codes&school_id=${user.school_id}`} style={linkStyle} onClick={() => setIsMobileMenuOpen(false)}>관리</Link>
-            <Link to={`/settings?school_id=${user.school_id}`} style={linkStyle} onClick={() => setIsMobileMenuOpen(false)}>마이페이지</Link>
+            <Link to="/admindashboard" style={linkStyle} onClick={() => setIsMobileMenuOpen(false)}>대시보드</Link>
+            <Link to={`/posts?classroom_id=school_${user.school_id}`} style={linkStyle} onClick={() => setIsMobileMenuOpen(false)}>학교 공지</Link>
+            <Link to={`/schedules?classroom_id=school_${user.school_id}`} style={linkStyle} onClick={() => setIsMobileMenuOpen(false)}>학교 일정</Link>
             <Link to="/inquiry/form" style={linkStyle} onClick={() => setIsMobileMenuOpen(false)}>문의하기</Link>
           </>
         )}
 
-        {/* 🔥 수정: 일반 교사 메뉴 (학급 생성자) - 학교에 가입된 선생님만 */}
+        {/* 교사 메뉴 (학급 있음) */}
         {!isSuperAdmin && !isAdminCreator && isTeacher && teacherClassroomId && (
           <>
-            <Link to={`/classroom/dashboard?classroom_id=${teacherClassroomId}`} style={linkStyle} onClick={() => setIsMobileMenuOpen(false)}>학급 관리</Link>
             <Link to={`/posts?classroom_id=${teacherClassroomId}`} style={linkStyle} onClick={() => setIsMobileMenuOpen(false)}>게시판</Link>
             <Link to={`/schedules?classroom_id=${teacherClassroomId}`} style={linkStyle} onClick={() => setIsMobileMenuOpen(false)}>일정</Link>
             <Link to={`/chat?classroom_id=${teacherClassroomId}`} style={linkStyle} onClick={() => setIsMobileMenuOpen(false)}>채팅</Link>
@@ -174,9 +175,13 @@ function Navigation() {
     <>
       <nav style={styles.nav}>
         <div style={styles.leftSection}>
-          <div onClick={handleLogoClick} style={styles.logo}>
-            <img src="/assets/logo.png" alt="로고" style={{ height: '50px' }} />
-            <span style={styles.logoText}>CLASSFEED</span>
+          {/* 로고 */}
+          <div style={styles.logo} onClick={() => navigate('/')}>
+            <img 
+              src="/assets/logo.png" 
+              alt="CLASSFEED Logo" 
+              style={styles.logoImage}
+            />
           </div>
 
           {/* 데스크톱 메뉴 */}
@@ -205,23 +210,17 @@ function Navigation() {
                 placeholder="공지 검색"
                 value={searchKeyword}
                 onChange={(e) => setSearchKeyword(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && searchKeyword.trim()) {
-                    const targetClassroomId = teacherClassroomId || classroomId;
-                    navigate(`/posts?search=${encodeURIComponent(searchKeyword.trim())}&classroom_id=${targetClassroomId}`);
-                    setSearchKeyword('');
-                  }
-                }}
+                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                 style={styles.searchInput}
               />
             </>
           )}
 
-          {/* 햄버거 메뉴 버튼 (모바일) */}
+          {/* 햄버거 메뉴 (모바일) */}
           {isMobile && (
-            <button
-              style={styles.hamburger}
+            <button 
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              style={styles.hamburger}
             >
               <div style={{...styles.hamburgerLine, transform: isMobileMenuOpen ? 'rotate(45deg) translate(5px, 5px)' : 'none'}}></div>
               <div style={{...styles.hamburgerLine, opacity: isMobileMenuOpen ? '0' : '1'}}></div>
@@ -315,10 +314,10 @@ const styles = {
     gap: '0.5rem',
     cursor: 'pointer'
   },
-  logoText: {
-    fontSize: '1.2rem',
-    fontWeight: 'bold',
-    color: '#333'
+  logoImage: {
+    height: '35px',
+    width: 'auto',
+    objectFit: 'contain'
   },
   desktopMenu: {
     display: 'flex',

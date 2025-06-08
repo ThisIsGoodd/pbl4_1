@@ -222,16 +222,17 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
-//✅ 게시글 상세 조회
+//✅ 게시글 상세 조회 - 권한 정보 포함
 router.get('/:id', authenticateToken, async (req, res) => {
   const postId = req.params.id;
 
   try {
-    // 게시글 + 작성자 정보 가져오기
+    // 🔥 수정: 게시글 + 작성자 정보 + 담당교사 정보 가져오기
     const [rows] = await db.query(
-      `SELECT posts.*, users.name AS author_name
+      `SELECT posts.*, users.name AS author_name, classrooms.teacher_id
        FROM posts
        JOIN users ON posts.author_id = users.user_id
+       LEFT JOIN classrooms ON posts.classroom_id = classrooms.classroom_id
        WHERE posts.post_id = ?`,
       [postId]
     );
@@ -250,7 +251,20 @@ router.get('/:id', authenticateToken, async (req, res) => {
       [postId]
     );
 
-    res.json({ post, attachments });
+    // 🔥 수정: post 객체에 attachments와 권한 정보를 포함시켜서 반환
+    const postWithAttachments = {
+      ...post,
+      attachments: attachments
+    };
+
+    console.log('📋 게시글 상세 조회 결과:', {
+      post_id: post.post_id,
+      author_id: post.author_id,
+      teacher_id: post.teacher_id,
+      attachments_count: attachments.length
+    });
+
+    res.json(postWithAttachments);
   } catch (err) {
     console.error('🔥 게시글 상세 조회 오류:', err);
     res.status(500).json({ error: '서버 오류', details: err.message });
@@ -473,5 +487,83 @@ router.get('/admin', authenticateToken, async (req, res) => {
     res.status(500).json({ error: '서버 오류', details: err.message });
   }
 });
+
+router.get('/:id/comments', authenticateToken, async (req, res) => {
+  const { id: postId } = req.params;
+  const { user_id, role } = req.user;
+  
+  try {
+    // 🔥 수정: child_name 컬럼 추가 조회
+    const [comments] = await db.query(
+      `SELECT comments.*, users.name AS author_name, users.role AS author_role, users.child_name
+       FROM comments
+       JOIN users ON comments.author_id = users.user_id
+       WHERE comments.post_id = ?
+       ORDER BY comments.created_at ASC`,
+      [postId]
+    );
+
+    // 🔥 사용자 역할에 따른 댓글 필터링
+    let filteredComments;
+    
+    if (role === 'teacher') {
+      // 선생님은 모든 댓글을 볼 수 있음 (숨겨진 댓글도 포함)
+      filteredComments = comments;
+    } else {
+      // 학부모는 숨겨지지 않은 댓글만 볼 수 있음
+      filteredComments = comments.filter(comment => !comment.is_hidden);
+    }
+
+    res.json({ comments: filteredComments });
+  } catch (err) {
+    console.error('🔥 댓글 조회 오류:', err);
+    res.status(500).json({ error: '서버 오류', details: err.message });
+  }
+});
+
+/**
+ * ✅ 특정 게시글에 댓글 작성 - posts 라우터에 추가
+ */
+router.post('/:id/comments', authenticateToken, async (req, res) => {
+  const { id: postId } = req.params;
+  const { content } = req.body;
+  const authorId = req.user.user_id;
+
+  if (!content) {
+    return res.status(400).json({ error: '댓글 내용을 입력하세요.' });
+  }
+
+  try {
+    await db.query(
+      'INSERT INTO comments (post_id, author_id, content, created_at) VALUES (?, ?, ?, NOW())',
+      [postId, authorId, content]
+    );
+
+    res.json({ message: '댓글 작성 완료' });
+
+    // 게시글 작성자 정보 및 제목 가져오기
+    const [postRows] = await db.query(
+      'SELECT author_id, title FROM posts WHERE post_id = ?',
+      [postId]
+    );
+
+    const postAuthorId = postRows[0]?.author_id;
+    const postTitle = postRows[0]?.title || '게시글';
+
+    if (postAuthorId && postAuthorId !== authorId) {
+      const { createNotification } = require('../utils/notify');
+      await createNotification({
+        userId: postAuthorId,
+        type: 'comment',
+        relatedId: postId,
+        message: `"${postTitle}"에 새 댓글이 달렸습니다.`
+      });
+    }
+  } catch (err) {
+    console.error('🔥 댓글 작성 오류:', err);
+    res.status(500).json({ error: '서버 오류', details: err.message });
+  }
+});
+
 
 module.exports = router;

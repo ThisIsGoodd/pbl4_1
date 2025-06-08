@@ -5,26 +5,21 @@ const authenticateToken = require('../authMiddleware');
 const { createNotification } = require('../utils/notify');
 
 /**
- * ✅ 일정 생성 - 학교 전체 관리자와 학급 교사 모두 지원
+ * ✅ 일정 생성 - 학교 전체 관리자와 학급 교사 모두 지원 (타임존 문제 해결)
  */
 router.post('/', authenticateToken, async (req, res) => {
   const { title, description, start_date, end_date, classroom_id, school_wide } = req.body;
   const { user_id, is_admin, school_id: userSchoolId } = req.user;
 
   console.log('🔍 [schedules POST] 요청 데이터:', {
-    title, description, start_date, end_date, classroom_id, school_wide, 
-    user_id, is_admin, userSchoolId
+    title, description, start_date, end_date, classroom_id, school_wide
   });
 
   if (!title || !start_date || !end_date) {
     return res.status(400).json({ error: '제목, 시작일, 종료일은 필수입니다.' });
   }
 
-  // 🔥 수정: 날짜 검증 추가
-  const startDateTime = new Date(start_date);
-  const endDateTime = new Date(end_date);
-  
-  if (endDateTime < startDateTime) {
+  if (end_date < start_date) {
     return res.status(400).json({ error: '종료일은 시작일보다 이전일 수 없습니다.' });
   }
 
@@ -33,55 +28,43 @@ router.post('/', authenticateToken, async (req, res) => {
     let targetSchoolId = null;
     let finalSchoolWide = false;
 
-    // 🔥 수정: 학교 전체 관리자 처리 개선
+    // 기존 권한 체크 로직 (변경 없음)
     if (is_admin && userSchoolId) {
       console.log('🏫 [schedules POST] 학교 전체 관리자 일정 생성');
-      
-      // 학교 전체 관리자는 classroom_id 없이도 일정 생성 가능
       targetSchoolId = userSchoolId;
-      finalSchoolWide = true; // 학교 관리자가 만드는 일정은 기본적으로 학교 전체 일정
+      finalSchoolWide = true;
       
-      // classroom_id가 제공된 경우에만 해당 학급 확인
       if (classroom_id) {
         const [classroomInfo] = await db.query(
           'SELECT school_id FROM classrooms WHERE classroom_id = ?',
           [classroom_id]
         );
-
         if (classroomInfo.length === 0) {
           return res.status(400).json({ error: '존재하지 않는 학급입니다.' });
         }
-
         if (classroomInfo[0].school_id !== userSchoolId) {
           return res.status(403).json({ error: '해당 학급에 대한 권한이 없습니다.' });
         }
-
         targetClassroomId = classroom_id;
         finalSchoolWide = school_wide === true || school_wide === 'true';
       }
     } else if (classroom_id) {
-      // 🔥 일반 교사의 경우
       console.log('👩‍🏫 [schedules POST] 교사 학급 일정 생성');
       
-      // 해당 학급의 교사인지 확인
       const [classroomInfo] = await db.query(
         'SELECT teacher_id, school_id FROM classrooms WHERE classroom_id = ?',
         [classroom_id]
       );
-
       if (classroomInfo.length === 0) {
         return res.status(400).json({ error: '존재하지 않는 학급입니다.' });
       }
-
       if (classroomInfo[0].teacher_id !== user_id) {
         return res.status(403).json({ error: '해당 학급의 교사만 일정을 생성할 수 있습니다.' });
       }
-
       targetClassroomId = classroom_id;
       targetSchoolId = classroomInfo[0].school_id;
       finalSchoolWide = school_wide === true || school_wide === 'true';
     } else {
-      // 🔥 수정: 학교 관리자가 아니면서 classroom_id도 없는 경우만 에러
       if (!is_admin || !userSchoolId) {
         return res.status(400).json({ error: '학급 정보가 필요합니다.' });
       }
@@ -91,7 +74,7 @@ router.post('/', authenticateToken, async (req, res) => {
       targetClassroomId, targetSchoolId, finalSchoolWide
     });
 
-    // 🔥 일정 저장 - NULL 처리 개선
+    // 🔥 DATE 타입 사용 - 매우 간단함!
     const [result] = await db.query(
       `INSERT INTO schedules 
         (title, description, start_date, end_date, created_at, created_by, classroom_id, school_id, school_wide) 
@@ -99,10 +82,10 @@ router.post('/', authenticateToken, async (req, res) => {
       [
         title, 
         description, 
-        start_date, 
-        end_date, 
+        start_date,  // 🔥 YYYY-MM-DD 그대로 저장 (DATE 타입이므로 타임존 문제 없음)
+        end_date,    // 🔥 YYYY-MM-DD 그대로 저장
         user_id, 
-        targetClassroomId, // NULL이면 NULL로 저장됨
+        targetClassroomId,
         targetSchoolId, 
         finalSchoolWide
       ]
@@ -111,12 +94,23 @@ router.post('/', authenticateToken, async (req, res) => {
     const scheduleId = result.insertId;
     console.log('✅ [schedules POST] 일정 저장 완료:', scheduleId);
 
+    // 🔍 저장된 데이터 확인
+    const [[savedSchedule]] = await db.query(
+      'SELECT schedule_id, title, start_date, end_date FROM schedules WHERE schedule_id = ?',
+      [scheduleId]
+    );
+    
+    console.log('🔍 [schedules POST] 입력한 날짜:', { start_date, end_date });
+    console.log('🔍 [schedules POST] 저장된 날짜:', { 
+      start: savedSchedule.start_date, 
+      end: savedSchedule.end_date 
+    });
+
     res.json({ message: '일정 추가 완료', schedule_id: scheduleId });
 
-    // 🔥 알림 전송
+    // 알림 전송 로직 (기존과 동일)
     try {
       if (finalSchoolWide && targetSchoolId) {
-        // 학교 전체 일정인 경우
         const [schoolUsers] = await db.query(
           `SELECT DISTINCT uc.user_id 
            FROM user_classrooms uc
@@ -124,8 +118,6 @@ router.post('/', authenticateToken, async (req, res) => {
            WHERE c.school_id = ? AND uc.user_id != ?`,
           [targetSchoolId, user_id]
         );
-
-        console.log('🔔 [schedules POST] 학교 전체 알림 대상:', schoolUsers.length, '명');
 
         for (const u of schoolUsers) {
           await createNotification({
@@ -138,13 +130,10 @@ router.post('/', authenticateToken, async (req, res) => {
           });
         }
       } else if (targetClassroomId) {
-        // 학급 일정인 경우
         const [parents] = await db.query(
           `SELECT user_id FROM user_classrooms WHERE classroom_id = ? AND user_id != ?`,
           [targetClassroomId, user_id]
         );
-
-        console.log('🔔 [schedules POST] 학급 알림 대상:', parents.length, '명');
 
         for (const p of parents) {
           await createNotification({
@@ -179,14 +168,15 @@ router.get('/', authenticateToken, async (req, res) => {
     let targetClassroomId = null;
 
     if (school_id && is_admin) {
-      // 🆕 학교 전체 관리자의 경우 (school_id 파라미터 사용)
       targetSchoolId = school_id;
       console.log('🏫 학교 전체 관리자 일정 조회');
       
-      // 학교 전체 일정만 조회
+      // 🔥 수정: DATE_FORMAT을 사용하여 문자열로 반환
       const [scheduleRows] = await db.query(
         `SELECT schedule_id, title, description, 
-                start_date AS start, end_date AS end, school_wide, created_by 
+                DATE_FORMAT(start_date, '%Y-%m-%d') AS start, 
+                DATE_FORMAT(end_date, '%Y-%m-%d') AS end, 
+                school_wide, created_by 
          FROM schedules 
          WHERE school_id = ? AND school_wide = TRUE
          ORDER BY start_date ASC`,
@@ -197,10 +187,8 @@ router.get('/', authenticateToken, async (req, res) => {
       return res.json({ schedules: scheduleRows });
       
     } else if (classroom_id) {
-      // 🔥 학급 교사나 학부모의 경우 (classroom_id 파라미터 사용)
       targetClassroomId = classroom_id;
       
-      // classroom_id로 school_id 찾기
       const [classroomInfo] = await db.query(
         `SELECT school_id FROM classrooms WHERE classroom_id = ?`,
         [targetClassroomId]
@@ -214,10 +202,12 @@ router.get('/', authenticateToken, async (req, res) => {
       
       console.log('📚 학급 일정 조회 (학급 + 학교 전체)');
       
-      // 해당 학급 일정 + 학교 전체 일정 조회
+      // 🔥 수정: DATE_FORMAT을 사용하여 문자열로 반환
       const [scheduleRows] = await db.query(
         `SELECT schedule_id, title, description, 
-                start_date AS start, end_date AS end, school_wide, created_by 
+                DATE_FORMAT(start_date, '%Y-%m-%d') AS start, 
+                DATE_FORMAT(end_date, '%Y-%m-%d') AS end, 
+                school_wide, created_by 
          FROM schedules 
          WHERE classroom_id = ? OR (school_id = ? AND school_wide = TRUE)
          ORDER BY start_date ASC`,
@@ -225,6 +215,7 @@ router.get('/', authenticateToken, async (req, res) => {
       );
 
       console.log('📅 [schedules GET] 학급+학교 일정 수:', scheduleRows.length);
+      console.log('🔍 [schedules GET] 조회된 일정 샘플:', scheduleRows.slice(0, 2));
       return res.json({ schedules: scheduleRows });
       
     } else {
@@ -251,9 +242,12 @@ router.get('/admin', authenticateToken, async (req, res) => {
 
     console.log('🔍 [schedules/admin] 학교 ID:', targetSchoolId);
 
+    // 🔥 수정: DATE_FORMAT을 사용하여 문자열로 반환
     const [scheduleRows] = await db.query(
       `SELECT schedule_id, title, description, 
-              start_date AS start, end_date AS end, created_by, school_wide
+              DATE_FORMAT(start_date, '%Y-%m-%d') AS start, 
+              DATE_FORMAT(end_date, '%Y-%m-%d') AS end, 
+              created_by, school_wide
        FROM schedules 
        WHERE school_id = ? AND school_wide = TRUE
        ORDER BY start_date ASC`,
@@ -269,7 +263,7 @@ router.get('/admin', authenticateToken, async (req, res) => {
   }
 });
 
-// ✅ 일정 수정
+// ✅ 일정 수정 - 🔥 타임존 문제 해결
 router.put('/:id', authenticateToken, async (req, res) => {
   const schedule_id = req.params.id;
   const { title, description, start_date, end_date } = req.body;
@@ -279,11 +273,11 @@ router.put('/:id', authenticateToken, async (req, res) => {
     return res.status(400).json({ error: '필수 항목이 누락되었습니다.' });
   }
 
-  // 🔥 추가: 날짜 검증
-  const startDateTime = new Date(start_date);
-  const endDateTime = new Date(end_date);
+  // 🔥 수정: 타임존 문제 해결을 위한 날짜 처리
+  const startDate = new Date(start_date);
+  const endDate = new Date(end_date);
   
-  if (endDateTime < startDateTime) {
+  if (endDate < startDate) {
     return res.status(400).json({ error: '종료일은 시작일보다 이전일 수 없습니다.' });
   }
 
@@ -302,9 +296,13 @@ router.put('/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: '일정 수정 권한이 없습니다.' });
     }
 
+    // 🔥 수정: 타임존 문제 해결
+    const startDateForDB = startDate.toISOString().split('T')[0] + ' 00:00:00';
+    const endDateForDB = endDate.toISOString().split('T')[0] + ' 23:59:59';
+
     await db.query(
       'UPDATE schedules SET title = ?, description = ?, start_date = ?, end_date = ? WHERE schedule_id = ?',
-      [title, description, start_date, end_date, schedule_id]
+      [title, description, startDateForDB, endDateForDB, schedule_id]
     );
 
     res.json({ message: '일정 수정 완료' });

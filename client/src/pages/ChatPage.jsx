@@ -15,19 +15,22 @@ function ChatPage() {
   const [searchParams] = useSearchParams();
   const classroomId = searchParams.get('classroom_id');
 
+  // 🔥 추가: 각 방의 참가자 정보 저장
+  const [roomParticipants, setRoomParticipants] = useState({});
+
   const token = localStorage.getItem('token');
   const userId = JSON.parse(atob(token.split('.')[1])).user_id;
   const userRole = JSON.parse(atob(token.split('.')[1])).role;
   const messagesEndRef = useRef(null);
 
-  // 🆕 대면 상담 요청 상태
+  // 대면 상담 요청 상태
   const [consultationForm, setConsultationForm] = useState({
     title: '',
     date: '',
     time: ''
   });
 
-  // ✅ 학급 정보 불러오기
+  // 학급 정보 불러오기
   useEffect(() => {
     const fetchClassroomInfo = async () => {
       if (!classroomId) {
@@ -55,7 +58,7 @@ function ChatPage() {
     fetchClassroomInfo();
   }, [classroomId, token]);
 
-  // ✅ 채팅방 목록 불러오기 (읽지 않은 메시지 수 포함)
+  // 🔥 수정: 채팅방 목록 불러오기 + 참가자 정보 조회
   useEffect(() => {
     const fetchRooms = async () => {
       if (!classroomId) return;
@@ -78,6 +81,23 @@ function ChatPage() {
             room.classroom_id == classroomId || room.room_type === 'private'
           );
           setRooms(filteredRooms);
+
+          // 🔥 각 채팅방의 참가자 정보 조회
+          const participantsData = {};
+          for (const room of filteredRooms) {
+            try {
+              const participantsRes = await fetch(`http://localhost:3001/api/chat/rooms/${room.room_id}/participants`, {
+                headers: { Authorization: `Bearer ${token}` }
+              });
+              if (participantsRes.ok) {
+                const participantsResult = await participantsRes.json();
+                participantsData[room.room_id] = participantsResult.participants;
+              }
+            } catch (err) {
+              console.error('참가자 정보 조회 실패:', room.room_id, err);
+            }
+          }
+          setRoomParticipants(participantsData);
           
           if (filteredRooms.length === 0) {
             setError('채팅방이 없습니다. 학급에 제대로 가입되었는지 확인해주세요.');
@@ -100,7 +120,7 @@ function ChatPage() {
     return () => clearInterval(interval);
   }, [classroomId, token]);
 
-  // ✅ Socket.io 메시지 수신 + 에러 핸들링
+  // Socket.io 메시지 수신 + 에러 핸들링
   useEffect(() => {
     // 새 메시지 수신
     socket.on('receiveMessage', (msg) => {
@@ -129,12 +149,12 @@ function ChatPage() {
     };
   }, [selectedRoom]);
 
-  // ✅ 메시지 목록 자동 스크롤
+  // 메시지 목록 자동 스크롤
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // ✅ 채팅방 클릭 핸들러 (읽음 처리)
+  // 채팅방 클릭 핸들러 (읽음 처리)
   const handleRoomClick = async (room) => {
     console.log('🏠 채팅방 선택:', room);
     
@@ -170,7 +190,7 @@ function ChatPage() {
     }
   };
 
-  // ✅ 메시지 전송 핸들러
+  // 메시지 전송 핸들러
   const handleSend = () => {
     if (!newMessage.trim() || !selectedRoom) return;
 
@@ -190,7 +210,7 @@ function ChatPage() {
     setNewMessage('');
   };
 
-  // ✅ Enter 키 처리
+  // Enter 키 처리
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -198,7 +218,7 @@ function ChatPage() {
     }
   };
 
-  // 🆕 대면 상담 요청 핸들러
+  // 대면 상담 요청 핸들러
   const handleConsultationRequest = () => {
     if (!selectedRoom || selectedRoom.room_type !== 'private') {
       alert('1:1 채팅방에서만 대면 상담을 요청할 수 있습니다.');
@@ -236,13 +256,71 @@ function ChatPage() {
     }
   };
 
-  // 🆕 채팅방 이름 생성 함수
+  // 🔥 수정된 채팅방 이름 생성 함수
   const getRoomDisplayName = (room) => {
     if (room.room_type === 'group') {
+      // 단체방: 학년반 표시
+      if (classroomInfo) {
+        return `${classroomInfo.grade}학년 ${classroomInfo.class_number}반`;
+      }
       return '학급 단체방';
     } else {
+      // 1:1 채팅: 상대방 정보 표시
+      const participants = roomParticipants[room.room_id] || [];
+      const otherParticipant = participants.find(p => p.user_id !== userId);
+      
+      if (otherParticipant) {
+        if (otherParticipant.role === 'teacher') {
+          return `선생님 (${otherParticipant.name})`;
+        } else if (otherParticipant.role === 'parent') {
+          // 학부모의 경우 이름과 자녀 이름 표시
+          if (otherParticipant.child_name) {
+            return `${otherParticipant.name} (${otherParticipant.child_name} 부모님)`;
+          } else {
+            return `${otherParticipant.name} (학부모)`;
+          }
+        }
+      }
       return '1:1 채팅';
     }
+  };
+
+  // 🔥 추가: 채팅방 헤더 부제목 생성 함수
+  const getRoomSubtitle = (room) => {
+    if (room.room_type === 'group') {
+      return '모든 학급 구성원과 대화';
+    } else {
+      const participants = roomParticipants[room.room_id] || [];
+      const otherParticipant = participants.find(p => p.user_id !== userId);
+      
+      if (otherParticipant) {
+        if (otherParticipant.role === 'teacher') {
+          return '선생님과의 개별 상담';
+        } else if (otherParticipant.role === 'parent') {
+          return '학부모와의 개별 대화';
+        }
+      }
+      return '1:1 개별 대화';
+    }
+  };
+
+  // 🔥 추가: 메시지 발신자 이름 표시 개선
+  const getSenderDisplayName = (message) => {
+    if (message.sender_id === userId) {
+      return '나';
+    }
+    
+    if (message.sender_role === 'teacher') {
+      return `선생님 (${message.sender_name})`;
+    } else if (message.sender_role === 'parent') {
+      if (message.sender_child_name) {
+        return `${message.sender_name} (${message.sender_child_name} 부모님)`;
+      } else {
+        return `${message.sender_name} (학부모)`;
+      }
+    }
+    
+    return message.sender_name;
   };
 
   if (loading) {
@@ -316,7 +394,7 @@ function ChatPage() {
             </div>
           )}
 
-          {/* 🆕 대면 상담 요청 폼 (학부모만) */}
+          {/* 대면 상담 요청 폼 (학부모만) */}
           {userRole === 'parent' && (
             <div style={styles.consultationSection}>
               <h4 style={styles.consultationTitle}>📅 대면 상담 요청</h4>
@@ -391,9 +469,7 @@ function ChatPage() {
                     {getRoomDisplayName(selectedRoom)}
                   </h4>
                   <span style={styles.chatHeaderSubtitle}>
-                    {selectedRoom.room_type === 'group' 
-                      ? '모든 학급 구성원과 대화' 
-                      : '선생님과의 개별 상담'}
+                    {getRoomSubtitle(selectedRoom)}
                   </span>
                 </div>
               </div>
@@ -423,7 +499,7 @@ function ChatPage() {
                         >
                           {!isMyMessage && (
                             <div style={styles.senderName}>
-                              {message.sender_name || '상대방'}
+                              {getSenderDisplayName(message)}
                             </div>
                           )}
                           <div style={styles.messageContent}>
@@ -482,34 +558,15 @@ const styles = {
     flexDirection: 'column',
     backgroundColor: '#f8f9fa'
   },
-  
+
   header: {
     padding: '1rem 2rem',
-    margin: 0,
     backgroundColor: 'white',
     borderBottom: '1px solid #e9ecef',
+    margin: 0,
     fontSize: '1.5rem',
     fontWeight: '600',
-    color: '#495057'
-  },
-
-  loadingContainer: {
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    height: '100vh',
-    fontSize: '1.1rem',
-    color: '#6c757d'
-  },
-
-  errorContainer: {
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'center',
-    alignItems: 'center',
-    height: '100vh',
-    textAlign: 'center',
-    color: '#dc3545'
+    color: '#333'
   },
 
   chatContainer: {
@@ -519,16 +576,18 @@ const styles = {
   },
 
   sidebar: {
-    width: '320px',
+    width: '350px',
     backgroundColor: 'white',
     borderRight: '1px solid #e9ecef',
     display: 'flex',
-    flexDirection: 'column'
+    flexDirection: 'column',
+    overflow: 'hidden'
   },
 
   roomListHeader: {
     padding: '1rem',
-    borderBottom: '1px solid #e9ecef'
+    borderBottom: '1px solid #e9ecef',
+    backgroundColor: '#f8f9fa'
   },
 
   roomList: {
@@ -539,9 +598,9 @@ const styles = {
   roomItem: {
     display: 'flex',
     alignItems: 'center',
-    padding: '0.75rem 1rem',
+    padding: '1rem',
+    borderBottom: '1px solid #f1f3f4',
     cursor: 'pointer',
-    borderBottom: '1px solid #f8f9fa',
     transition: 'background-color 0.2s',
     '&:hover': {
       backgroundColor: '#f8f9fa'
@@ -549,47 +608,50 @@ const styles = {
   },
 
   roomItemActive: {
-    backgroundColor: '#e3f2fd',
-    borderLeft: '4px solid #2196f3'
+    backgroundColor: '#e3f2fd'
   },
 
   roomIcon: {
     fontSize: '1.5rem',
-    marginRight: '0.75rem'
+    marginRight: '1rem',
+    width: '40px',
+    textAlign: 'center'
   },
 
   roomInfo: {
-    flex: 1
+    flex: 1,
+    minWidth: 0
   },
 
   roomName: {
-    fontWeight: '500',
+    fontWeight: '600',
     fontSize: '0.95rem',
-    color: '#495057'
+    marginBottom: '0.25rem',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap'
   },
 
   unreadText: {
     fontSize: '0.8rem',
-    color: '#dc3545',
-    fontWeight: '500',
-    marginTop: '0.25rem'
+    color: '#666'
   },
 
   unreadBadge: {
     backgroundColor: '#dc3545',
     color: 'white',
     borderRadius: '50%',
-    width: '20px',
-    height: '20px',
+    width: '24px',
+    height: '24px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: '0.75rem',
+    fontSize: '0.8rem',
     fontWeight: 'bold'
   },
 
   noRooms: {
-    padding: '2rem 1rem',
+    padding: '2rem',
     textAlign: 'center',
     color: '#6c757d',
     fontStyle: 'italic'
@@ -605,11 +667,11 @@ const styles = {
     margin: '0 0 1rem 0',
     fontSize: '1rem',
     fontWeight: '600',
-    color: '#495057'
+    color: '#333'
   },
 
   formGroup: {
-    marginBottom: '1rem'
+    marginBottom: '0.75rem'
   },
 
   formRow: {
@@ -619,20 +681,23 @@ const styles = {
 
   formLabel: {
     display: 'block',
-    marginBottom: '0.5rem',
-    fontSize: '0.85rem',
+    marginBottom: '0.25rem',
+    fontSize: '0.8rem',
     fontWeight: '500',
-    color: '#6c757d'
+    color: '#555'
   },
 
   formInput: {
     width: '100%',
     padding: '0.5rem',
     border: '1px solid #ced4da',
-    borderRadius: '6px',
-    fontSize: '0.9rem',
+    borderRadius: '4px',
+    fontSize: '0.85rem',
     outline: 'none',
-    transition: 'border-color 0.2s'
+    transition: 'border-color 0.2s',
+    '&:focus': {
+      borderColor: '#007bff'
+    }
   },
 
   consultationButton: {
@@ -641,19 +706,20 @@ const styles = {
     backgroundColor: '#28a745',
     color: 'white',
     border: 'none',
-    borderRadius: '8px',
+    borderRadius: '6px',
     fontSize: '0.9rem',
-    fontWeight: '500',
+    fontWeight: '600',
     cursor: 'pointer',
     transition: 'background-color 0.2s',
     marginBottom: '0.5rem'
   },
 
   consultationNote: {
-    margin: 0,
     fontSize: '0.75rem',
     color: '#6c757d',
-    textAlign: 'center'
+    textAlign: 'center',
+    margin: 0,
+    lineHeight: '1.3'
   },
 
   chatArea: {
@@ -673,7 +739,7 @@ const styles = {
 
   chatHeaderIcon: {
     fontSize: '1.5rem',
-    marginRight: '0.75rem'
+    marginRight: '1rem'
   },
 
   chatHeaderInfo: {
@@ -681,10 +747,10 @@ const styles = {
   },
 
   chatHeaderTitle: {
-    margin: 0,
+    margin: '0 0 0.25rem 0',
     fontSize: '1.1rem',
     fontWeight: '600',
-    color: '#495057'
+    color: '#333'
   },
 
   chatHeaderSubtitle: {
@@ -694,9 +760,27 @@ const styles = {
 
   messageContainer: {
     flex: 1,
-    overflowY: 'auto',
     padding: '1rem',
-    backgroundColor: '#fafbfc'
+    overflowY: 'auto',
+    backgroundColor: '#fafafa'
+  },
+
+  loadingContainer: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: '100vh',
+    backgroundColor: '#f8f9fa'
+  },
+
+  errorContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: '100vh',
+    backgroundColor: '#f8f9fa',
+    color: '#dc3545'
   },
 
   noMessages: {
@@ -727,7 +811,7 @@ const styles = {
   },
 
   otherMessage: {
-    backgroundColor: '#e9ecef', // 🔥 수정: 배경색을 더 진하게 변경
+    backgroundColor: '#e9ecef',
     color: '#495057',
     marginRight: 'auto'
   },
@@ -743,7 +827,7 @@ const styles = {
     fontSize: '0.95rem',
     lineHeight: '1.4',
     marginBottom: '0.25rem',
-    whiteSpace: 'pre-wrap' // 줄바꿈 유지
+    whiteSpace: 'pre-wrap'
   },
 
   messageTime: {

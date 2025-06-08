@@ -2,25 +2,28 @@ import React, { useEffect, useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { getToken } from '../utils/jwt';
-import { AuthContext } from '../contexts/AuthContext'; // 🔥 추가
+import { AuthContext } from '../contexts/AuthContext';
 
 function ProfilePage() {
   const navigate = useNavigate();
-  const { logout } = useContext(AuthContext); // 🔥 추가: 로그아웃 함수
+  const { logout } = useContext(AuthContext);
   const [user, setUser] = useState(null);
   const [name, setName] = useState('');
   const [childName, setChildName] = useState('');
   const [image, setImage] = useState(null);
   const [preview, setPreview] = useState('');
   
-  // ✅ 알림 설정 상태 추가
+  // 🔥 추가: 학교 생성자 여부 확인
+  const [isSchoolCreator, setIsSchoolCreator] = useState(false);
+  
+  // 알림 설정 상태
   const [notificationSettings, setNotificationSettings] = useState({
     post_alert: true,
     schedule_alert: true,
     chat_alert: true,
   });
 
-  // ✅ DND 시간 설정 추가
+  // DND 시간 설정
   const [chatDndStart, setChatDndStart] = useState('');
   const [chatDndEnd, setChatDndEnd] = useState('');
 
@@ -64,6 +67,26 @@ function ProfilePage() {
     fetchNotificationSettings();
   }, [token]);
 
+  // 🔥 추가: 학교 생성자 여부 확인
+  useEffect(() => {
+    const checkSchoolCreator = async () => {
+      if (!user?.is_admin || !user?.school_id) return;
+      
+      try {
+        const res = await axios.get(`http://localhost:3001/api/schools/${user.school_id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        // 학교 생성자인지 확인
+        setIsSchoolCreator(res.data.created_by === user.user_id);
+      } catch (err) {
+        console.error('학교 정보 조회 실패:', err);
+      }
+    };
+
+    checkSchoolCreator();
+  }, [user?.is_admin, user?.school_id, user?.user_id, token]);
+
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -83,7 +106,7 @@ function ProfilePage() {
       formData.append('name', name);
       formData.append('child_name', childName);
       
-      // 🔥 수정: 선생님만 DND 시간 설정 가능
+      // 선생님만 DND 시간 설정 가능
       if (user.role === 'teacher') {
         formData.append('chat_dnd_start', chatDndStart);
         formData.append('chat_dnd_end', chatDndEnd);
@@ -114,7 +137,7 @@ function ProfilePage() {
     }
   };
 
-  // 🔥 추가: 학급 탈퇴 (학부모용)
+  // 학급 탈퇴 (학부모용)
   const handleLeaveClassroom = async (classroomId) => {
     if (!window.confirm('정말로 이 학급에서 탈퇴하시겠습니까?')) return;
 
@@ -133,7 +156,7 @@ function ProfilePage() {
     }
   };
 
-  // 🔥 추가: 학급 삭제 (선생님용)
+  // 학급 삭제 (선생님용)
   const handleDeleteClassroom = async (classroomId) => {
     if (!window.confirm('정말로 학급을 삭제하시겠습니까? 모든 데이터가 삭제됩니다.')) return;
 
@@ -152,7 +175,7 @@ function ProfilePage() {
     }
   };
 
-  // 🔥 추가: 학교 삭제 (학교 관리자용)
+  // 학교 삭제 (학교 생성자만)
   const handleDeleteSchool = async () => {
     if (!window.confirm('정말로 학교를 삭제하시겠습니까? 모든 학급과 데이터가 삭제됩니다.')) return;
     
@@ -169,7 +192,7 @@ function ProfilePage() {
 
       if (res.status === 200) {
         alert('학교가 삭제되었습니다.');
-        logout(); // 로그아웃 처리
+        logout();
       }
     } catch (err) {
       console.error('학교 삭제 실패:', err);
@@ -177,7 +200,7 @@ function ProfilePage() {
     }
   };
 
-  // 🔥 추가: 회원 탈퇴
+  // 회원 탈퇴
   const handleDeleteAccount = async () => {
     if (!window.confirm('정말로 회원 탈퇴하시겠습니까? 모든 데이터가 삭제됩니다.')) return;
     
@@ -288,7 +311,7 @@ function ProfilePage() {
         </div>
       </div>
 
-      {/* 🔥 수정: 채팅 방해금지 시간 설정 (선생님만) */}
+      {/* 채팅 방해금지 시간 설정 (선생님만) */}
       {user.role === 'teacher' && (
         <div style={{ 
           marginBottom: '2rem', 
@@ -299,33 +322,34 @@ function ProfilePage() {
         }}>
           <h3 style={{ marginBottom: '1rem', color: '#333' }}>🔕 채팅 방해금지 시간</h3>
           <p style={{ fontSize: '0.9rem', color: '#666', marginBottom: '1.5rem' }}>
-            지정된 시간에는 채팅 알림을 받지 않습니다. (선생님만 설정 가능)
+            지정된 시간에는 채팅 알림을 받지 않습니다.
           </p>
           
-          <div style={{ display: 'flex', gap: '2rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
             <div>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>시작 시간:</label>
-              <input 
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>시작 시간:</label>
+              <input
                 type="time"
                 value={chatDndStart}
                 onChange={(e) => setChatDndStart(e.target.value)}
                 style={{ 
-                  padding: '0.5rem',
+                  padding: '0.5rem', 
                   border: '1px solid #ccc',
-                  borderRadius: '6px'
+                  borderRadius: '4px'
                 }}
               />
             </div>
+            
             <div>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>종료 시간:</label>
-              <input 
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>종료 시간:</label>
+              <input
                 type="time"
                 value={chatDndEnd}
                 onChange={(e) => setChatDndEnd(e.target.value)}
                 style={{ 
-                  padding: '0.5rem',
+                  padding: '0.5rem', 
                   border: '1px solid #ccc',
-                  borderRadius: '6px'
+                  borderRadius: '4px'
                 }}
               />
             </div>
@@ -339,165 +363,112 @@ function ProfilePage() {
         padding: '1.5rem', 
         border: '1px solid #ddd', 
         borderRadius: '12px',
-        backgroundColor: '#fff8dc'
+        backgroundColor: '#f0f8ff'
       }}>
-        <h3 style={{ marginBottom: '1.5rem', color: '#333' }}>🔔 알림 설정</h3>
+        <h3 style={{ marginBottom: '1rem', color: '#333' }}>🔔 알림 설정</h3>
         
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <label style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            cursor: 'pointer',
-            padding: '0.5rem',
-            borderRadius: '6px',
-            backgroundColor: notificationSettings.post_alert ? '#e8f5e8' : '#f5f5f5'
-          }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+          <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
             <input
               type="checkbox"
               checked={notificationSettings.post_alert}
               onChange={() => handleNotificationToggle('post_alert')}
-              style={{ marginRight: '1rem', transform: 'scale(1.2)' }}
+              style={{ marginRight: '0.5rem' }}
             />
-            📢 공지사항 알림
+            <span>새 게시글 알림</span>
           </label>
-
-          <label style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            cursor: 'pointer',
-            padding: '0.5rem',
-            borderRadius: '6px',
-            backgroundColor: notificationSettings.schedule_alert ? '#e8f5e8' : '#f5f5f5'
-          }}>
+          
+          <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
             <input
               type="checkbox"
               checked={notificationSettings.schedule_alert}
               onChange={() => handleNotificationToggle('schedule_alert')}
-              style={{ marginRight: '1rem', transform: 'scale(1.2)' }}
+              style={{ marginRight: '0.5rem' }}
             />
-            📅 일정 알림
+            <span>일정 알림</span>
           </label>
-
-          <label style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            cursor: 'pointer',
-            padding: '0.5rem',
-            borderRadius: '6px',
-            backgroundColor: notificationSettings.chat_alert ? '#e8f5e8' : '#f5f5f5'
-          }}>
+          
+          <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
             <input
               type="checkbox"
               checked={notificationSettings.chat_alert}
               onChange={() => handleNotificationToggle('chat_alert')}
-              style={{ marginRight: '1rem', transform: 'scale(1.2)' }}
+              style={{ marginRight: '0.5rem' }}
             />
-            💬 채팅 알림
+            <span>채팅 알림</span>
           </label>
         </div>
       </div>
 
-      {/* 소속 정보 */}
+      {/* 가입된 학급 정보 */}
       <div style={{ 
         marginBottom: '2rem', 
         padding: '1.5rem', 
         border: '1px solid #ddd', 
         borderRadius: '12px',
-        backgroundColor: '#f0fff0'
+        backgroundColor: '#fff9e6'
       }}>
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center',
-          marginBottom: '1rem'
-        }}>
-          <h3 style={{ margin: 0, color: '#333' }}>🏫 소속 정보</h3>
-          {/* 🔥 수정: 학급 변경 버튼 (학부모만) */}
-          {user.role === 'parent' && (
-            <button
-              onClick={() => navigate('/join/invite')}
-              style={{
-                backgroundColor: '#007bff',
-                color: 'white',
-                border: 'none',
-                padding: '0.5rem 1rem',
-                borderRadius: '6px',
-                fontSize: '0.9rem',
-                cursor: 'pointer',
-                fontWeight: 'bold'
-              }}
-              onMouseOver={(e) => e.target.style.backgroundColor = '#0056b3'}
-              onMouseOut={(e) => e.target.style.backgroundColor = '#007bff'}
-            >
-              🔄 학급 변경
-            </button>
-          )}
-        </div>
+        <h3 style={{ marginBottom: '1rem', color: '#333' }}>📚 가입된 학급</h3>
         
         {user.joined_classrooms && user.joined_classrooms.length > 0 ? (
           <div>
             {user.joined_classrooms.map((classroom, index) => (
               <div key={index} style={{ 
-                marginBottom: '1rem',
-                padding: '1rem',
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center',
+                padding: '0.8rem',
                 backgroundColor: 'white',
-                borderRadius: '8px',
+                borderRadius: '6px',
+                marginBottom: '0.5rem',
                 border: '1px solid #e0e0e0'
               }}>
-                <p style={{ margin: '0 0 0.5rem 0' }}>
-                  <strong>학교:</strong> {classroom.school}
-                </p>
-                <p style={{ margin: '0 0 1rem 0' }}>
-                  <strong>학급:</strong> {classroom.grade}학년 {classroom.class_number}반
-                </p>
-                
-                {/* 🔥 추가: 학급별 액션 버튼 */}
-                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                  {user.role === 'parent' && (
-                    <button
-                      onClick={() => handleLeaveClassroom(classroom.classroom_id)}
-                      style={{
-                        backgroundColor: '#dc3545',
-                        color: 'white',
-                        border: 'none',
-                        padding: '0.25rem 0.5rem',
-                        borderRadius: '4px',
-                        fontSize: '0.8rem',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      학급 탈퇴
-                    </button>
-                  )}
-                  
-                  {user.role === 'teacher' && (
-                    <button
-                      onClick={() => handleDeleteClassroom(classroom.classroom_id)}
-                      style={{
-                        backgroundColor: '#dc3545',
-                        color: 'white',
-                        border: 'none',
-                        padding: '0.25rem 0.5rem',
-                        borderRadius: '4px',
-                        fontSize: '0.8rem',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      학급 삭제
-                    </button>
-                  )}
+                <div>
+                  <strong>{classroom.grade}학년 {classroom.class_number}반</strong>
+                  <br />
+                  <small style={{ color: '#666' }}>{classroom.school}</small>
                 </div>
+                
+                {user.role === 'parent' && (
+                  <button
+                    onClick={() => handleLeaveClassroom(classroom.classroom_id)}
+                    style={{
+                      backgroundColor: '#dc3545',
+                      color: 'white',
+                      border: 'none',
+                      padding: '0.5rem 1rem',
+                      borderRadius: '4px',
+                      fontSize: '0.8rem',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    탈퇴
+                  </button>
+                )}
+                
+                {user.role === 'teacher' && classroom.teacher_id === user.user_id && (
+                  <button
+                    onClick={() => handleDeleteClassroom(classroom.classroom_id)}
+                    style={{
+                      backgroundColor: '#dc3545',
+                      color: 'white',
+                      border: 'none',
+                      padding: '0.5rem 1rem',
+                      borderRadius: '4px',
+                      fontSize: '0.8rem',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    학급 삭제
+                  </button>
+                )}
               </div>
             ))}
           </div>
         ) : (
-          <div style={{ textAlign: 'center' }}>
-            <p style={{ 
-              color: '#666',
-              fontStyle: 'italic',
-              marginBottom: '1rem'
-            }}>
-              학급에 가입되어 있지 않습니다.
+          <div style={{ textAlign: 'center', padding: '2rem' }}>
+            <p style={{ color: '#999', marginBottom: '1rem' }}>
+              가입된 학급이 없습니다.
             </p>
             {user.role === 'parent' && (
               <button
@@ -522,7 +493,7 @@ function ProfilePage() {
         )}
       </div>
 
-      {/* 🔥 추가: 위험 영역 */}
+      {/* 위험 영역 */}
       <div style={{ 
         marginBottom: '2rem', 
         padding: '1.5rem', 
@@ -536,8 +507,8 @@ function ProfilePage() {
         </p>
         
         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-          {/* 학교 관리자: 학교 삭제 */}
-          {user.is_admin && user.school_id ? (
+          {/* 🔥 수정: 학교 생성자만 학교 삭제 버튼 표시 */}
+          {user.is_admin && user.school_id && isSchoolCreator ? (
             <button
               onClick={handleDeleteSchool}
               style={{
@@ -551,7 +522,7 @@ function ProfilePage() {
                 fontWeight: 'bold'
               }}
             >
-              🏫 학교 삭제
+              🏫 학교 삭제 (생성자만)
             </button>
           ) : null}
           

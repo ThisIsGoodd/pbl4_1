@@ -98,6 +98,17 @@ function SchedulePage() {
     fetchClassroomInfo();
   }, [classroomId, token]);
 
+  // 🔥 날짜를 로컬 시간으로 처리하는 헬퍼 함수들
+  const formatDateForServer = (dateString) => {
+    // YYYY-MM-DD 형태의 날짜를 서버에 보낼 때 시간 정보 추가
+    return `${dateString}T00:00:00`;
+  };
+
+  const formatDateFromServer = (dateTimeString) => {
+    // 서버에서 받은 날짜를 YYYY-MM-DD 형태로 변환
+    return dateTimeString.split('T')[0];
+  };
+
   // 일정 목록 불러오기
   const fetchSchedules = async () => {
     try {
@@ -127,10 +138,11 @@ function SchedulePage() {
   // FullCalendar용 이벤트 데이터 변환
   const events = schedules.map((s) => ({
     id: s.schedule_id,
-    title: s.title, // 제목만 표시
-    start: s.start,
-    end: s.end,
-    allDay: true, // 🆕 하루 종일 이벤트로 설정 (시간 표시 안 함)
+    title: s.title,
+    // 🔥 수정: 날짜만 사용하여 타임존 문제 방지
+    start: formatDateFromServer(s.start),
+    end: formatDateFromServer(s.end),
+    allDay: true,
     extendedProps: {
       description: s.description,
       schoolWide: s.school_wide,
@@ -138,6 +150,7 @@ function SchedulePage() {
     },
     color: s.school_wide ? '#9DA7E3' : '#5ADD7D'
   }));
+
   // 이벤트 클릭 핸들러
   const handleEventClick = (clickInfo) => {
     const event = clickInfo.event;
@@ -171,21 +184,27 @@ function SchedulePage() {
       return;
     }
 
+    // 🔍 디버깅: 원본 날짜 확인
+    console.log('🔍 [프론트엔드] 원본 날짜:', {
+      startDate: scheduleForm.startDate,
+      endDate: scheduleForm.endDate
+    });
+
     try {
       const requestBody = {
         title: scheduleForm.title,
         description: scheduleForm.description,
-        start_date: scheduleForm.startDate,
-        end_date: scheduleForm.endDate,
+        // 🔥 수정: 날짜를 그대로 전송 (변환하지 않음)
+        start_date: scheduleForm.startDate,  // YYYY-MM-DD 그대로
+        end_date: scheduleForm.endDate,      // YYYY-MM-DD 그대로
         school_wide: scheduleForm.schoolWide
       };
 
-      // 🔥 수정: 학교 전체 관리자 vs 일반 교사 구분
+      console.log('🔍 [프론트엔드] 서버로 전송할 데이터:', requestBody);
+
       if (schoolId) {
-        // 학교 전체 관리자인 경우: classroom_id 없이 전송
         console.log('🏫 학교 전체 관리자 일정 등록:', requestBody);
       } else if (classroomId) {
-        // 일반 교사인 경우: classroom_id 포함
         requestBody.classroom_id = classroomId;
         console.log('📚 학급 교사 일정 등록:', requestBody);
       } else {
@@ -229,12 +248,25 @@ function SchedulePage() {
   // 선택된 날짜의 일정 필터링
   const getEventsForSelectedDate = () => {
     if (!selectedDate) return [];
+    
+    console.log('🔍 선택된 날짜:', selectedDate);
+    console.log('📅 전체 일정 목록:', schedules);
+    
     return schedules.filter(s => {
-      const isInDate = selectedDate >= s.start && selectedDate <= s.end;
-      const matchesSearch =
+      // 🔥 수정: 서버에서 받은 날짜를 안전하게 처리
+      const startDate = formatDateFromServer(s.start);
+      const endDate = formatDateFromServer(s.end);
+      const selectedDateStr = selectedDate;
+      
+      const isInDateRange = selectedDateStr >= startDate && selectedDateStr <= endDate;
+      
+      const matchesSearch = !searchKeyword || 
         s.title.toLowerCase().includes(searchKeyword.toLowerCase()) ||
-        s.description.toLowerCase().includes(searchKeyword.toLowerCase());
-      return isInDate && (!searchKeyword || matchesSearch);
+        (s.description && s.description.toLowerCase().includes(searchKeyword.toLowerCase()));
+      
+      console.log(`📊 일정 "${s.title}": 시작=${startDate}, 종료=${endDate}, 선택=${selectedDateStr}, 날짜범위=${isInDateRange}, 검색매치=${matchesSearch}, 학교전체=${s.school_wide}`);
+      
+      return isInDateRange && matchesSearch;
     });
   };
 
@@ -263,8 +295,8 @@ function SchedulePage() {
 
   // 날짜 포맷 함수
   const formatDateRange = (startDate, endDate) => {
-    const start = startDate.split('T')[0];
-    const end = endDate.split('T')[0];
+    const start = formatDateFromServer(startDate);
+    const end = formatDateFromServer(endDate);
     
     if (start === end) {
       return start;

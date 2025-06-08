@@ -291,61 +291,119 @@ function ProfilePage() {
         }}>
           <h3 style={{ marginBottom: '1rem', color: '#333' }}>🔕 채팅 방해금지 시간</h3>
           <p style={{ fontSize: '0.9rem', color: '#666', marginBottom: '1.5rem' }}>
-            지정된 시간에는 채팅 알림을 받지 않습니다.
+            지정된 시간에는 채팅 알림을 받지 않습니다. (선생님만 설정 가능)
           </p>
           
-          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* 🆕 현재 설정된 시간 표시 */}
+          {chatDndStart && chatDndEnd && (
+            <div style={{
+              backgroundColor: '#e8f5e8',
+              border: '1px solid #4caf50',
+              borderRadius: '8px',
+              padding: '1rem',
+              marginBottom: '1.5rem'
+            }}>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '0.5rem',
+                marginBottom: '0.5rem' 
+              }}>
+                <span style={{ fontSize: '1.2rem' }}>✅</span>
+                <strong style={{ color: '#2e7d32' }}>현재 설정된 방해금지 시간</strong>
+              </div>
+              <div style={{ 
+                fontSize: '1.1rem', 
+                color: '#1b5e20',
+                fontWeight: 'bold' 
+              }}>
+                🕐 {chatDndStart} ~ {chatDndEnd}
+              </div>
+              <div style={{ 
+                fontSize: '0.9rem', 
+                color: '#388e3c',
+                marginTop: '0.5rem' 
+              }}>
+                이 시간대에는 채팅 알림을 받지 않습니다.
+              </div>
+            </div>
+          )}
+
+          {/* 설정이 없을 때 안내 메시지 */}
+          {(!chatDndStart || !chatDndEnd) && (
+            <div style={{
+              backgroundColor: '#fff3cd',
+              border: '1px solid #ffc107',
+              borderRadius: '8px',
+              padding: '1rem',
+              marginBottom: '1.5rem'
+            }}>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '0.5rem',
+                color: '#856404' 
+              }}>
+                <span style={{ fontSize: '1.2rem' }}>⚠️</span>
+                <span>방해금지 시간이 설정되지 않았습니다.</span>
+              </div>
+            </div>
+          )}
+          
+          <div style={{ display: 'flex', gap: '2rem', alignItems: 'center', flexWrap: 'wrap' }}>
             <div>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                시작 시간:
-              </label>
-              <input
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>시작 시간:</label>
+              <input 
                 type="time"
                 value={chatDndStart}
-                onChange={(e) => {
-                  console.log('🕐 DND 시작 시간 변경:', e.target.value);
-                  setChatDndStart(e.target.value);
-                }}
-                style={{
+                onChange={(e) => setChatDndStart(e.target.value)}
+                style={{ 
                   padding: '0.5rem',
                   border: '1px solid #ccc',
-                  borderRadius: '4px',
+                  borderRadius: '6px',
                   fontSize: '1rem'
                 }}
               />
             </div>
-
             <div>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                종료 시간:
-              </label>
-              <input
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>종료 시간:</label>
+              <input 
                 type="time"
                 value={chatDndEnd}
-                onChange={(e) => {
-                  console.log('🕐 DND 종료 시간 변경:', e.target.value);
-                  setChatDndEnd(e.target.value);
-                }}
-                style={{
+                onChange={(e) => setChatDndEnd(e.target.value)}
+                style={{ 
                   padding: '0.5rem',
                   border: '1px solid #ccc',
-                  borderRadius: '4px',
+                  borderRadius: '6px',
                   fontSize: '1rem'
                 }}
               />
             </div>
           </div>
 
-          {/* 🔥 추가: 현재 설정된 시간 표시 */}
+          {/* 🆕 방해금지 시간 초기화 버튼 */}
           {(chatDndStart || chatDndEnd) && (
-            <div style={{ 
-              marginTop: '1rem', 
-              padding: '0.75rem', 
-              backgroundColor: '#e7f3ff', 
-              borderRadius: '6px',
-              fontSize: '0.9rem'
-            }}>
-              <strong>현재 설정:</strong> {chatDndStart || '미설정'} ~ {chatDndEnd || '미설정'}
+            <div style={{ marginTop: '1rem' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setChatDndStart('');
+                  setChatDndEnd('');
+                }}
+                style={{
+                  backgroundColor: '#dc3545',
+                  color: 'white',
+                  border: 'none',
+                  padding: '0.5rem 1rem',
+                  borderRadius: '6px',
+                  fontSize: '0.9rem',
+                  cursor: 'pointer'
+                }}
+                onMouseOver={(e) => e.target.style.backgroundColor = '#c82333'}
+                onMouseOut={(e) => e.target.style.backgroundColor = '#dc3545'}
+              >
+                🗑️ 방해금지 시간 해제
+              </button>
             </div>
           )}
         </div>
@@ -482,7 +540,7 @@ function ProfilePage() {
         
         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
           {/* 학교 관리자: 학교 삭제 */}
-          {user.is_admin && user.school_id && (
+          {user.is_admin && user.school_id ? (
             <button
               onClick={handleDeleteSchool}
               style={{
@@ -498,9 +556,9 @@ function ProfilePage() {
             >
               🏫 학교 삭제
             </button>
-          )}
+          ) : null}
           
-          {/* 🔥 수정: 모든 사용자 회원 탈퇴 - marginTop 제거 */}
+          {/* 🔥 수정: 회원 탈퇴 버튼 - 0 출력 제거 */}
           <button 
             onClick={handleDeleteAccount}
             style={{ 
@@ -514,7 +572,7 @@ function ProfilePage() {
               fontWeight: 'bold'
             }}
           >
-            👤 회원 탈퇴
+            🚫 회원 탈퇴
           </button>
         </div>
       </div>

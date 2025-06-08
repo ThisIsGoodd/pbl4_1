@@ -17,10 +17,11 @@ router.get('/profile', authenticateToken, async (req, res) => {
   const user_id = req.user.user_id;
 
   try {
-    // 1. 기본 사용자 정보
+    // 1. 기본 사용자 정보 (chat_dnd_start, chat_dnd_end 포함)
     const [userRows] = await db.query(`
       SELECT 
-        user_id, name, email, role, is_admin, school_id, profile_picture, child_name
+        user_id, name, email, role, is_admin, school_id, profile_picture, child_name,
+        chat_dnd_start, chat_dnd_end
       FROM users
       WHERE user_id = ?
     `, [user_id]);

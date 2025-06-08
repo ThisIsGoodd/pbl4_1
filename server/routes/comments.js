@@ -12,9 +12,9 @@ router.get('/posts/:postId', authenticateToken, async (req, res) => {
   const { user_id, role } = req.user;
   
   try {
-    // 🔥 수정: is_hidden 컬럼 추가 조회
+    // 🔥 수정: child_name 컬럼 추가 조회
     const [comments] = await db.query(
-      `SELECT comments.*, users.name AS author_name, users.role AS author_role
+      `SELECT comments.*, users.name AS author_name, users.role AS author_role, users.child_name
        FROM comments
        JOIN users ON comments.author_id = users.user_id
        WHERE comments.post_id = ?

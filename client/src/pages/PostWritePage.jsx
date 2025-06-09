@@ -91,13 +91,10 @@ function PostWritePage() {
         .then(data => {
           console.log('🔍 학급 API 응답:', data);
           
-          // 🔥 수정: data 자체가 classroom 객체인 경우도 처리
-          const classroom = data.classroom || data;
-          
-          // 🔥 classroom_id가 있는지 확인 (유효한 학급 정보인지 확인)
-          if (classroom && (classroom.classroom_id || classroom.grade)) {
-            setClassroomInfo(classroom);
-            console.log('✅ 학급 정보 로드 성공:', classroom);
+          // 🔥 수정: 서버에서 data를 직접 반환하므로 data를 그대로 사용
+          if (data && (data.classroom_id || data.grade)) {
+            setClassroomInfo(data);
+            console.log('✅ 학급 정보 로드 성공:', data);
           } else {
             throw new Error('학급 정보가 유효하지 않습니다');
           }
@@ -210,9 +207,12 @@ function PostWritePage() {
       ) : classroomInfo && (
         <>
           <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#f9f9f9', borderRadius: '8px' }}>
+          {/* 🆕 일반 교사인 경우 학교 정보 표시 */}
+          {classroomInfo && (
             <p style={{ fontWeight: 'bold', color: '#333' }}>
-              {classroomInfo.school_name} {classroomInfo.grade}학년 {classroomInfo.class_number}반
+              {classroomInfo.school} {classroomInfo.grade}학년 {classroomInfo.class_number}반
             </p>
+          )}
           </div>
 
           {/* 🆕 일반 교사는 게시 범위 선택 가능 */}

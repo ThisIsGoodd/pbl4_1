@@ -96,7 +96,7 @@ function Navigation() {
     } else if (isAdminCreator) {
       navigate('/admin/main');
     } else if (isTeacher && teacherClassroomId) {
-      navigate(`/classroom/dashboard?classroom_id=${teacherClassroomId}`);
+      navigate(`/main?classroom_id=${teacherClassroomId}`);
     } else if (isJoinedClass) {
       navigate(`/main?classroom_id=${classroomId}`);
     } else {

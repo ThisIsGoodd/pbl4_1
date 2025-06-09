@@ -69,8 +69,8 @@ function LoginPage() {
                 navigate('/join/invite');
               }
             } else if (user.role === 'teacher') {
-              if (user.is_admin) {
-                navigate('/admindashboard');
+              if (user.is_admin && user.school_id) {
+                navigate('/admin/main');
               } else if (user.classroom_id) {
                 navigate(`/main?classroom_id=${user.classroom_id}`);
               } else {

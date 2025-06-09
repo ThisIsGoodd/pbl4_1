@@ -117,13 +117,28 @@ export function AuthProvider({ children }) {
             return;
           }
 
-          // ✅ 관리자인 교사는 관리자 대시보드로
-          if (user.is_admin) {
-            navigate('/admindashboard');
-            return;
+          // 🔥 수정: 학교 전체 관리자인 경우 관리자 메인으로
+          if (user.is_admin && user.school_id) {
+            // 학교 생성자인지 확인
+            try {
+              const schoolRes = await fetch(`http://localhost:3001/api/schools/${user.school_id}`, {
+                headers: { Authorization: `Bearer ${token}` }
+              });
+              
+              if (schoolRes.ok) {
+                const schoolData = await schoolRes.json();
+                if (schoolData.created_by === user.user_id) {
+                  // 학교 생성자(전체 관리자)는 관리자 메인으로
+                  navigate('/admin/main');
+                  return;
+                }
+              }
+            } catch (err) {
+              console.error('학교 정보 조회 실패:', err);
+            }
           }
 
-          // ✅ 학급이 있는 교사는 해당 학급으로
+          // 🔥 수정: 일반 교사는 학급 메인 페이지로 이동
           if (user.classroom_id) {
             navigate(`/main?classroom_id=${user.classroom_id}`);
             return;
@@ -140,6 +155,7 @@ export function AuthProvider({ children }) {
               if (classroomRes.ok) {
                 const classroomData = await classroomRes.json();
                 if (classroomData.classroom?.classroom_id) {
+                  // 🔥 수정: 학급 메인 페이지로 이동
                   navigate(`/main?classroom_id=${classroomData.classroom.classroom_id}`);
                 } else {
                   console.warn('학급 조회 중 오류:', classroomRes.status);

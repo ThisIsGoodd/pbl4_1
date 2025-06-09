@@ -70,6 +70,7 @@ function PostPage() {
         console.log('📚 학급 공지 조회:', url);
       } else {
         console.error('❌ classroomId 또는 schoolId가 필요합니다.');
+        setPosts([]); // 빈 배열로 설정
         return;
       }
 
@@ -81,6 +82,7 @@ function PostPage() {
       
       if (!res.ok) {
         console.error('❌ 게시글 조회 실패:', data);
+        setPosts([]); // 오류 시 빈 배열로 설정
         return;
       }
 
@@ -88,8 +90,8 @@ function PostPage() {
 
       // 🔥 필터링 로직
       if (isSchoolAdmin) {
-        // 학교 전체 관리자는 학교 전체 공지만 표시
-        filtered = filtered.filter(post => post.school_wide === true || post.school_wide === 1);
+        // 학교 전체 관리자는 학교 전체 공지만 표시 (서버에서 이미 필터링됨)
+        console.log('🏫 학교 전체 관리자 - 필터링 불필요');
       } else {
         // 일반 사용자는 scope에 따라 필터링
         if (scope === 'classroom') {
@@ -100,7 +102,7 @@ function PostPage() {
       }
 
       // 검색 필터링
-      if (searchQuery && keywordFromNav) {
+      if (searchQuery) {
         filtered = filtered.filter(post =>
           post.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
           post.content.toLowerCase().includes(searchQuery.toLowerCase())
@@ -118,6 +120,7 @@ function PostPage() {
       console.log('✅ 게시글 조회 완료:', filtered.length, '개');
     } catch (err) {
       console.error('🔥 게시글 목록 불러오기 실패:', err);
+      setPosts([]); // 오류 시 빈 배열로 설정
     }
   };
 

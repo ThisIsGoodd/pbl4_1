@@ -1,5 +1,5 @@
 // client/src/pages/PostWritePage.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -15,6 +15,9 @@ function PostWritePage() {
   const location = useLocation();
   const token = getToken();
   const user = getCurrentUser();
+  
+  // 🔥 중복 실행 방지를 위한 ref
+  const hasNavigatedRef = useRef(false);
 
   // URL 파라미터 파싱
   const searchParams = new URLSearchParams(location.search);
@@ -41,13 +44,18 @@ function PostWritePage() {
   });
 
   useEffect(() => {
+    // 🔥 이미 네비게이션이 실행되었으면 중단
+    if (hasNavigatedRef.current) return;
+
     if (!user) {
+      hasNavigatedRef.current = true;
       alert('로그인이 필요합니다.');
       navigate('/login');
       return;
     }
 
     if (user.role === 'parent') {
+      hasNavigatedRef.current = true;
       alert('학부모는 게시글을 작성할 수 없습니다.');
       navigate(-1);
       return;
@@ -74,22 +82,38 @@ function PostWritePage() {
       fetch(`http://localhost:3001/api/classrooms/${classroomId}`, {
         headers: { Authorization: `Bearer ${token}` }
       })
-        .then(res => res.json())
+        .then(res => {
+          if (!res.ok) {
+            throw new Error(`HTTP error! status: ${res.status}`);
+          }
+          return res.json();
+        })
         .then(data => {
-          if (data.classroom) {
-            setClassroomInfo(data.classroom);
-            console.log('📚 학급 정보 로드:', data.classroom);
+          console.log('🔍 학급 API 응답:', data);
+          
+          // 🔥 수정: data 자체가 classroom 객체인 경우도 처리
+          const classroom = data.classroom || data;
+          
+          // 🔥 classroom_id가 있는지 확인 (유효한 학급 정보인지 확인)
+          if (classroom && (classroom.classroom_id || classroom.grade)) {
+            setClassroomInfo(classroom);
+            console.log('✅ 학급 정보 로드 성공:', classroom);
           } else {
-            alert('학급 정보를 찾을 수 없습니다.');
-            navigate(-1);
+            throw new Error('학급 정보가 유효하지 않습니다');
           }
         })
         .catch(err => {
           console.error('🔥 학급 정보 조회 오류:', err);
-          alert('학급 정보 조회 중 오류가 발생했습니다.');
-          navigate(-1);
+          
+          // 🔥 중복 실행 방지
+          if (!hasNavigatedRef.current) {
+            hasNavigatedRef.current = true;
+            alert('학급 정보를 찾을 수 없습니다.');
+            navigate(-1);
+          }
         });
     } else if (!classroomId && user.role === 'teacher') {
+      hasNavigatedRef.current = true;
       alert('학급 정보가 필요합니다.');
       navigate(-1);
     }
@@ -178,299 +202,134 @@ function PostWritePage() {
 
       {/* 🆕 학교 전체 관리자인 경우 학교 정보 표시 */}
       {isSchoolAdmin ? (
-        <div style={{ 
-          marginBottom: '1.5rem', 
-          fontWeight: 'bold', 
-          padding: '1rem', 
-          backgroundColor: '#e3f2fd', 
-          borderRadius: '8px',
-          border: '1px solid #90caf9',
-          textAlign: 'center'
-        }}>
-          🏫 <strong>학교 전체 공지사항</strong>으로 작성됩니다.
-          <div style={{ fontSize: '0.9rem', marginTop: '0.5rem', color: '#1565c0' }}>
-            모든 학급의 학생과 학부모가 볼 수 있습니다.
-          </div>
+        <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#f9f9f9', borderRadius: '8px' }}>
+          <p style={{ color: '#666', fontSize: '0.95rem' }}>
+            ⚠️ 학교 전체 관리자는 학교 전체 공지사항만 작성할 수 있습니다.
+          </p>
         </div>
-      ) : classroomInfo ? (
-        <p style={{ 
-          marginBottom: '1.5rem', 
-          fontWeight: 'bold', 
-          padding: '1rem', 
-          backgroundColor: '#f3f4f6', 
-          borderRadius: '8px',
-          textAlign: 'center'
-        }}>
-          📚 대상 학급: {classroomInfo.grade}학년 {classroomInfo.class_number}반 ({classroomInfo.school})
-        </p>
-      ) : null}
-
-      {/* 🔥 공지사항 유형 선택 (일반 교사만 표시) */}
-      {!isSchoolAdmin && classroomInfo && (
-        <div style={{ 
-          marginBottom: '2rem', 
-          padding: '1.5rem', 
-          border: '2px solid #e5e7eb', 
-          borderRadius: '12px', 
-          backgroundColor: '#fafbfc' 
-        }}>
-          <h3 style={{ 
-            margin: '0 0 1rem 0', 
-            fontWeight: '600', 
-            color: '#374151', 
-            fontSize: '1.1rem',
-            textAlign: 'center'
-          }}>
-            📢 공지사항 유형을 선택하세요
-          </h3>
-          
-          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-            {/* 학급 공지 옵션 */}
-            <label style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              cursor: 'pointer',
-              padding: '1.5rem 2rem',
-              border: `3px solid ${postType === 'classroom' ? '#3b82f6' : '#e5e7eb'}`,
-              borderRadius: '12px',
-              backgroundColor: postType === 'classroom' ? '#eff6ff' : 'white',
-              transition: 'all 0.2s ease',
-              minWidth: '200px',
-              boxShadow: postType === 'classroom' ? '0 4px 12px rgba(59, 130, 246, 0.15)' : '0 2px 4px rgba(0,0,0,0.05)'
-            }}>
-              <input
-                type="radio"
-                name="postType"
-                value="classroom"
-                checked={postType === 'classroom'}
-                onChange={(e) => setPostType(e.target.value)}
-                style={{ display: 'none' }}
-              />
-              <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>📚</div>
-              <div style={{ 
-                fontWeight: 'bold', 
-                fontSize: '1rem', 
-                color: postType === 'classroom' ? '#1d4ed8' : '#374151',
-                marginBottom: '0.5rem'
-              }}>
-                학급 공지사항
-              </div>
-              <div style={{ 
-                fontSize: '0.85rem', 
-                color: '#6b7280', 
-                textAlign: 'center',
-                lineHeight: '1.4'
-              }}>
-                우리 학급 학생들에게만<br/>표시되는 공지사항
-              </div>
-            </label>
-
-            {/* 학교 전체 공지 옵션 */}
-            <label style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              cursor: 'pointer',
-              padding: '1.5rem 2rem',
-              border: `3px solid ${postType === 'school' ? '#10b981' : '#e5e7eb'}`,
-              borderRadius: '12px',
-              backgroundColor: postType === 'school' ? '#ecfdf5' : 'white',
-              transition: 'all 0.2s ease',
-              minWidth: '200px',
-              boxShadow: postType === 'school' ? '0 4px 12px rgba(16, 185, 129, 0.15)' : '0 2px 4px rgba(0,0,0,0.05)'
-            }}>
-              <input
-                type="radio"
-                name="postType"
-                value="school"
-                checked={postType === 'school'}
-                onChange={(e) => setPostType(e.target.value)}
-                style={{ display: 'none' }}
-              />
-              <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🏫</div>
-              <div style={{ 
-                fontWeight: 'bold', 
-                fontSize: '1rem', 
-                color: postType === 'school' ? '#047857' : '#374151',
-                marginBottom: '0.5rem'
-              }}>
-                학교 전체 공지사항
-              </div>
-              <div style={{ 
-                fontSize: '0.85rem', 
-                color: '#6b7280', 
-                textAlign: 'center',
-                lineHeight: '1.4'
-              }}>
-                학교 전체 학급에<br/>표시되는 중요 공지사항
-              </div>
-            </label>
+      ) : classroomInfo && (
+        <>
+          <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#f9f9f9', borderRadius: '8px' }}>
+            <p style={{ fontWeight: 'bold', color: '#333' }}>
+              {classroomInfo.school_name} {classroomInfo.grade}학년 {classroomInfo.class_number}반
+            </p>
           </div>
 
-          {/* 🆕 선택된 유형에 따른 안내 메시지 */}
-          <div style={{
-            marginTop: '1rem',
-            padding: '0.75rem 1rem',
-            backgroundColor: postType === 'school' ? '#fef3c7' : '#dbeafe',
-            border: `1px solid ${postType === 'school' ? '#f59e0b' : '#3b82f6'}`,
-            borderRadius: '8px',
-            textAlign: 'center',
-            fontSize: '0.9rem'
-          }}>
-            {postType === 'school' ? (
-              <span style={{ color: '#92400e' }}>
-                ⚠️ <strong>학교 전체 공지</strong>는 모든 학급에 표시되므로 신중하게 작성해주세요.
-              </span>
-            ) : (
-              <span style={{ color: '#1e40af' }}>
-                ℹ️ <strong>학급 공지</strong>는 {classroomInfo?.grade}학년 {classroomInfo?.class_number}반 학생들에게만 표시됩니다.
-              </span>
-            )}
+          {/* 🆕 일반 교사는 게시 범위 선택 가능 */}
+          <div style={{ marginBottom: '1.5rem' }}>
+            <label style={{ fontWeight: 'bold', marginBottom: '0.5rem', display: 'block' }}>
+              게시 범위 선택:
+            </label>
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <label>
+                <input
+                  type="radio"
+                  value="classroom"
+                  checked={postType === 'classroom'}
+                  onChange={(e) => setPostType(e.target.value)}
+                />
+                <span style={{ marginLeft: '0.5rem' }}>📚 학급 공지 (우리 반만)</span>
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  value="school"
+                  checked={postType === 'school'}
+                  onChange={(e) => setPostType(e.target.value)}
+                />
+                <span style={{ marginLeft: '0.5rem' }}>🏫 학교 공지 (전체 학교)</span>
+              </label>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       <form onSubmit={handleSubmit}>
-        {/* 제목 입력 */}
         <div style={{ marginBottom: '1.5rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-            제목 <span style={{ color: 'red' }}>*</span>
+          <label style={{ fontWeight: 'bold', marginBottom: '0.5rem', display: 'block' }}>
+            제목 (50자 이내)
           </label>
           <input
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="제목을 입력하세요 (최대 50자)"
-            maxLength={50}
             style={{
               width: '100%',
               padding: '0.75rem',
+              fontSize: '1rem',
               border: '1px solid #d1d5db',
               borderRadius: '8px',
-              fontSize: '1rem'
+              boxSizing: 'border-box',
             }}
-            required
+            placeholder="제목을 입력하세요"
           />
-          <div style={{ fontSize: '0.8rem', color: '#6b7280', marginTop: '0.25rem' }}>
-            {title.length}/50자
-          </div>
         </div>
 
-        {/* 내용 입력 */}
         <div style={{ marginBottom: '1.5rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-            내용 <span style={{ color: 'red' }}>*</span>
+          <label style={{ fontWeight: 'bold', marginBottom: '0.5rem', display: 'block' }}>
+            내용 (1000자 이내)
           </label>
-          
-          {/* 에디터 툴바 */}
-          <div style={{ 
-            marginBottom: '0.5rem', 
-            padding: '0.5rem', 
-            backgroundColor: '#f9fafb', 
-            borderRadius: '8px 8px 0 0',
-            border: '1px solid #d1d5db',
-            borderBottom: 'none'
-          }}>
-            <button
-              type="button"
-              onClick={() => editor?.chain().focus().toggleBold().run()}
-              style={{
-                padding: '0.25rem 0.5rem',
-                margin: '0 0.25rem',
-                border: '1px solid #d1d5db',
-                borderRadius: '4px',
-                backgroundColor: editor?.isActive('bold') ? '#3b82f6' : 'white',
-                color: editor?.isActive('bold') ? 'white' : 'black',
-                cursor: 'pointer'
-              }}
-            >
-              <strong>B</strong>
-            </button>
-            <button
-              type="button"
-              onClick={() => editor?.chain().focus().toggleItalic().run()}
-              style={{
-                padding: '0.25rem 0.5rem',
-                margin: '0 0.25rem',
-                border: '1px solid #d1d5db',
-                borderRadius: '4px',
-                backgroundColor: editor?.isActive('italic') ? '#3b82f6' : 'white',
-                color: editor?.isActive('italic') ? 'white' : 'black',
-                cursor: 'pointer'
-              }}
-            >
-              <em>I</em>
-            </button>
-            <label style={{
-              padding: '0.25rem 0.5rem',
-              margin: '0 0.25rem',
-              border: '1px solid #d1d5db',
-              borderRadius: '4px',
-              backgroundColor: 'white',
-              cursor: 'pointer'
-            }}>
-              📷 이미지
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                style={{ display: 'none' }}
-              />
-            </label>
-          </div>
-          
           <EditorContent editor={editor} />
-          <div style={{ fontSize: '0.8rem', color: '#6b7280', marginTop: '0.25rem' }}>
-            ⚠️ 내용은 1000자 이내로 작성해주세요.
-          </div>
         </div>
 
-        {/* 첨부파일 */}
-        <div style={{ marginBottom: '2rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-            첨부파일 (선택사항)
+        <div style={{ marginBottom: '1.5rem' }}>
+          <label style={{ fontWeight: 'bold', marginBottom: '0.5rem', display: 'block' }}>
+            이미지 추가
+          </label>
+          <input type="file" accept="image/*" onChange={handleImageUpload} />
+        </div>
+
+        <div style={{ marginBottom: '1.5rem' }}>
+          <label style={{ fontWeight: 'bold', marginBottom: '0.5rem', display: 'block' }}>
+            파일 첨부 (최대 3개)
           </label>
           <input
             type="file"
             multiple
-            onChange={(e) => setFiles(Array.from(e.target.files))}
-            style={{
-              width: '100%',
-              padding: '0.75rem',
-              border: '1px solid #d1d5db',
-              borderRadius: '8px'
+            onChange={(e) => {
+              const selectedFiles = Array.from(e.target.files).slice(0, 3);
+              setFiles(selectedFiles);
             }}
           />
           {files.length > 0 && (
-            <div style={{ marginTop: '0.5rem', fontSize: '0.9rem', color: '#6b7280' }}>
-              선택된 파일: {files.map(f => f.name).join(', ')}
-            </div>
+            <ul style={{ marginTop: '0.5rem' }}>
+              {files.map((file, idx) => (
+                <li key={idx} style={{ color: '#666' }}>{file.name}</li>
+              ))}
+            </ul>
           )}
         </div>
 
-        {/* 작성 버튼 */}
-        <button
-          type="submit"
-          style={{
-            width: '100%',
-            padding: '1rem',
-            backgroundColor: isSchoolAdmin ? '#28a745' : (postType === 'school' ? '#10b981' : '#3b82f6'),
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            fontSize: '1.1rem',
-            fontWeight: 'bold',
-            cursor: 'pointer',
-            transition: 'background-color 0.2s ease'
-          }}
-        >
-          {isSchoolAdmin 
-            ? '🏫 학교 전체 공지 작성' 
-            : postType === 'school' 
-            ? '🏫 학교 전체 공지 작성' 
-            : '📚 학급 공지 작성'}
-        </button>
+        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            style={{
+              padding: '0.75rem 1.5rem',
+              backgroundColor: '#ccc',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontSize: '1rem',
+            }}
+          >
+            취소
+          </button>
+          <button
+            type="submit"
+            style={{
+              padding: '0.75rem 1.5rem',
+              backgroundColor: '#3b82f6',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontSize: '1rem',
+            }}
+          >
+            작성 완료
+          </button>
+        </div>
       </form>
     </div>
   );

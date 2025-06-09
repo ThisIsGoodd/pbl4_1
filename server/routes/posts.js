@@ -175,36 +175,65 @@ router.post('/', authenticateToken, upload.array('files', 10), async (req, res) 
 // 🔥 게시글 목록 조회 - 수정된 버전
 router.get('/', authenticateToken, async (req, res) => {
   const { user_id } = req.user;
-  const { search, classroom_id } = req.query;
-
-  if (!classroom_id) {
-    return res.status(400).json({ error: 'classroom_id가 필요합니다.' });
-  }
+  const { search, classroom_id, school_id } = req.query;
 
   try {
-    // school_id는 user_schools에서 가져와서 조건으로 사용
-    const [[schoolRow]] = await db.query(
-      'SELECT school_id FROM user_schools WHERE user_id = ? LIMIT 1',
-      [user_id]
-    );
-    const school_id = schoolRow?.school_id || null;
+    let query = '';
+    let params = [];
 
-    // 🔥 수정: 학교 전체 공지를 위한 JOIN 쿼리 수정
-    let query = `
-      SELECT DISTINCT posts.*, users.name AS author_name
-      FROM posts
-      JOIN users ON posts.author_id = users.user_id
-      WHERE (
-        posts.classroom_id = ? 
-        OR (
-          posts.school_wide = TRUE 
-          AND posts.classroom_id IN (
-            SELECT classroom_id FROM classrooms WHERE school_id = ?
+    // 🆕 학교 전체 공지만 조회하는 경우 (학교 전체 관리자)
+    if (school_id && !classroom_id) {
+      console.log('🏫 학교 전체 공지만 조회');
+      
+      // 요청자가 해당 학교의 관리자인지 확인
+      const [[userSchoolRow]] = await db.query(
+        'SELECT school_id FROM user_schools WHERE user_id = ? AND school_id = ?',
+        [user_id, school_id]
+      );
+
+      if (!userSchoolRow) {
+        return res.status(403).json({ error: '해당 학교에 접근 권한이 없습니다.' });
+      }
+
+      query = `
+        SELECT DISTINCT posts.*, users.name AS author_name
+        FROM posts
+        JOIN users ON posts.author_id = users.user_id
+        JOIN classrooms ON posts.classroom_id = classrooms.classroom_id
+        WHERE posts.school_wide = TRUE 
+          AND classrooms.school_id = ?
+      `;
+      params = [school_id];
+    } 
+    // 기존 로직: 특정 학급의 공지 + 학교 전체 공지
+    else if (classroom_id) {
+      console.log('📚 학급 공지 + 학교 전체 공지 조회');
+      
+      // school_id는 user_schools에서 가져와서 조건으로 사용
+      const [[schoolRow]] = await db.query(
+        'SELECT school_id FROM user_schools WHERE user_id = ? LIMIT 1',
+        [user_id]
+      );
+      const userSchoolId = schoolRow?.school_id || null;
+
+      query = `
+        SELECT DISTINCT posts.*, users.name AS author_name
+        FROM posts
+        JOIN users ON posts.author_id = users.user_id
+        WHERE (
+          posts.classroom_id = ? 
+          OR (
+            posts.school_wide = TRUE 
+            AND posts.classroom_id IN (
+              SELECT classroom_id FROM classrooms WHERE school_id = ?
+            )
           )
         )
-      )
-    `;
-    const params = [classroom_id, school_id];
+      `;
+      params = [classroom_id, userSchoolId];
+    } else {
+      return res.status(400).json({ error: 'classroom_id 또는 school_id가 필요합니다.' });
+    }
 
     if (search) {
       query += ` AND (posts.title LIKE ? OR posts.content LIKE ?)`;
@@ -215,6 +244,8 @@ router.get('/', authenticateToken, async (req, res) => {
     query += ` ORDER BY posts.created_at DESC`;
 
     const [postRows] = await db.query(query, params);
+    
+    console.log('✅ [posts GET] 게시글 조회 완료:', postRows.length, '개');
     res.json({ posts: postRows });
   } catch (err) {
     console.error('🔥 게시글 조회 오류:', err);
@@ -565,5 +596,52 @@ router.post('/:id/comments', authenticateToken, async (req, res) => {
   }
 });
 
+router.get('/school-posts', authenticateToken, async (req, res) => {
+  const { user_id } = req.user;
+  const { school_id, search } = req.query;
+
+  if (!school_id) {
+    return res.status(400).json({ error: 'school_id가 필요합니다.' });
+  }
+
+  try {
+    // 요청자가 해당 학교의 관리자인지 확인
+    const [[userSchoolRow]] = await db.query(
+      'SELECT school_id, role FROM user_schools WHERE user_id = ? AND school_id = ?',
+      [user_id, school_id]
+    );
+
+    if (!userSchoolRow) {
+      return res.status(403).json({ error: '해당 학교에 접근 권한이 없습니다.' });
+    }
+
+    // 🔥 학교 전체 공지사항만 조회
+    let query = `
+      SELECT DISTINCT posts.*, users.name AS author_name
+      FROM posts
+      JOIN users ON posts.author_id = users.user_id
+      JOIN classrooms ON posts.classroom_id = classrooms.classroom_id
+      WHERE posts.school_wide = TRUE 
+        AND classrooms.school_id = ?
+    `;
+    const params = [school_id];
+
+    if (search) {
+      query += ` AND (posts.title LIKE ? OR posts.content LIKE ?)`;
+      const likeKeyword = `%${search}%`;
+      params.push(likeKeyword, likeKeyword);
+    }
+
+    query += ` ORDER BY posts.created_at DESC`;
+
+    const [postRows] = await db.query(query, params);
+    
+    console.log('✅ [school-posts GET] 학교 전체 공지 조회:', postRows.length, '개');
+    res.json({ posts: postRows });
+  } catch (err) {
+    console.error('🔥 학교 전체 공지 조회 오류:', err);
+    res.status(500).json({ error: '서버 오류', details: err.message });
+  }
+});
 
 module.exports = router;

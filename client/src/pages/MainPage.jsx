@@ -80,8 +80,11 @@ function MainPage() {
       .then(data => {
         if (data.schedules) {
           setAllSchedules(data.schedules);
-          const today = new Date().toISOString().split('T')[0];
-          const filtered = data.schedules.filter(e => e.start <= today && e.end >= today);
+          
+          // 🔥 수정된 부분: 오늘 일정 필터링 - UTC 변환 없이 로컬 날짜 사용
+          const today = new Date();
+          const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+          const filtered = data.schedules.filter(e => e.start <= todayStr && e.end >= todayStr);
           setTodayEvents(filtered);
         }
       });
@@ -154,9 +157,16 @@ function MainPage() {
     return days;
   };
 
+  // 🔥 수정된 함수: UTC 변환 없이 로컬 날짜 사용
   const getEventsForDate = (date) => {
     if (!date) return [];
-    const dateStr = date.toISOString().split('T')[0];
+    
+    // 로컬 시간대로 날짜 문자열 생성 (UTC 변환 없이)
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+    
     return allSchedules.filter(event => {
       return dateStr >= event.start && dateStr <= event.end;
     });
@@ -229,56 +239,35 @@ function MainPage() {
             minHeight: isMobile ? '200px' : '300px'
           }}>
             {classPhoto ? (
-              <img
-                src={classPhoto}
-                alt="단체사진"
-                style={styles.classPhoto}
-                onError={(e) => {
-                  e.target.style.display = 'none';
-                  setClassPhoto('');
-                }}
+              <img 
+                src={classPhoto} 
+                alt="단체사진" 
+                style={{ 
+                  width: '100%', 
+                  height: '100%', 
+                  objectFit: 'contain',
+                  borderRadius: '8px'
+                }} 
               />
             ) : (
-              <div style={styles.photoPlaceholder}>
-                <div style={{ fontSize: isMobile ? '2rem' : '3rem', marginBottom: '1rem' }}>📸</div>
-                <div>단체 사진 없음</div>
-                {isTeacher && (
-                  <div style={{ marginTop: '1rem', fontSize: '0.9rem' }}>
-                    아래 버튼으로 사진을 업로드하세요
-                  </div>
-                )}
-              </div>
+              <p style={{ textAlign: 'center', color: '#999' }}>단체사진 없음</p>
             )}
-            {/* 교사만 업로드 버튼 표시 */}
             {isTeacher && (
-              <div style={styles.uploadButtonContainer}>
+              <label style={styles.uploadLabel}>
                 <input
                   type="file"
-                  id="photoUpload"
                   accept="image/*"
                   onChange={handlePhotoUpload}
                   style={{ display: 'none' }}
                   disabled={uploadingPhoto}
                 />
-                <label 
-                  htmlFor="photoUpload" 
-                  style={{
-                    ...styles.uploadButton,
-                    opacity: uploadingPhoto ? 0.7 : 1,
-                    cursor: uploadingPhoto ? 'not-allowed' : 'pointer'
-                  }}
-                >
-                  {uploadingPhoto ? '업로드 중...' : classPhoto ? '📷 사진 변경' : '📷 사진 업로드'}
-                </label>
-              </div>
+                📷 {uploadingPhoto ? '업로드 중...' : '사진 변경'}
+              </label>
             )}
           </div>
 
-          <div style={{
-            ...styles.noticeBox,
-            minHeight: isMobile ? '150px' : 'auto'
-          }}>
-            <h3>📌 최근 공지사항</h3>
+          <div style={styles.noticeSection}>
+            <h3>📢 최근 공지</h3>
             <ul style={{ listStyle: 'none', padding: 0 }}>
               {posts.length === 0 ? (
                 <li>공지사항 없음</li>
@@ -418,124 +407,81 @@ function MainPage() {
 const styles = {
   wrapper: {
     padding: '2rem',
-    width: '100%',
     maxWidth: '1200px',
     margin: '0 auto'
   },
   mobileWrapper: {
-    padding: '1rem',
-    width: '100%'
+    padding: '1rem'
   },
   title: {
-    fontWeight: 'bold',
-    textAlign: 'center'
+    textAlign: 'center',
+    color: '#333'
   },
   layout: {
     display: 'flex',
-    gap: '2rem',
-    marginTop: '2rem',
-    minHeight: '80vh',
-    height: 'auto'
+    gap: '2rem'
   },
   mobileLayout: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '1rem',
-    marginTop: '1rem'
+    gap: '1.5rem'
   },
   left: {
-    flex: 6,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '2rem',
-    height: 'fit-content'
+    flex: 1
   },
   mobileLeft: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '1rem'
+    width: '100%'
+  },
+  right: {
+    flex: 1
+  },
+  mobileRight: {
+    width: '100%'
   },
   photoBox: {
-    flex: 4,
-    border: '1px solid #ccc',
-    backgroundColor: '#f8f8f8',
-    display: 'flex',
-    flexDirection: 'column',
-    position: 'relative',
+    border: '1px solid #ddd',
     borderRadius: '8px',
-    overflow: 'hidden'
-  },
-  classPhoto: {
-    width: '100%',
-    height: '100%', 
-    objectFit: 'cover',
-    borderRadius: '8px'
-  },
-  photoPlaceholder: {
-    textAlign: 'center', 
-    color: '#777',
+    padding: '1rem',
+    marginBottom: '1.5rem',
+    backgroundColor: '#fafafa',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    height: '100%'
+    position: 'relative'
   },
-  uploadButtonContainer: {
-    position: 'absolute',
-    bottom: '10px',
-    left: '50%',
-    transform: 'translateX(-50%)',
-    zIndex: 2
-  },
-  uploadButton: {
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    color: 'white',
-    padding: '8px 16px',
-    borderRadius: '20px',
-    fontSize: '0.9rem',
-    border: 'none',
-    display: 'inline-block',
-    textDecoration: 'none'
-  },
-  noticeBox: {
-    flex: 4,
-    border: '1px solid #ccc',
-    padding: '1rem',
-    backgroundColor: '#fff',
-    overflowY: 'auto',
-    borderRadius: '8px'
-  },
-  right: {
-    flex: 4,
-    border: '1px solid #ccc',
-    padding: '1rem',
-    backgroundColor: '#fff',
-    borderRadius: '8px',
-    display: 'flex',
-    flexDirection: 'column'
-  },
-  mobileRight: {
-    border: '1px solid #ccc',
-    padding: '1rem',
-    backgroundColor: '#fff',
-    borderRadius: '8px',
-    display: 'flex',
-    flexDirection: 'column'
-  },
-  todaySection: {
-    marginBottom: '1rem'
-  },
-  scheduleButton: {
+  uploadLabel: {
     marginTop: '1rem',
     padding: '0.5rem 1rem',
     backgroundColor: '#007bff',
     color: 'white',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '0.9rem'
+  },
+  noticeSection: {
+    padding: '1rem',
+    backgroundColor: '#f8f9fa',
+    borderRadius: '8px'
+  },
+  todaySection: {
+    padding: '1rem',
+    backgroundColor: '#e8f4fd',
+    borderRadius: '8px',
+    marginBottom: '1rem'
+  },
+  scheduleButton: {
+    marginTop: '1rem',
+    width: '100%',
+    padding: '0.5rem',
+    backgroundColor: '#28a745',
+    color: 'white',
     border: 'none',
-    borderRadius: '6px',
+    borderRadius: '4px',
     cursor: 'pointer'
   },
   calendarSection: {
-    flex: 1
+    marginTop: '1rem'
   },
   calendarContainer: {
     border: '1px solid #ddd',

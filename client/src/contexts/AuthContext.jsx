@@ -117,7 +117,7 @@ export function AuthProvider({ children }) {
             return;
           }
 
-          // 🔥 수정: 학교 전체 관리자인 경우 관리자 메인으로
+          // 🔥 수정: 학교 전체 관리자인 경우에만 관리자 메인으로
           if (user.is_admin && user.school_id) {
             // 학교 생성자인지 확인
             try {
@@ -138,13 +138,7 @@ export function AuthProvider({ children }) {
             }
           }
 
-          // 🔥 수정: 일반 교사는 학급 메인 페이지로 이동
-          if (user.classroom_id) {
-            navigate(`/main?classroom_id=${user.classroom_id}`);
-            return;
-          }
-
-          // ✅ 학급이 없는 교사 → 학교에 인증됐는지 확인
+          // 🔥 일반 교사는 먼저 자신의 학급 정보를 확인
           if (user.school_id) {
             try {
               // 내 학급 조회 시도
@@ -155,19 +149,26 @@ export function AuthProvider({ children }) {
               if (classroomRes.ok) {
                 const classroomData = await classroomRes.json();
                 if (classroomData.classroom?.classroom_id) {
-                  // 🔥 수정: 학급 메인 페이지로 이동
+                  // 🔥 학급이 있는 교사는 학급 메인 페이지로 이동
                   navigate(`/main?classroom_id=${classroomData.classroom.classroom_id}`);
-                } else {
-                  console.warn('학급 조회 중 오류:', classroomRes.status);
-                  navigate('/classroom/create');
+                  return;
                 }
               }
-              return;
             } catch (e) {
               console.warn('학급 조회 실패:', e);
-              navigate('/classroom/create');
-              return;
             }
+          }
+
+          // 🔥 user.classroom_id가 있는 경우 (구 버전 호환)
+          if (user.classroom_id) {
+            navigate(`/main?classroom_id=${user.classroom_id}`);
+            return;
+          }
+
+          // ✅ 학급이 없는 교사 → 학교에 인증됐는지 확인
+          if (user.school_id) {
+            navigate('/classroom/create');
+            return;
           }
 
           // ✅ 인증도 안 된 교사 → 요청 여부 확인

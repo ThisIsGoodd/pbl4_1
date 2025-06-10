@@ -56,7 +56,9 @@ function LoginPage() {
           
           // 역할 확인 후 적절한 페이지로 이동
           const user = profileData.user;
-          setTimeout(() => {
+          
+          // 로그인 직후 바로 리다이렉트하지 않고 AuthContext가 처리하도록 함
+          setTimeout(async () => {
             if (!user.role) {
               navigate('/select-role');
             } else if (user.role === 'superadmin') {
@@ -69,12 +71,50 @@ function LoginPage() {
                 navigate('/join/invite');
               }
             } else if (user.role === 'teacher') {
+              // 🔥 수정: 학교 생성자인지 확인
               if (user.is_admin && user.school_id) {
-                navigate('/admin/main');
-              } else if (user.classroom_id) {
+                try {
+                  const schoolRes = await fetch(`http://localhost:3001/api/schools/${user.school_id}`, {
+                    headers: { Authorization: `Bearer ${data.token}` }
+                  });
+                  
+                  if (schoolRes.ok) {
+                    const schoolData = await schoolRes.json();
+                    if (schoolData.created_by === user.user_id) {
+                      // 학교 생성자만 관리자 메인으로
+                      navigate('/admin/main');
+                      return;
+                    }
+                  }
+                } catch (err) {
+                  console.error('학교 정보 조회 실패:', err);
+                }
+              }
+              
+              // 🔥 일반 교사는 학급 조회
+              try {
+                const classroomRes = await fetch('http://localhost:3001/api/classrooms/my-classroom', {
+                  headers: { Authorization: `Bearer ${data.token}` }
+                });
+                
+                if (classroomRes.ok) {
+                  const classroomData = await classroomRes.json();
+                  if (classroomData.classroom?.classroom_id) {
+                    navigate(`/main?classroom_id=${classroomData.classroom.classroom_id}`);
+                    return;
+                  }
+                }
+              } catch (err) {
+                console.error('학급 조회 실패:', err);
+              }
+              
+              // 학급이 없으면
+              if (user.classroom_id) {
                 navigate(`/main?classroom_id=${user.classroom_id}`);
-              } else {
+              } else if (user.school_id) {
                 navigate('/classroom/create');
+              } else {
+                navigate('/teacher-auth');
               }
             }
           }, 100); // 약간의 딜레이로 상태 업데이트 완료 후 이동
@@ -123,30 +163,11 @@ function LoginPage() {
         {/* 구글 로그인 버튼 */}
         <div style={{
           ...styles.loginSection,
-          maxWidth: isMobile ? '100%' : '320px'
+          maxWidth: isMobile ? '300px' : '400px'
         }}>
           <GoogleLoginButton onSuccess={handleGoogleLogin} />
         </div>
-
-        {/* 추가 정보 (모바일에서만 표시) */}
-        {isMobile && (
-          <div style={styles.mobileInfo}>
-            <p style={styles.infoText}>
-              학교와 가정을 연결하는<br />
-              스마트한 소통 공간
-            </p>
-          </div>
-        )}
       </div>
-
-      {/* 푸터 (데스크톱에서만 표시) */}
-      {!isMobile && (
-        <div style={styles.footer}>
-          <p style={styles.footerText}>
-            학교와 가정을 연결하는 스마트한 소통 공간
-          </p>
-        </div>
-      )}
     </div>
   );
 }
@@ -154,85 +175,37 @@ function LoginPage() {
 const styles = {
   container: {
     minHeight: '100vh',
-    backgroundColor: '#f8f9fa',
     display: 'flex',
-    flexDirection: 'column',
-    position: 'relative',
-    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
-    transition: 'all 0.3s ease'
-  },
-  
-  loginText: {
-    position: 'absolute',
-    color: '#6c757d',
-    fontWeight: '500',
-    zIndex: 10,
-    transition: 'all 0.3s ease'
-  },
-  
-  content: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'center',
     alignItems: 'center',
-    margin: '0 auto',
-    width: '100%',
-    transition: 'all 0.3s ease'
+    justifyContent: 'center',
+    backgroundColor: '#f5f5f5',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
   },
-  
+  content: {
+    backgroundColor: '#fff',
+    borderRadius: '12px',
+    boxShadow: '0 2px 20px rgba(0, 0, 0, 0.1)',
+    width: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center'
+  },
   logoSection: {
     textAlign: 'center',
-    marginBottom: '3rem',
-    animation: 'fadeInUp 0.8s ease-out'
+    marginBottom: '2rem'
   },
-  
   logoImage: {
     height: 'auto',
-    objectFit: 'contain',
-    maxWidth: '90vw',
-    transition: 'all 0.3s ease',
-    filter: 'drop-shadow(0 4px 12px rgba(0, 0, 0, 0.1))'
+    objectFit: 'contain'
   },
-  
   subtitle: {
-    color: '#6c757d',
-    margin: '0',
-    fontWeight: '400',
-    transition: 'all 0.3s ease'
+    color: '#666',
+    marginTop: '0.5rem',
+    letterSpacing: '0.5px'
   },
-  
   loginSection: {
     width: '100%',
-    animation: 'fadeInUp 0.8s ease-out 0.2s both'
-  },
-
-  mobileInfo: {
-    marginTop: '2rem',
-    textAlign: 'center',
-    animation: 'fadeInUp 0.8s ease-out 0.4s both'
-  },
-
-  infoText: {
-    fontSize: '0.9rem',
-    color: '#8e9aaf',
-    lineHeight: '1.6',
-    margin: 0
-  },
-
-  footer: {
-    position: 'absolute',
-    bottom: '2rem',
-    left: '50%',
-    transform: 'translateX(-50%)',
-    textAlign: 'center'
-  },
-
-  footerText: {
-    fontSize: '0.9rem',
-    color: '#8e9aaf',
-    margin: 0,
-    opacity: 0.8
+    margin: '0 auto'
   }
 };
 

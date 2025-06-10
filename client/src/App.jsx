@@ -44,9 +44,12 @@ function AppRoutes() {
     }
   }, [user, location.pathname, navigate]);
 
+  // 로그인 페이지에서는 네비게이션 바를 숨김
+  const hideNavigation = location.pathname === '/';
+
   return (
     <>
-      <Navigation />
+      {!hideNavigation && <Navigation />}
       <Routes>
         <Route path="/" element={<LoginPage />} />
 
@@ -83,29 +86,28 @@ function AppRoutes() {
         <Route path="/chat" element={
           <RequireAuth><ChatPage /></RequireAuth>
         } />
-        <Route path="/superadmin/school-requests" element={
-          <RequireAuth><SuperAdminSchoolRequestPage /></RequireAuth>
-        } />
-        <Route path="/join/invite" element={
-          <RequireAuth><JoinInvitePage /></RequireAuth>
-        } />
-        <Route path="/join/info" element={
-          <RequireAuth><JoinInfoPage /></RequireAuth>
-        } />
+        <Route path="/join/invite" element={<JoinInvitePage />} />
+        <Route path="/join/info" element={<JoinInfoPage />} />
         <Route path="/classroom/create" element={
           <RequireAuth><ClassroomCreatePage /></RequireAuth>
         } />
         <Route path="/classroom/dashboard" element={
           <RequireAuth><ClassroomDashboardPage /></RequireAuth>
         } />
-        <Route path="/school/pending" element={
+        <Route path="/school-pending" element={
           <RequireAuth><SchoolPendingPage /></RequireAuth>
         } />
-        <Route path="/admin/request-school" element={
+        <Route path="/request-school" element={
           <RequireAuth><RequestSchoolPage /></RequireAuth>
         } />
         <Route path="/superadmin/schools" element={
           <RequireAuth><SuperAdminSchoolPage /></RequireAuth>
+        } />
+        <Route path="/superadmin/school-requests" element={
+          <RequireAuth><SuperAdminSchoolRequestPage /></RequireAuth>
+        } />
+        <Route path="/superadmin/inquiries" element={
+          <RequireAuth><SuperAdminInquiriesPage /></RequireAuth>
         } />
         <Route path="/admindashboard" element={
           <RequireAuth><AdminDashboard /></RequireAuth>
@@ -113,12 +115,8 @@ function AppRoutes() {
         <Route path="/admin/main" element={
           <RequireAuth><AdminMainPage /></RequireAuth>
         } />
-        {/* ✅ 문의사항 라우트 추가 */}
         <Route path="/inquiry/form" element={
           <RequireAuth><InquiryFormPage /></RequireAuth>
-        } />
-        <Route path="/superadmin/inquiries" element={
-          <RequireAuth><SuperAdminInquiriesPage /></RequireAuth>
         } />
       </Routes>
     </>

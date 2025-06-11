@@ -20,9 +20,9 @@ PostDetailPage.jsx(done)
 PostPage.jsx(done)
 PostWritePage.jsx(done)
 ProfilePage.jsx(done)
-RequestSchoolPage.jsx
-RoleSelectPage.jsx
-SchedulePage.jsx
+RequestSchoolPage.jsx(done)
+RoleSelectPage.jsx(done)
+SchedulePage.jsx(done)
 SchoolPendingPage.jsx
 SuperAdminInquiriesPage.jsx
 SuperAdminSchoolPage.jsx

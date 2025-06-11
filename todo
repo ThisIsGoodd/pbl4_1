@@ -10,16 +10,16 @@ ClassroomListPage.jsx(done)
 InquiryFormPage.jsx(done)
 JoinClassroomPage.jsx
 JoinCompletePage.jsx
-JoinInfoPage.jsx
-JoinInvitePage.jsx
-LoginPage.jsx
-MainPage.jsx
-NotificationSettingsPage.jsx
-NotificationsPage.jsx
-PostDetailPage.jsx
-PostPage.jsx
-PostWritePage.jsx
-ProfilePage.jsx
+JoinInfoPage.jsx(done)
+JoinInvitePage.jsx(done)
+LoginPage.jsx(done)
+MainPage.jsx(done)
+NotificationSettingsPage.jsx(사용 X)
+NotificationsPage.jsx(done)
+PostDetailPage.jsx(done)
+PostPage.jsx(done)
+PostWritePage.jsx(done)
+ProfilePage.jsx(done)
 RequestSchoolPage.jsx
 RoleSelectPage.jsx
 SchedulePage.jsx

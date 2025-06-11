@@ -281,7 +281,7 @@ function ProfilePage() {
             </div>
             <div className="user-badge">
               <span className="role-badge">{getRoleDisplayName(user.role)}</span>
-              {user.is_admin && <span className="admin-badge">관리자</span>}
+              {user.is_admin === true && <span className="admin-badge">관리자</span>}
             </div>
           </div>
         </div>
@@ -495,7 +495,7 @@ function ProfilePage() {
               
               <div className="danger-actions">
                 {/* 학교 생성자만 학교 삭제 버튼 표시 */}
-                {user.is_admin && user.school_id && isSchoolCreator && (
+                {user.is_admin === true && user.school_id && isSchoolCreator && (
                   <button
                     onClick={handleDeleteSchool}
                     className="danger-button school-delete"

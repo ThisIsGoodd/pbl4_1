@@ -13,9 +13,11 @@ function ChatPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchParams] = useSearchParams();
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  const [showSidebar, setShowSidebar] = useState(true);
   const classroomId = searchParams.get('classroom_id');
 
-  // 🔥 추가: 각 방의 참가자 정보 저장
+  // 각 방의 참가자 정보 저장
   const [roomParticipants, setRoomParticipants] = useState({});
 
   const token = localStorage.getItem('token');
@@ -29,6 +31,23 @@ function ChatPage() {
     date: '',
     time: ''
   });
+
+  // 반응형 처리
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowWidth(window.innerWidth);
+      if (window.innerWidth > 768) {
+        setShowSidebar(true);
+      } else if (selectedRoom) {
+        setShowSidebar(false);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [selectedRoom]);
+
+  const isMobile = windowWidth <= 768;
 
   // 학급 정보 불러오기
   useEffect(() => {
@@ -52,55 +71,47 @@ function ChatPage() {
       } catch (err) {
         console.error('학급 정보 불러오기 실패:', err);
         setError('학급 정보 불러오기 중 오류가 발생했습니다.');
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchClassroomInfo();
   }, [classroomId, token]);
 
-  // 🔥 수정: 채팅방 목록 불러오기 + 참가자 정보 조회
+  // 채팅방 목록 불러오기
   useEffect(() => {
     const fetchRooms = async () => {
       if (!classroomId) return;
 
       try {
-        console.log('🔍 채팅방 목록 요청:', classroomId);
-        
-        const res = await fetch(`http://localhost:3001/api/chat/rooms`, {
+        const res = await fetch(`http://localhost:3001/api/chat/rooms?classroom_id=${classroomId}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
-        
-        console.log('📡 채팅방 응답 상태:', res.status);
-        
         const data = await res.json();
-        console.log('📦 채팅방 데이터:', data);
         
-        if (res.ok) {
-          // 해당 학급과 관련된 채팅방만 필터링
-          const filteredRooms = (data.rooms || []).filter(room => 
-            room.classroom_id == classroomId || room.room_type === 'private'
-          );
-          setRooms(filteredRooms);
-
-          // 🔥 각 채팅방의 참가자 정보 조회
+        if (res.ok && data.rooms) {
+          setRooms(data.rooms);
+          
+          // 각 방의 참가자 정보 가져오기
           const participantsData = {};
-          for (const room of filteredRooms) {
+          for (const room of data.rooms) {
             try {
               const participantsRes = await fetch(`http://localhost:3001/api/chat/rooms/${room.room_id}/participants`, {
                 headers: { Authorization: `Bearer ${token}` }
               });
+              const participantsResult = await participantsRes.json();
               if (participantsRes.ok) {
-                const participantsResult = await participantsRes.json();
                 participantsData[room.room_id] = participantsResult.participants;
               }
             } catch (err) {
-              console.error('참가자 정보 조회 실패:', room.room_id, err);
+              console.error('참가자 정보 불러오기 실패:', err);
             }
           }
           setRoomParticipants(participantsData);
           
-          if (filteredRooms.length === 0) {
-            setError('채팅방이 없습니다. 학급에 제대로 가입되었는지 확인해주세요.');
+          if (data.rooms.length === 0) {
+            setError('가입되지 않은 학급입니다. 학급에 제대로 가입되었는지 확인해주세요.');
           }
         } else {
           setError('채팅방 목록 불러오기 실패: ' + data.error);
@@ -159,6 +170,11 @@ function ChatPage() {
     console.log('🏠 채팅방 선택:', room);
     
     setSelectedRoom(room);
+    
+    // 모바일에서는 사이드바 숨기기
+    if (isMobile) {
+      setShowSidebar(false);
+    }
     
     // Socket.io 방 참가
     socket.emit('joinRoom', room.room_id);
@@ -256,7 +272,7 @@ function ChatPage() {
     }
   };
 
-  // 🔥 수정된 채팅방 이름 생성 함수
+  // 채팅방 이름 생성 함수
   const getRoomDisplayName = (room) => {
     if (room.room_type === 'group') {
       // 단체방: 학년반 표시
@@ -285,7 +301,7 @@ function ChatPage() {
     }
   };
 
-  // 🔥 추가: 채팅방 헤더 부제목 생성 함수
+  // 채팅방 헤더 부제목 생성 함수
   const getRoomSubtitle = (room) => {
     if (room.room_type === 'group') {
       return '모든 학급 구성원과 대화';
@@ -304,7 +320,7 @@ function ChatPage() {
     }
   };
 
-  // 🔥 추가: 메시지 발신자 이름 표시 개선
+  // 메시지 발신자 이름 표시 개선
   const getSenderDisplayName = (message) => {
     if (message.sender_id === userId) {
       return '나';
@@ -325,572 +341,1011 @@ function ChatPage() {
 
   if (loading) {
     return (
-      <div style={styles.loadingContainer}>
-        <p>⏳ 채팅방을 불러오는 중...</p>
+      <div className="loading-container">
+        <div className="spinner"></div>
+        <div className="loading-text">채팅방을 불러오는 중...</div>
+
+        <style jsx>{`
+          .loading-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            gap: 1rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          }
+          
+          .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+          }
+          
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+          
+          .loading-text {
+            color: white;
+            font-size: 1.1rem;
+            font-weight: 500;
+          }
+        `}</style>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div style={styles.errorContainer}>
-        <h3>❌ 오류 발생</h3>
-        <p>{error}</p>
-        <button onClick={() => window.location.reload()}>
-          새로고침
-        </button>
+      <div className="error-container">
+        <div className="error-content">
+          <h3 className="error-title">❌ 오류 발생</h3>
+          <p className="error-message">{error}</p>
+          <button 
+            className="retry-button"
+            onClick={() => window.location.reload()}
+          >
+            새로고침
+          </button>
+        </div>
+
+        <style jsx>{`
+          .error-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 1rem;
+          }
+
+          .error-content {
+            background: white;
+            border-radius: 20px;
+            padding: 2rem;
+            text-align: center;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            max-width: 400px;
+            width: 100%;
+          }
+
+          .error-title {
+            font-size: 1.5rem;
+            color: #dc3545;
+            margin: 0 0 1rem 0;
+          }
+
+          .error-message {
+            color: #64748b;
+            margin: 0 0 1.5rem 0;
+            line-height: 1.5;
+          }
+
+          .retry-button {
+            padding: 0.75rem 2rem;
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+          }
+
+          .retry-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(79, 70, 229, 0.3);
+          }
+        `}</style>
       </div>
     );
   }
 
   return (
-    <div style={styles.container}>
-      <h2 style={styles.header}>
-        {classroomInfo
-          ? `${classroomInfo.grade}학년 ${classroomInfo.class_number}반 채팅`
-          : '채팅'}
-      </h2>
-
-      <div style={styles.chatContainer}>
-        {/* 왼쪽: 채팅방 목록 */}
-        <div style={styles.sidebar}>
-          <div style={styles.roomListHeader}>
-            <h3>채팅방 목록</h3>
+    <div className="chat-page">
+      <div className="chat-container">
+        {/* 헤더 */}
+        <div className="chat-header">
+          <div className="header-content">
+            <h2 className="header-title">
+              💬 {classroomInfo ? `${classroomInfo.grade}학년 ${classroomInfo.class_number}반 채팅` : '채팅'}
+            </h2>
+            {isMobile && (
+              <button 
+                className="sidebar-toggle"
+                onClick={() => setShowSidebar(!showSidebar)}
+              >
+                {showSidebar ? '✕' : '☰'}
+              </button>
+            )}
           </div>
-          
-          {rooms.length === 0 ? (
-            <p style={styles.noRooms}>채팅방이 없습니다.</p>
-          ) : (
-            <div style={styles.roomList}>
-              {rooms.map(room => (
-                <div
-                  key={room.room_id}
-                  style={{
-                    ...styles.roomItem,
-                    ...(selectedRoom?.room_id === room.room_id ? styles.roomItemActive : {})
-                  }}
-                  onClick={() => handleRoomClick(room)}
-                >
-                  <div style={styles.roomIcon}>
-                    {room.room_type === 'group' ? '👥' : '💬'}
-                  </div>
-                  <div style={styles.roomInfo}>
-                    <div style={styles.roomName}>
-                      {getRoomDisplayName(room)}
+        </div>
+
+        <div className="chat-layout">
+          {/* 사이드바 - 채팅방 목록 */}
+          <div className={`sidebar ${showSidebar ? 'show' : 'hide'}`}>
+            <div className="sidebar-header">
+              <h3 className="sidebar-title">채팅방 목록</h3>
+            </div>
+            
+            <div className="rooms-list">
+              {rooms.length === 0 ? (
+                <div className="empty-rooms">
+                  <div className="empty-icon">💬</div>
+                  <p className="empty-text">채팅방이 없습니다</p>
+                </div>
+              ) : (
+                rooms.map(room => (
+                  <div
+                    key={room.room_id}
+                    className={`room-item ${selectedRoom?.room_id === room.room_id ? 'active' : ''}`}
+                    onClick={() => handleRoomClick(room)}
+                  >
+                    <div className="room-icon">
+                      {room.room_type === 'group' ? '👥' : '💬'}
+                    </div>
+                    <div className="room-info">
+                      <div className="room-name">{getRoomDisplayName(room)}</div>
+                      <div className="room-subtitle">{getRoomSubtitle(room)}</div>
                     </div>
                     {room.unread_count > 0 && (
-                      <div style={styles.unreadText}>
-                        읽지 않은 메시지 {room.unread_count}개
-                      </div>
+                      <div className="unread-badge">{room.unread_count}</div>
                     )}
                   </div>
-                  {room.unread_count > 0 && (
-                    <div style={styles.unreadBadge}>
-                      {room.unread_count}
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* 메인 채팅 영역 */}
+          <div className="chat-main">
+            {selectedRoom ? (
+              <>
+                {/* 채팅방 헤더 */}
+                <div className="chat-room-header">
+                  <div className="room-header-info">
+                    <div className="room-header-icon">
+                      {selectedRoom.room_type === 'group' ? '👥' : '💬'}
+                    </div>
+                    <div className="room-header-text">
+                      <h3 className="room-header-name">{getRoomDisplayName(selectedRoom)}</h3>
+                      <p className="room-header-subtitle">{getRoomSubtitle(selectedRoom)}</p>
+                    </div>
+                  </div>
+                  
+                  {/* 상담 요청 버튼 (학부모만, 1:1 채팅에서만) */}
+                  {userRole === 'parent' && selectedRoom.room_type === 'private' && (
+                    <button className="consultation-button" onClick={() => {
+                      const form = document.getElementById('consultation-form');
+                      form.style.display = form.style.display === 'block' ? 'none' : 'block';
+                    }}>
+                      📅 상담 요청
+                    </button>
+                  )}
+                </div>
+
+                {/* 상담 요청 폼 */}
+                {userRole === 'parent' && selectedRoom.room_type === 'private' && (
+                  <div id="consultation-form" className="consultation-form">
+                    <h4 className="form-title">📅 대면 상담 요청</h4>
+                    <div className="form-group">
+                      <label className="form-label">상담 내용</label>
+                      <input
+                        type="text"
+                        value={consultationForm.title}
+                        onChange={(e) => setConsultationForm(prev => ({ ...prev, title: e.target.value }))}
+                        placeholder="상담 받고 싶은 내용을 간단히 적어주세요"
+                        className="form-input"
+                      />
+                    </div>
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label className="form-label">희망 날짜</label>
+                        <input
+                          type="date"
+                          value={consultationForm.date}
+                          onChange={(e) => setConsultationForm(prev => ({ ...prev, date: e.target.value }))}
+                          className="form-input"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">희망 시간</label>
+                        <input
+                          type="time"
+                          value={consultationForm.time}
+                          onChange={(e) => setConsultationForm(prev => ({ ...prev, time: e.target.value }))}
+                          className="form-input"
+                        />
+                      </div>
+                    </div>
+                    <button 
+                      className="form-submit"
+                      onClick={handleConsultationRequest}
+                    >
+                      상담 요청 전송
+                    </button>
+                  </div>
+                )}
+
+                {/* 메시지 영역 */}
+                <div className="messages-container">
+                  {messages.length === 0 ? (
+                    <div className="empty-messages">
+                      <div className="empty-icon">💬</div>
+                      <p className="empty-text">아직 메시지가 없습니다</p>
+                      <p className="empty-subtext">첫 번째 메시지를 보내보세요!</p>
+                    </div>
+                  ) : (
+                    <div className="messages-list">
+                      {messages.map((message, index) => (
+                        <div key={index} className="message-wrapper">
+                          <div className={`message-bubble ${message.sender_id === userId ? 'my-message' : 'other-message'}`}>
+                            {message.sender_id !== userId && (
+                              <div className="sender-name">{getSenderDisplayName(message)}</div>
+                            )}
+                            <div className="message-content">{message.content}</div>
+                            <div className="message-time">
+                              {new Date(message.sent_at).toLocaleTimeString([], {
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      <div ref={messagesEndRef} />
                     </div>
                   )}
                 </div>
-              ))}
-            </div>
-          )}
 
-          {/* 대면 상담 요청 폼 (학부모만) */}
-          {userRole === 'parent' && (
-            <div style={styles.consultationSection}>
-              <h4 style={styles.consultationTitle}>📅 대면 상담 요청</h4>
-              
-              <div style={styles.formGroup}>
-                <label style={styles.formLabel}>상담 내용</label>
-                <input
-                  type="text"
-                  value={consultationForm.title}
-                  onChange={(e) => setConsultationForm(prev => ({...prev, title: e.target.value}))}
-                  placeholder="상담하고 싶은 내용을 간단히 입력해주세요"
-                  style={styles.formInput}
-                  maxLength={50}
-                />
-              </div>
-
-              <div style={styles.formRow}>
-                <div style={styles.formGroup}>
-                  <label style={styles.formLabel}>희망 날짜</label>
-                  <input
-                    type="date"
-                    value={consultationForm.date}
-                    onChange={(e) => setConsultationForm(prev => ({...prev, date: e.target.value}))}
-                    style={styles.formInput}
-                    min={new Date().toISOString().split('T')[0]} // 오늘 이후만 선택 가능
+                {/* 메시지 입력 영역 */}
+                <div className="input-container">
+                  <textarea
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    placeholder="메시지를 입력하세요..."
+                    className="message-input"
+                    rows="1"
                   />
+                  <button 
+                    onClick={handleSend}
+                    disabled={!newMessage.trim()}
+                    className="send-button"
+                  >
+                    📤
+                  </button>
                 </div>
-                
-                <div style={styles.formGroup}>
-                  <label style={styles.formLabel}>희망 시간</label>
-                  <input
-                    type="time"
-                    value={consultationForm.time}
-                    onChange={(e) => setConsultationForm(prev => ({...prev, time: e.target.value}))}
-                    style={styles.formInput}
-                  />
-                </div>
+              </>
+            ) : (
+              <div className="no-selection">
+                <div className="no-selection-icon">💬</div>
+                <h3 className="no-selection-title">채팅방을 선택하세요</h3>
+                <p className="no-selection-text">왼쪽에서 채팅방을 선택하여 대화를 시작하세요</p>
               </div>
-              
-              <button 
-                style={{
-                  ...styles.consultationButton,
-                  opacity: (!consultationForm.title.trim() || !consultationForm.date || !consultationForm.time || !selectedRoom || selectedRoom.room_type !== 'private') ? 0.5 : 1,
-                  cursor: (!consultationForm.title.trim() || !consultationForm.date || !consultationForm.time || !selectedRoom || selectedRoom.room_type !== 'private') ? 'not-allowed' : 'pointer'
-                }}
-                onClick={handleConsultationRequest}
-                disabled={!consultationForm.title.trim() || !consultationForm.date || !consultationForm.time || !selectedRoom || selectedRoom.room_type !== 'private'}
-              >
-                📅 상담 요청하기
-              </button>
-              
-              <p style={styles.consultationNote}>
-                {!selectedRoom ? '1:1 채팅방을 선택하세요' : 
-                 selectedRoom.room_type !== 'private' ? '1:1 채팅방에서만 상담 요청 가능' :
-                 '선생님께 대면 상담을 요청할 수 있습니다'}
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* 오른쪽: 메시지 영역 */}
-        <div style={styles.chatArea}>
-          {selectedRoom ? (
-            <>
-              {/* 채팅방 헤더 */}
-              <div style={styles.chatHeader}>
-                <div style={styles.chatHeaderIcon}>
-                  {selectedRoom.room_type === 'group' ? '👥' : '💬'}
-                </div>
-                <div style={styles.chatHeaderInfo}>
-                  <h4 style={styles.chatHeaderTitle}>
-                    {getRoomDisplayName(selectedRoom)}
-                  </h4>
-                  <span style={styles.chatHeaderSubtitle}>
-                    {getRoomSubtitle(selectedRoom)}
-                  </span>
-                </div>
-              </div>
-
-              {/* 메시지 목록 */}
-              <div style={styles.messageContainer}>
-                {messages.length === 0 ? (
-                  <div style={styles.noMessages}>
-                    <p>메시지가 없습니다. 첫 메시지를 보내보세요!</p>
-                  </div>
-                ) : (
-                  messages.map((message, index) => {
-                    const isMyMessage = message.sender_id === userId;
-                    return (
-                      <div
-                        key={index}
-                        style={{
-                          ...styles.messageWrapper,
-                          justifyContent: isMyMessage ? 'flex-end' : 'flex-start'
-                        }}
-                      >
-                        <div
-                          style={{
-                            ...styles.messageBubble,
-                            ...(isMyMessage ? styles.myMessage : styles.otherMessage)
-                          }}
-                        >
-                          {!isMyMessage && (
-                            <div style={styles.senderName}>
-                              {getSenderDisplayName(message)}
-                            </div>
-                          )}
-                          <div style={styles.messageContent}>
-                            {message.content}
-                          </div>
-                          <div style={styles.messageTime}>
-                            {new Date(message.sent_at || message.created_at).toLocaleTimeString([], {
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-                <div ref={messagesEndRef} />
-              </div>
-
-              {/* 메시지 입력창 */}
-              <div style={styles.inputContainer}>
-                <input
-                  type="text"
-                  placeholder="메시지를 입력하세요..."
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  style={styles.messageInput}
-                />
-                <button 
-                  onClick={handleSend}
-                  style={styles.sendButton}
-                  disabled={!newMessage.trim()}
-                >
-                  <span>➤</span>
-                </button>
-              </div>
-            </>
-          ) : (
-            <div style={styles.noSelection}>
-              <div style={styles.noSelectionIcon}>💬</div>
-              <h3>채팅방을 선택해주세요</h3>
-              <p>왼쪽에서 채팅방을 선택하면 대화를 시작할 수 있습니다</p>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
+
+      <style jsx>{`
+        .chat-page {
+          min-height: 100vh;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          padding: 1rem;
+        }
+
+        .chat-container {
+          max-width: 1400px;
+          margin: 0 auto;
+          height: calc(100vh - 2rem);
+          background: var(--bg-primary, #ffffff);
+          border-radius: 20px;
+          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+          overflow: hidden;
+          display: flex;
+          flex-direction: column;
+        }
+
+        .chat-header {
+          background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+          padding: 1.5rem 2rem;
+          color: white;
+          flex-shrink: 0;
+        }
+
+        .header-content {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+
+        .header-title {
+          font-size: clamp(1.5rem, 3vw, 2rem);
+          font-weight: 700;
+          margin: 0;
+          letter-spacing: -0.02em;
+        }
+
+        .sidebar-toggle {
+          display: none;
+          background: rgba(255, 255, 255, 0.2);
+          border: none;
+          color: white;
+          font-size: 1.5rem;
+          padding: 0.5rem;
+          border-radius: 8px;
+          cursor: pointer;
+          transition: background 0.2s ease;
+        }
+
+        .sidebar-toggle:hover {
+          background: rgba(255, 255, 255, 0.3);
+        }
+
+        .chat-layout {
+          display: flex;
+          flex: 1;
+          overflow: hidden;
+        }
+
+        .sidebar {
+          width: 320px;
+          background: var(--bg-secondary, #f8fafc);
+          border-right: 1px solid var(--border-color, #e2e8f0);
+          display: flex;
+          flex-direction: column;
+          transition: all 0.3s ease;
+          flex-shrink: 0;
+        }
+
+        .sidebar.hide {
+          width: 0;
+          opacity: 0;
+          overflow: hidden;
+        }
+
+        .sidebar-header {
+          padding: 1.5rem;
+          border-bottom: 1px solid var(--border-color, #e2e8f0);
+          background: var(--bg-primary, #ffffff);
+        }
+
+        .sidebar-title {
+          font-size: 1.2rem;
+          font-weight: 600;
+          color: var(--text-primary, #1e293b);
+          margin: 0;
+        }
+
+        .rooms-list {
+          flex: 1;
+          overflow-y: auto;
+          padding: 1rem;
+        }
+
+        .empty-rooms {
+          text-align: center;
+          padding: 3rem 1rem;
+          color: var(--text-secondary, #64748b);
+        }
+
+        .empty-icon {
+          font-size: 3rem;
+          margin-bottom: 1rem;
+          opacity: 0.5;
+        }
+
+        .empty-text {
+          font-size: 1.1rem;
+          margin: 0;
+        }
+
+        .room-item {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+          padding: 1rem;
+          border-radius: 12px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          margin-bottom: 0.5rem;
+          background: var(--bg-primary, #ffffff);
+          border: 1px solid var(--border-color, #e2e8f0);
+        }
+
+        .room-item:hover {
+          background: var(--bg-hover, #f1f5f9);
+          transform: translateX(4px);
+        }
+
+        .room-item.active {
+          background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+          color: white;
+          box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+        }
+
+        .room-icon {
+          font-size: 1.5rem;
+          flex-shrink: 0;
+        }
+
+        .room-info {
+          flex: 1;
+          min-width: 0;
+        }
+
+        .room-name {
+          font-weight: 600;
+          font-size: 0.95rem;
+          margin-bottom: 0.25rem;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .room-subtitle {
+          font-size: 0.8rem;
+          opacity: 0.7;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .unread-badge {
+          background: #ef4444;
+          color: white;
+          font-size: 0.75rem;
+          font-weight: 700;
+          padding: 0.25rem 0.5rem;
+          border-radius: 10px;
+          min-width: 20px;
+          text-align: center;
+          flex-shrink: 0;
+        }
+
+        .chat-main {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+        }
+
+        .chat-room-header {
+          background: var(--bg-primary, #ffffff);
+          border-bottom: 1px solid var(--border-color, #e2e8f0);
+          padding: 1.5rem 2rem;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          flex-shrink: 0;
+        }
+
+        .room-header-info {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+        }
+
+        .room-header-icon {
+          font-size: 2rem;
+          width: 50px;
+          height: 50px;
+          background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .room-header-text {
+          min-width: 0;
+        }
+
+        .room-header-name {
+          font-size: 1.3rem;
+          font-weight: 600;
+          color: var(--text-primary, #1e293b);
+          margin: 0 0 0.25rem 0;
+        }
+
+        .room-header-subtitle {
+          font-size: 0.9rem;
+          color: var(--text-secondary, #64748b);
+          margin: 0;
+        }
+
+        .consultation-button {
+          padding: 0.75rem 1.5rem;
+          background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+          color: white;
+          border: none;
+          border-radius: 12px;
+          font-size: 0.9rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          white-space: nowrap;
+        }
+
+        .consultation-button:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3);
+        }
+
+        .consultation-form {
+          display: none;
+          background: var(--bg-secondary, #f8fafc);
+          border: 1px solid var(--border-color, #e2e8f0);
+          border-radius: 16px;
+          padding: 1.5rem;
+          margin: 1rem 2rem;
+          animation: slideDown 0.3s ease-out;
+        }
+
+        @keyframes slideDown {
+          from { opacity: 0; transform: translateY(-10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        .form-title {
+          font-size: 1.1rem;
+          font-weight: 600;
+          color: var(--text-primary, #1e293b);
+          margin: 0 0 1rem 0;
+        }
+
+        .form-group {
+          margin-bottom: 1rem;
+        }
+
+        .form-row {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 1rem;
+        }
+
+        .form-label {
+          display: block;
+          font-size: 0.9rem;
+          font-weight: 500;
+          color: var(--text-primary, #1e293b);
+          margin-bottom: 0.5rem;
+        }
+
+        .form-input {
+          width: 100%;
+          padding: 0.75rem;
+          border: 2px solid var(--border-color, #e2e8f0);
+          border-radius: 8px;
+          font-size: 0.95rem;
+          background: var(--bg-primary, #ffffff);
+          color: var(--text-primary, #1e293b);
+          transition: border-color 0.2s ease;
+          box-sizing: border-box;
+        }
+
+        .form-input:focus {
+          outline: none;
+          border-color: #4f46e5;
+          box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+
+        .form-submit {
+          width: 100%;
+          padding: 0.75rem;
+          background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+          color: white;
+          border: none;
+          border-radius: 12px;
+          font-size: 0.95rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+
+        .form-submit:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(79, 70, 229, 0.3);
+        }
+
+        .messages-container {
+          flex: 1;
+          overflow-y: auto;
+          background: var(--bg-primary, #ffffff);
+        }
+
+        .empty-messages {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          height: 100%;
+          color: var(--text-secondary, #64748b);
+          text-align: center;
+          padding: 2rem;
+        }
+
+        .empty-messages .empty-icon {
+          font-size: 4rem;
+          margin-bottom: 1rem;
+          opacity: 0.5;
+        }
+
+        .empty-messages .empty-text {
+          font-size: 1.2rem;
+          font-weight: 500;
+          margin: 0 0 0.5rem 0;
+        }
+
+        .empty-subtext {
+          font-size: 0.9rem;
+          margin: 0;
+          opacity: 0.8;
+        }
+
+        .messages-list {
+          padding: 1rem 2rem;
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
+        }
+
+        .message-wrapper {
+          display: flex;
+          width: 100%;
+        }
+
+        .message-bubble {
+          max-width: 70%;
+          border-radius: 20px;
+          padding: 0.75rem 1rem;
+          word-wrap: break-word;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+          animation: messageSlideIn 0.3s ease-out;
+        }
+
+        @keyframes messageSlideIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        .my-message {
+          background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+          color: white;
+          margin-left: auto;
+          border-bottom-right-radius: 8px;
+        }
+
+        .other-message {
+          background: var(--bg-secondary, #f8fafc);
+          color: var(--text-primary, #1e293b);
+          margin-right: auto;
+          border: 1px solid var(--border-color, #e2e8f0);
+          border-bottom-left-radius: 8px;
+        }
+
+        .sender-name {
+          font-size: 0.75rem;
+          font-weight: 600;
+          margin-bottom: 0.25rem;
+          opacity: 0.8;
+        }
+
+        .message-content {
+          font-size: 0.95rem;
+          line-height: 1.4;
+          margin-bottom: 0.25rem;
+          white-space: pre-wrap;
+        }
+
+        .message-time {
+          font-size: 0.7rem;
+          opacity: 0.7;
+          text-align: right;
+        }
+
+        .no-selection {
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          height: 100%;
+          color: var(--text-secondary, #64748b);
+          text-align: center;
+          padding: 2rem;
+        }
+
+        .no-selection-icon {
+          font-size: 5rem;
+          margin-bottom: 1.5rem;
+          opacity: 0.3;
+        }
+
+        .no-selection-title {
+          font-size: 1.5rem;
+          font-weight: 600;
+          margin: 0 0 0.5rem 0;
+        }
+
+        .no-selection-text {
+          font-size: 1rem;
+          margin: 0;
+          opacity: 0.8;
+        }
+
+        .input-container {
+          display: flex;
+          padding: 1.5rem 2rem;
+          border-top: 1px solid var(--border-color, #e2e8f0);
+          background: var(--bg-primary, #ffffff);
+          gap: 1rem;
+          align-items: flex-end;
+          flex-shrink: 0;
+        }
+
+        .message-input {
+          flex: 1;
+          padding: 0.75rem 1rem;
+          border: 2px solid var(--border-color, #e2e8f0);
+          border-radius: 20px;
+          font-size: 0.95rem;
+          background: var(--bg-primary, #ffffff);
+          color: var(--text-primary, #1e293b);
+          outline: none;
+          transition: all 0.2s ease;
+          resize: none;
+          max-height: 120px;
+          min-height: 44px;
+          font-family: inherit;
+        }
+
+        .message-input:focus {
+          border-color: #4f46e5;
+          box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+
+        .send-button {
+          width: 48px;
+          height: 48px;
+          background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+          color: white;
+          border: none;
+          border-radius: 50%;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 1.2rem;
+          transition: all 0.2s ease;
+          flex-shrink: 0;
+        }
+
+        .send-button:hover:not(:disabled) {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(79, 70, 229, 0.3);
+        }
+
+        .send-button:disabled {
+          background: var(--text-secondary, #64748b);
+          cursor: not-allowed;
+          transform: none;
+          box-shadow: none;
+        }
+
+        /* 다크 모드 */
+        @media (prefers-color-scheme: dark) {
+          .chat-page {
+            --bg-primary: #1e293b;
+            --bg-secondary: #334155;
+            --bg-hover: #475569;
+            --text-primary: #f8fafc;
+            --text-secondary: #cbd5e1;
+            --border-color: #475569;
+          }
+        }
+
+        /* 반응형 디자인 */
+        @media (max-width: 768px) {
+          .chat-page {
+            padding: 0;
+          }
+
+          .chat-container {
+            height: 100vh;
+            border-radius: 0;
+          }
+
+          .chat-header {
+            padding: 1rem 1.5rem;
+          }
+
+          .sidebar-toggle {
+            display: block;
+          }
+
+          .sidebar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            z-index: 10;
+            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+          }
+
+          .sidebar.hide {
+            transform: translateX(-100%);
+            width: 320px;
+          }
+
+          .sidebar.show {
+            transform: translateX(0);
+          }
+
+          .chat-room-header {
+            padding: 1rem 1.5rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+          }
+
+          .room-header-info {
+            min-width: 0;
+            flex: 1;
+          }
+
+          .consultation-button {
+            width: 100%;
+            order: 3;
+            flex-basis: 100%;
+          }
+
+          .consultation-form {
+            margin: 1rem 1.5rem;
+            padding: 1rem;
+          }
+
+          .form-row {
+            grid-template-columns: 1fr;
+            gap: 0.75rem;
+          }
+
+          .messages-list {
+            padding: 1rem 1.5rem;
+          }
+
+          .input-container {
+            padding: 1rem 1.5rem;
+          }
+
+          .message-bubble {
+            max-width: 85%;
+          }
+
+          .no-selection {
+            padding: 1.5rem;
+          }
+
+          .no-selection-icon {
+            font-size: 4rem;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .chat-header {
+            padding: 0.75rem 1rem;
+          }
+
+          .header-title {
+            font-size: 1.3rem;
+          }
+
+          .sidebar {
+            width: 280px;
+          }
+
+          .sidebar.hide {
+            width: 280px;
+          }
+
+          .sidebar-header {
+            padding: 1rem;
+          }
+
+          .rooms-list {
+            padding: 0.75rem;
+          }
+
+          .room-item {
+            padding: 0.75rem;
+          }
+
+          .chat-room-header {
+            padding: 0.75rem 1rem;
+          }
+
+          .room-header-icon {
+            width: 40px;
+            height: 40px;
+            font-size: 1.5rem;
+          }
+
+          .room-header-name {
+            font-size: 1.1rem;
+          }
+
+          .consultation-form {
+            margin: 0.75rem 1rem;
+            padding: 1rem;
+          }
+
+          .messages-list {
+            padding: 0.75rem 1rem;
+          }
+
+          .input-container {
+            padding: 0.75rem 1rem;
+            gap: 0.75rem;
+          }
+
+          .send-button {
+            width: 40px;
+            height: 40px;
+            font-size: 1rem;
+          }
+
+          .message-bubble {
+            max-width: 90%;
+            padding: 0.6rem 0.8rem;
+          }
+        }
+
+        /* 접근성 */
+        .room-item:focus,
+        .consultation-button:focus,
+        .form-submit:focus,
+        .send-button:focus {
+          outline: 2px solid #4f46e5;
+          outline-offset: 2px;
+        }
+
+        /* 스크롤바 스타일 */
+        .rooms-list::-webkit-scrollbar,
+        .messages-container::-webkit-scrollbar {
+          width: 6px;
+        }
+
+        .rooms-list::-webkit-scrollbar-track,
+        .messages-container::-webkit-scrollbar-track {
+          background: var(--bg-secondary, #f8fafc);
+        }
+
+        .rooms-list::-webkit-scrollbar-thumb,
+        .messages-container::-webkit-scrollbar-thumb {
+          background: var(--border-color, #e2e8f0);
+          border-radius: 3px;
+        }
+
+        .rooms-list::-webkit-scrollbar-thumb:hover,
+        .messages-container::-webkit-scrollbar-thumb:hover {
+          background: var(--text-secondary, #64748b);
+        }
+
+        /* 애니메이션 성능 최적화 */
+        @media (prefers-reduced-motion: reduce) {
+          * {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }
-
-const styles = {
-  container: {
-    height: '100vh',
-    display: 'flex',
-    flexDirection: 'column',
-    backgroundColor: '#f8f9fa'
-  },
-
-  header: {
-    padding: '1rem 2rem',
-    backgroundColor: 'white',
-    borderBottom: '1px solid #e9ecef',
-    margin: 0,
-    fontSize: '1.5rem',
-    fontWeight: '600',
-    color: '#333'
-  },
-
-  chatContainer: {
-    display: 'flex',
-    flex: 1,
-    overflow: 'hidden'
-  },
-
-  sidebar: {
-    width: '350px',
-    backgroundColor: 'white',
-    borderRight: '1px solid #e9ecef',
-    display: 'flex',
-    flexDirection: 'column',
-    overflow: 'hidden'
-  },
-
-  roomListHeader: {
-    padding: '1rem',
-    borderBottom: '1px solid #e9ecef',
-    backgroundColor: '#f8f9fa'
-  },
-
-  roomList: {
-    flex: 1,
-    overflowY: 'auto'
-  },
-
-  roomItem: {
-    display: 'flex',
-    alignItems: 'center',
-    padding: '1rem',
-    borderBottom: '1px solid #f1f3f4',
-    cursor: 'pointer',
-    transition: 'background-color 0.2s',
-    '&:hover': {
-      backgroundColor: '#f8f9fa'
-    }
-  },
-
-  roomItemActive: {
-    backgroundColor: '#e3f2fd'
-  },
-
-  roomIcon: {
-    fontSize: '1.5rem',
-    marginRight: '1rem',
-    width: '40px',
-    textAlign: 'center'
-  },
-
-  roomInfo: {
-    flex: 1,
-    minWidth: 0
-  },
-
-  roomName: {
-    fontWeight: '600',
-    fontSize: '0.95rem',
-    marginBottom: '0.25rem',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap'
-  },
-
-  unreadText: {
-    fontSize: '0.8rem',
-    color: '#666'
-  },
-
-  unreadBadge: {
-    backgroundColor: '#dc3545',
-    color: 'white',
-    borderRadius: '50%',
-    width: '24px',
-    height: '24px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '0.8rem',
-    fontWeight: 'bold'
-  },
-
-  noRooms: {
-    padding: '2rem',
-    textAlign: 'center',
-    color: '#6c757d',
-    fontStyle: 'italic'
-  },
-
-  consultationSection: {
-    padding: '1rem',
-    borderTop: '1px solid #e9ecef',
-    backgroundColor: '#f8f9fa'
-  },
-
-  consultationTitle: {
-    margin: '0 0 1rem 0',
-    fontSize: '1rem',
-    fontWeight: '600',
-    color: '#333'
-  },
-
-  formGroup: {
-    marginBottom: '0.75rem'
-  },
-
-  formRow: {
-    display: 'flex',
-    gap: '0.5rem'
-  },
-
-  formLabel: {
-    display: 'block',
-    marginBottom: '0.25rem',
-    fontSize: '0.8rem',
-    fontWeight: '500',
-    color: '#555'
-  },
-
-  formInput: {
-    width: '100%',
-    padding: '0.5rem',
-    border: '1px solid #ced4da',
-    borderRadius: '4px',
-    fontSize: '0.85rem',
-    outline: 'none',
-    transition: 'border-color 0.2s',
-    '&:focus': {
-      borderColor: '#007bff'
-    }
-  },
-
-  consultationButton: {
-    width: '100%',
-    padding: '0.75rem',
-    backgroundColor: '#28a745',
-    color: 'white',
-    border: 'none',
-    borderRadius: '6px',
-    fontSize: '0.9rem',
-    fontWeight: '600',
-    cursor: 'pointer',
-    transition: 'background-color 0.2s',
-    marginBottom: '0.5rem'
-  },
-
-  consultationNote: {
-    fontSize: '0.75rem',
-    color: '#6c757d',
-    textAlign: 'center',
-    margin: 0,
-    lineHeight: '1.3'
-  },
-
-  chatArea: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    backgroundColor: 'white'
-  },
-
-  chatHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    padding: '1rem',
-    borderBottom: '1px solid #e9ecef',
-    backgroundColor: '#f8f9fa'
-  },
-
-  chatHeaderIcon: {
-    fontSize: '1.5rem',
-    marginRight: '1rem'
-  },
-
-  chatHeaderInfo: {
-    flex: 1
-  },
-
-  chatHeaderTitle: {
-    margin: '0 0 0.25rem 0',
-    fontSize: '1.1rem',
-    fontWeight: '600',
-    color: '#333'
-  },
-
-  chatHeaderSubtitle: {
-    fontSize: '0.85rem',
-    color: '#6c757d'
-  },
-
-  messageContainer: {
-    flex: 1,
-    padding: '1rem',
-    overflowY: 'auto',
-    backgroundColor: '#fafafa'
-  },
-
-  loadingContainer: {
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    height: '100vh',
-    backgroundColor: '#f8f9fa'
-  },
-
-  errorContainer: {
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'center',
-    alignItems: 'center',
-    height: '100vh',
-    backgroundColor: '#f8f9fa',
-    color: '#dc3545'
-  },
-
-  noMessages: {
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    height: '100%',
-    color: '#6c757d',
-    fontStyle: 'italic'
-  },
-
-  messageWrapper: {
-    display: 'flex',
-    marginBottom: '0.75rem'
-  },
-
-  messageBubble: {
-    maxWidth: '70%',
-    borderRadius: '18px',
-    padding: '0.75rem 1rem',
-    wordWrap: 'break-word'
-  },
-
-  myMessage: {
-    backgroundColor: '#007bff',
-    color: 'white',
-    marginLeft: 'auto'
-  },
-
-  otherMessage: {
-    backgroundColor: '#e9ecef',
-    color: '#495057',
-    marginRight: 'auto'
-  },
-
-  senderName: {
-    fontSize: '0.75rem',
-    fontWeight: '500',
-    marginBottom: '0.25rem',
-    opacity: 0.8
-  },
-
-  messageContent: {
-    fontSize: '0.95rem',
-    lineHeight: '1.4',
-    marginBottom: '0.25rem',
-    whiteSpace: 'pre-wrap'
-  },
-
-  messageTime: {
-    fontSize: '0.7rem',
-    opacity: 0.7,
-    textAlign: 'right'
-  },
-
-  noSelection: {
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'center',
-    alignItems: 'center',
-    height: '100%',
-    color: '#6c757d',
-    textAlign: 'center'
-  },
-
-  noSelectionIcon: {
-    fontSize: '4rem',
-    marginBottom: '1rem',
-    opacity: 0.5
-  },
-
-  inputContainer: {
-    display: 'flex',
-    padding: '1rem',
-    borderTop: '1px solid #e9ecef',
-    backgroundColor: 'white',
-    gap: '0.5rem'
-  },
-
-  messageInput: {
-    flex: 1,
-    padding: '0.75rem 1rem',
-    border: '1px solid #ced4da',
-    borderRadius: '24px',
-    fontSize: '0.95rem',
-    outline: 'none',
-    transition: 'border-color 0.2s',
-    '&:focus': {
-      borderColor: '#007bff'
-    }
-  },
-
-  sendButton: {
-    width: '48px',
-    height: '48px',
-    backgroundColor: '#007bff',
-    color: 'white',
-    border: 'none',
-    borderRadius: '50%',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '1.2rem',
-    transition: 'background-color 0.2s',
-    '&:disabled': {
-      backgroundColor: '#6c757d',
-      cursor: 'not-allowed'
-    }
-  }
-};
 
 export default ChatPage;

@@ -400,6 +400,47 @@ function ProfilePage() {
         </div>
       </div>
 
+      {/* 🆕 학급 관리 버튼 추가 - 학부모만 표시 */}
+      {user.role === 'parent' && (
+        <button
+          onClick={() => navigate('/classrooms')}
+          style={{
+            width: '100%',
+            marginBottom: '2rem',
+            padding: '1rem',
+            backgroundColor: 'white',
+            border: '1px solid #ddd',
+            borderRadius: '12px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            transition: 'all 0.2s'
+          }}
+          onMouseOver={(e) => {
+            e.currentTarget.style.backgroundColor = '#f8f9fa';
+            e.currentTarget.style.borderColor = '#007bff';
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.backgroundColor = 'white';
+            e.currentTarget.style.borderColor = '#ddd';
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <span style={{ fontSize: '1.5rem' }}>🏫</span>
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ fontWeight: 'bold', fontSize: '1.1rem', marginBottom: '0.25rem' }}>
+                내 학급 관리
+              </div>
+              <div style={{ color: '#666', fontSize: '0.9rem' }}>
+                가입한 학급 보기 및 추가 가입
+              </div>
+            </div>
+          </div>
+          <span style={{ color: '#666', fontSize: '1.2rem' }}>›</span>
+        </button>
+      )}
+      
       {/* 가입된 학급 정보 */}
       <div style={{ 
         marginBottom: '2rem', 

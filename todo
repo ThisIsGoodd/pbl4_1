@@ -5,8 +5,11 @@ AdminDashboard.jsx(done)
 AdminMainPage.jsx(done)
 ChatPage.jsx(done)
 ClassroomCreatePage.jsx(done)
-ClassroomDashboardPage.jsx
-InquiryFormPage.jsx
+ClassroomDashboardPage.jsx(done)
+ClassroomListPage.jsx(done)
+InquiryFormPage.jsx(done)
+JoinClassroomPage.jsx
+JoinCompletePage.jsx
 JoinInfoPage.jsx
 JoinInvitePage.jsx
 LoginPage.jsx

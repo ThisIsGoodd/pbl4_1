@@ -83,66 +83,86 @@ function SchedulePage() {
     fetchClassroomInfo();
   }, [classroomId, token]);
 
-  // 캘린더 렌더링 후 주말 색상 적용
+  // 일정 데이터 가져오기
+  useEffect(() => {
+    if (myUserId) {
+      fetchSchedules();
+    }
+  }, [classroomId, schoolId, myUserId]);
+
+  // 주말 색상 적용을 위한 스타일 주입
   useEffect(() => {
     const applyWeekendColors = () => {
-      // 헤더 요일명 색상 적용
+      // 헤더 요일 색상 적용
       const headerCells = document.querySelectorAll('.fc-col-header-cell');
       headerCells.forEach((cell, index) => {
         const cushion = cell.querySelector('.fc-col-header-cell-cushion');
         if (cushion) {
           if (index === 0) { // 일요일
-            cushion.style.color = '#dc2626';
-            cushion.style.fontWeight = '600';
+            cushion.style.setProperty('color', '#dc2626', 'important');
+            cushion.style.setProperty('font-weight', '600', 'important');
           } else if (index === 6) { // 토요일
-            cushion.style.color = '#2563eb';
-            cushion.style.fontWeight = '600';
+            cushion.style.setProperty('color', '#2563eb', 'important');
+            cushion.style.setProperty('font-weight', '600', 'important');
           }
         }
       });
 
-      // 날짜 숫자 색상 적용
-      const dayCells = document.querySelectorAll('.fc-daygrid-day');
-      dayCells.forEach(cell => {
+      // 모든 날짜 셀을 찾아서 처리
+      const allDayCells = document.querySelectorAll('.fc-daygrid-day');
+      allDayCells.forEach((cell) => {
         const dateStr = cell.getAttribute('data-date');
         if (dateStr) {
-          const date = new Date(dateStr);
+          const date = new Date(dateStr + 'T00:00:00'); // 시간대 문제 방지
           const dayOfWeek = date.getDay();
           const dayNumber = cell.querySelector('.fc-daygrid-day-number');
           
           if (dayNumber) {
             if (dayOfWeek === 0) { // 일요일
-              dayNumber.style.color = '#dc2626';
-              dayNumber.style.fontWeight = '600';
-              dayNumber.classList.add('weekend-sunday');
+              dayNumber.style.setProperty('color', '#dc2626', 'important');
+              dayNumber.style.setProperty('font-weight', '600', 'important');
             } else if (dayOfWeek === 6) { // 토요일
-              dayNumber.style.color = '#2563eb';
-              dayNumber.style.fontWeight = '600';
-              dayNumber.classList.add('weekend-saturday');
+              dayNumber.style.setProperty('color', '#2563eb', 'important');
+              dayNumber.style.setProperty('font-weight', '600', 'important');
+            } else {
+              // 평일은 기본 색상으로 되돌리기
+              dayNumber.style.removeProperty('color');
+              dayNumber.style.removeProperty('font-weight');
             }
           }
         }
       });
     };
 
-    // 컴포넌트 마운트 후 잠시 대기하여 적용
-    const timer = setTimeout(applyWeekendColors, 100);
-    
-    // 캘린더 이벤트가 변경될 때마다 다시 적용
-    const observer = new MutationObserver(applyWeekendColors);
-    const calendarElement = document.querySelector('.fc');
-    if (calendarElement) {
-      observer.observe(calendarElement, {
+    // 초기 적용
+    const initialTimer = setTimeout(applyWeekendColors, 100);
+
+    // 변경 감지하여 재적용
+    const observer = new MutationObserver(() => {
+      applyWeekendColors();
+    });
+
+    const calendarEl = document.querySelector('.fc');
+    if (calendarEl) {
+      observer.observe(calendarEl, {
         childList: true,
-        subtree: true
+        subtree: true,
+        attributes: true
       });
     }
 
-    return () => {
-      clearTimeout(timer);
-      observer.disconnect();
+    // datesSet 이벤트 리스너
+    const handleDatesSet = () => {
+      setTimeout(applyWeekendColors, 50);
     };
-  }, [schedules]); // schedules가 변경될 때마다 재적용
+    document.addEventListener('weekendColorsNeeded', handleDatesSet);
+
+    return () => {
+      clearTimeout(initialTimer);
+      observer.disconnect();
+      document.removeEventListener('weekendColorsNeeded', handleDatesSet);
+    };
+  }, []);
 
   const fetchSchedules = async () => {
     setIsLoading(true);
@@ -383,6 +403,13 @@ function SchedulePage() {
                 eventDisplay="block"
                 dayHeaderFormat={{ weekday: 'short' }}
                 titleFormat={{ year: 'numeric', month: 'long' }}
+                datesSet={() => {
+                  // 캘린더가 렌더링된 후 주말 색상 재적용
+                  setTimeout(() => {
+                    const event = new Event('weekendColorsNeeded');
+                    document.dispatchEvent(event);
+                  }, 50);
+                }}
               />
             </div>
           </div>
@@ -821,72 +848,6 @@ function SchedulePage() {
 
         :global(.selected-date) {
           background-color: rgba(79, 70, 229, 0.2) !important;
-        }
-
-        /* 주말 색상 스타일 - 다양한 셀렉터로 적용 */
-        :global(.fc-day-sat .fc-daygrid-day-number),
-        :global(.fc-daygrid-day[data-date*="-06"] .fc-daygrid-day-number),
-        :global(.fc-day:nth-child(7) .fc-daygrid-day-number) {
-          color: #2563eb !important;
-          font-weight: 600;
-        }
-
-        :global(.fc-day-sun .fc-daygrid-day-number),
-        :global(.fc-daygrid-day[data-date*="-01"] .fc-daygrid-day-number),
-        :global(.fc-day:nth-child(1) .fc-daygrid-day-number) {
-          color: #dc2626 !important;
-          font-weight: 600;
-        }
-
-        /* 헤더 요일명 색상 */
-        :global(.fc-col-header-cell.fc-day-sat .fc-col-header-cell-cushion),
-        :global(.fc-col-header-cell:nth-child(7) .fc-col-header-cell-cushion) {
-          color: #2563eb !important;
-          font-weight: 600;
-        }
-
-        :global(.fc-col-header-cell.fc-day-sun .fc-col-header-cell-cushion),
-        :global(.fc-col-header-cell:nth-child(1) .fc-col-header-cell-cushion) {
-          color: #dc2626 !important;
-          font-weight: 600;
-        }
-
-        /* JavaScript로 동적 적용을 위한 추가 스타일 */
-        :global(.weekend-saturday) {
-          color: #2563eb !important;
-          font-weight: 600;
-        }
-
-        :global(.weekend-sunday) {
-          color: #dc2626 !important;
-          font-weight: 600;
-        }
-
-        /* 다크모드에서도 주말 색상 유지 */
-        @media (prefers-color-scheme: dark) {
-          :global(.fc-day-sat .fc-daygrid-day-number),
-          :global(.fc-daygrid-day[data-date*="-06"] .fc-daygrid-day-number),
-          :global(.fc-day:nth-child(7) .fc-daygrid-day-number),
-          :global(.weekend-saturday) {
-            color: #60a5fa !important;
-          }
-
-          :global(.fc-day-sun .fc-daygrid-day-number),
-          :global(.fc-daygrid-day[data-date*="-01"] .fc-daygrid-day-number),
-          :global(.fc-day:nth-child(1) .fc-daygrid-day-number),
-          :global(.weekend-sunday) {
-            color: #f87171 !important;
-          }
-
-          :global(.fc-col-header-cell.fc-day-sat .fc-col-header-cell-cushion),
-          :global(.fc-col-header-cell:nth-child(7) .fc-col-header-cell-cushion) {
-            color: #60a5fa !important;
-          }
-
-          :global(.fc-col-header-cell.fc-day-sun .fc-col-header-cell-cushion),
-          :global(.fc-col-header-cell:nth-child(1) .fc-col-header-cell-cushion) {
-            color: #f87171 !important;
-          }
         }
 
         /* 사이드 패널 */

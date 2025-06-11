@@ -7,6 +7,7 @@ const path = require('path');
 const http = require('http');
 const socketIo = require('socket.io');
 const fs = require('fs');
+const session = require('express-session');
 
 const db = require('./db');
 const authenticateToken = require('./authMiddleware');
@@ -35,6 +36,16 @@ const PORT = process.env.PORT || 3001;
 app.use(passport.initialize());
 app.use(cors());
 app.use(express.json());
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'your-secret-key-here',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: false, // HTTPS 사용 시 true로 변경
+    httpOnly: true,
+    maxAge: 1000 * 60 * 60 * 24 // 24시간
+  }
+}));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
   setHeaders: (res, filePath) => {
     // 🔥 모든 uploads 파일에 다운로드 헤더 추가

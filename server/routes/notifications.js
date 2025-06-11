@@ -213,4 +213,32 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// 📌 읽지 않은 알림 개수 조회 - /stats 엔드포인트 다음에 추가
+router.get('/unread-count', authenticateToken, async (req, res) => {
+  const { user_id } = req.user;
+  const { classroom_id } = req.query;
+
+  try {
+    let query = `
+      SELECT COUNT(*) as unread_count
+      FROM notifications 
+      WHERE user_id = ? AND is_read = FALSE
+    `;
+    const params = [user_id];
+
+    // classroom_id가 있으면 해당 학급의 알림만 카운트
+    if (classroom_id) {
+      query += ` AND (classroom_id = ? OR classroom_id IS NULL)`;
+      params.push(classroom_id);
+    }
+
+    const [result] = await db.query(query, params);
+    
+    res.json({ unread_count: result[0].unread_count || 0 });
+  } catch (err) {
+    console.error('🔥 읽지 않은 알림 개수 조회 오류:', err);
+    res.status(500).json({ error: '서버 오류' });
+  }
+});
+
 module.exports = router;

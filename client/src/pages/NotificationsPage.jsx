@@ -238,13 +238,46 @@ function NotificationPage() {
 
   if (loading) {
     return (
-      <div style={{ 
-        padding: '20px', 
-        textAlign: 'center',
-        fontSize: '16px',
-        color: '#666'
-      }}>
-        알림을 불러오는 중...
+      <div className="notifications-page">
+        <div className="container">
+          <div className="loading-container">
+            <div className="loading-spinner"></div>
+            <p>알림을 불러오는 중...</p>
+          </div>
+        </div>
+        <style jsx>{`
+          .notifications-page {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 1rem;
+          }
+          .container {
+            max-width: 1000px;
+            margin: 0 auto;
+          }
+          .loading-container {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 3rem 2rem;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            color: #1e293b;
+          }
+          .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #f1f5f9;
+            border-top: 3px solid #4f46e5;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+          }
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}</style>
       </div>
     );
   }
@@ -252,226 +285,429 @@ function NotificationPage() {
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
   return (
-    <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
-      {/* 헤더 */}
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center',
-        marginBottom: '20px',
-        paddingBottom: '15px',
-        borderBottom: '2px solid #eee'
-      }}>
-        <h2 style={{ 
-          margin: 0, 
-          fontSize: '24px', 
-          fontWeight: 'bold',
-          color: '#333'
-        }}>
-          알림 목록
-          {unreadCount > 0 && (
-            <span style={{ 
-              backgroundColor: '#ff4444', 
-              color: 'white', 
-              padding: '3px 8px', 
-              borderRadius: '12px', 
-              fontSize: '12px',
-              marginLeft: '8px'
-            }}>
-              {unreadCount}
-            </span>
-          )}
-        </h2>
-        
-        <div style={{ display: 'flex', gap: '8px' }}>
-          {unreadCount > 0 && (
-            <button
-              onClick={handleMarkAllAsRead}
-              style={{
-                padding: '8px 16px',
-                backgroundColor: '#4CAF50',
-                color: 'white',
-                border: 'none',
-                borderRadius: '5px',
-                cursor: 'pointer',
-                fontSize: '14px'
-              }}
-            >
-              전체 읽음
-            </button>
-          )}
-          
-          {notifications.length > 0 && (
-            <>
-              <button
-                onClick={handleDeleteRead}
-                style={{
-                  padding: '8px 16px',
-                  backgroundColor: '#ff9800',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '5px',
-                  cursor: 'pointer',
-                  fontSize: '14px'
-                }}
-              >
-                읽은 알림 삭제
-              </button>
-              
-              <button
-                onClick={handleDeleteAll}
-                style={{
-                  padding: '8px 16px',
-                  backgroundColor: '#f44336',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '5px',
-                  cursor: 'pointer',
-                  fontSize: '14px'
-                }}
-              >
-                전체 삭제
-              </button>
-            </>
-          )}
+    <div className="notifications-page">
+      <div className="container">
+        {/* 헤더 */}
+        <div className="header">
+          <h1>
+            🔔 알림 목록
+            {unreadCount > 0 && (
+              <span className="unread-badge">
+                {unreadCount}
+              </span>
+            )}
+          </h1>
+          <p>새로운 소식을 확인하세요</p>
         </div>
-      </div>
 
-      {/* 알림 목록 */}
-      {notifications.length === 0 ? (
-        <div style={{ 
-          textAlign: 'center', 
-          padding: '60px 20px',
-          color: '#999'
-        }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔔</div>
-          <p style={{ fontSize: '16px', margin: 0 }}>새로운 알림이 없습니다.</p>
-        </div>
-      ) : (
-        <div>
-          {notifications.map((n) => (
-            <div
-              key={n.notification_id}
-              onClick={() => handleClick(n)}
-              style={{
-                padding: '16px',
-                marginBottom: '12px',
-                border: '1px solid #ddd',
-                borderRadius: '8px',
-                backgroundColor: n.is_read ? '#fff' : '#f0f8ff',
-                cursor: 'pointer',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'flex-start',
-                transition: 'box-shadow 0.2s'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.boxShadow = 'none';
-              }}
-            >
-              <div style={{ flex: 1 }}>
-                <div style={{ 
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '8px',
-                  marginBottom: '8px'
-                }}>
-                  {/* 타입별 아이콘 */}
-                  <span style={{ fontSize: '16px' }}>
-                    {n.type === 'post' && '📢'}
-                    {n.type === 'comment' && '💬'}
-                    {n.type === 'schedule' && '📅'}
-                    {n.type === 'chat' && '💭'}
-                    {n.type === 'inquiry' && '❓'}
-                  </span>
+        {/* 메인 콘텐츠 */}
+        <div className="content">
+          {/* 액션 버튼들 */}
+          <div className="action-buttons">
+            {unreadCount > 0 && (
+              <button onClick={handleMarkAllAsRead} className="action-btn primary">
+                전체 읽음
+              </button>
+            )}
+            
+            {notifications.length > 0 && (
+              <>
+                <button onClick={handleDeleteRead} className="action-btn warning">
+                  읽은 알림 삭제
+                </button>
+                
+                <button onClick={handleDeleteAll} className="action-btn danger">
+                  전체 삭제
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* 알림 목록 */}
+          {notifications.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-icon">🔔</div>
+              <h3>새로운 알림이 없습니다</h3>
+              <p>새로운 소식이 있으면 여기에 표시됩니다.</p>
+            </div>
+          ) : (
+            <div className="notifications-list">
+              {notifications.map((n) => (
+                <div
+                  key={n.notification_id}
+                  onClick={() => handleClick(n)}
+                  className={`notification-item ${!n.is_read ? 'unread' : ''}`}
+                >
+                  <div className="notification-content">
+                    <div className="notification-header">
+                      <span className="notification-icon">
+                        {n.type === 'post' && '📢'}
+                        {n.type === 'comment' && '💬'}
+                        {n.type === 'schedule' && '📅'}
+                        {n.type === 'chat' && '💭'}
+                        {n.type === 'inquiry' && '❓'}
+                      </span>
+                      
+                      <div className="notification-message">
+                        {n.message}
+                        {!n.is_read && <span className="unread-dot"></span>}
+                      </div>
+                    </div>
+                    
+                    <div className="notification-time">
+                      {new Date(n.created_at).toLocaleString()}
+                    </div>
+                  </div>
                   
-                  <div style={{ 
-                    flex: 1,
-                    fontSize: '14px',
-                    color: '#333',
-                    fontWeight: n.is_read ? 'normal' : 'bold'
-                  }}>
-                    {n.message}
+                  <div className="notification-actions">
                     {!n.is_read && (
-                      <span style={{ 
-                        display: 'inline-block',
-                        width: '6px',
-                        height: '6px',
-                        backgroundColor: '#ff4444',
-                        borderRadius: '50%',
-                        marginLeft: '8px'
-                      }}></span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleMarkAsRead(n.notification_id);
+                        }}
+                        className="read-btn"
+                        title="읽음 처리"
+                      >
+                        읽음
+                      </button>
                     )}
+                    
+                    <button
+                      onClick={(e) => handleDelete(n.notification_id, e)}
+                      className="delete-btn"
+                      title="삭제"
+                    >
+                      ×
+                    </button>
                   </div>
                 </div>
-                <small style={{ color: '#999', fontSize: '12px' }}>
-                  {new Date(n.created_at).toLocaleString()}
-                </small>
-              </div>
-              
-              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                {!n.is_read && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleMarkAsRead(n.notification_id);
-                    }}
-                    style={{
-                      backgroundColor: 'transparent',
-                      border: '1px solid #4CAF50',
-                      color: '#4CAF50',
-                      cursor: 'pointer',
-                      padding: '4px 8px',
-                      borderRadius: '4px',
-                      fontSize: '12px'
-                    }}
-                    title="읽음 처리"
-                  >
-                    읽음
-                  </button>
-                )}
-                
-                <button
-                  onClick={(e) => handleDelete(n.notification_id, e)}
-                  style={{
-                    backgroundColor: 'transparent',
-                    border: 'none',
-                    color: '#f44336',
-                    cursor: 'pointer',
-                    padding: '4px',
-                    borderRadius: '4px',
-                    fontSize: '16px'
-                  }}
-                  title="삭제"
-                >
-                  ×
-                </button>
-              </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
-      )}
 
-      {/* 토스트 메시지 */}
-      {toast.show && (
-        <div style={{
-          position: 'fixed',
-          top: '20px',
-          right: '20px',
-          backgroundColor: toast.type === 'success' ? '#4CAF50' : toast.type === 'error' ? '#f44336' : '#2196F3',
-          color: 'white',
-          padding: '12px 16px',
-          borderRadius: '6px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-          zIndex: 1000,
-          fontSize: '14px'
-        }}>
-          {toast.message}
-        </div>
-      )}
+        {/* 토스트 메시지 */}
+        {toast.show && (
+          <div className={`toast toast-${toast.type}`}>
+            {toast.message}
+          </div>
+        )}
+      </div>
+
+      <style jsx>{`
+        .notifications-page {
+          min-height: 100vh;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          padding: 1rem;
+        }
+
+        .container {
+          max-width: 1000px;
+          margin: 0 auto;
+        }
+
+        /* 헤더 */
+        .header {
+          background: rgba(255, 255, 255, 0.9);
+          backdrop-filter: blur(10px);
+          border-radius: 16px;
+          padding: 2rem;
+          text-align: center;
+          margin-bottom: 2rem;
+          box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+          margin: 0 0 0.5rem 0;
+          color: #1e293b;
+          font-size: 2rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
+        }
+
+        .header p {
+          margin: 0;
+          color: #64748b;
+          font-size: 1.1rem;
+        }
+
+        .unread-badge {
+          background: #ef4444;
+          color: white;
+          padding: 0.25rem 0.75rem;
+          border-radius: 12px;
+          font-size: 0.875rem;
+          font-weight: 600;
+        }
+
+        /* 메인 콘텐츠 */
+        .content {
+          background: rgba(255, 255, 255, 0.9);
+          backdrop-filter: blur(10px);
+          border-radius: 16px;
+          padding: 2rem;
+          box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+        }
+
+        /* 액션 버튼들 */
+        .action-buttons {
+          display: flex;
+          gap: 0.75rem;
+          margin-bottom: 2rem;
+          flex-wrap: wrap;
+        }
+
+        .action-btn {
+          padding: 0.75rem 1.5rem;
+          border: none;
+          border-radius: 8px;
+          cursor: pointer;
+          font-weight: 600;
+          transition: all 0.2s ease;
+          font-size: 0.9rem;
+        }
+
+        .action-btn.primary {
+          background: #4f46e5;
+          color: white;
+        }
+
+        .action-btn.primary:hover {
+          background: #3730a3;
+        }
+
+        .action-btn.warning {
+          background: #f59e0b;
+          color: white;
+        }
+
+        .action-btn.warning:hover {
+          background: #d97706;
+        }
+
+        .action-btn.danger {
+          background: #ef4444;
+          color: white;
+        }
+
+        .action-btn.danger:hover {
+          background: #dc2626;
+        }
+
+        /* 빈 상태 */
+        .empty-state {
+          text-align: center;
+          padding: 3rem 2rem;
+          color: #64748b;
+        }
+
+        .empty-icon {
+          font-size: 4rem;
+          margin-bottom: 1rem;
+          opacity: 0.5;
+        }
+
+        .empty-state h3 {
+          margin: 0 0 0.5rem 0;
+          color: #1e293b;
+          font-size: 1.25rem;
+        }
+
+        .empty-state p {
+          margin: 0;
+          font-size: 1rem;
+        }
+
+        /* 알림 목록 */
+        .notifications-list {
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+        }
+
+        .notification-item {
+          padding: 1.25rem;
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
+          background: white;
+          cursor: pointer;
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          transition: all 0.2s ease;
+        }
+
+        .notification-item:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+        }
+
+        .notification-item.unread {
+          background: #f0f9ff;
+          border-color: #0ea5e9;
+        }
+
+        .notification-content {
+          flex: 1;
+        }
+
+        .notification-header {
+          display: flex;
+          align-items: flex-start;
+          gap: 0.75rem;
+          margin-bottom: 0.5rem;
+        }
+
+        .notification-icon {
+          font-size: 1.25rem;
+          flex-shrink: 0;
+        }
+
+        .notification-message {
+          flex: 1;
+          color: #1e293b;
+          font-size: 0.95rem;
+          line-height: 1.5;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+
+        .notification-item.unread .notification-message {
+          font-weight: 600;
+        }
+
+        .unread-dot {
+          width: 6px;
+          height: 6px;
+          background: #ef4444;
+          border-radius: 50%;
+          flex-shrink: 0;
+        }
+
+        .notification-time {
+          color: #64748b;
+          font-size: 0.8rem;
+          margin-left: 2rem;
+        }
+
+        .notification-actions {
+          display: flex;
+          gap: 0.5rem;
+          align-items: center;
+          flex-shrink: 0;
+        }
+
+        .read-btn {
+          background: transparent;
+          border: 1px solid #22c55e;
+          color: #22c55e;
+          cursor: pointer;
+          padding: 0.25rem 0.75rem;
+          border-radius: 6px;
+          font-size: 0.8rem;
+          transition: all 0.2s ease;
+        }
+
+        .read-btn:hover {
+          background: #22c55e;
+          color: white;
+        }
+
+        .delete-btn {
+          background: transparent;
+          border: none;
+          color: #ef4444;
+          cursor: pointer;
+          padding: 0.25rem 0.5rem;
+          border-radius: 4px;
+          font-size: 1.25rem;
+          transition: all 0.2s ease;
+        }
+
+        .delete-btn:hover {
+          background: #fef2f2;
+        }
+
+        /* 토스트 메시지 */
+        .toast {
+          position: fixed;
+          top: 20px;
+          right: 20px;
+          color: white;
+          padding: 1rem 1.5rem;
+          border-radius: 8px;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+          z-index: 1000;
+          font-size: 0.9rem;
+          font-weight: 500;
+        }
+
+        .toast-success {
+          background: #22c55e;
+        }
+
+        .toast-error {
+          background: #ef4444;
+        }
+
+        .toast-info {
+          background: #3b82f6;
+        }
+
+        /* 반응형 디자인 */
+        @media (max-width: 768px) {
+          .notifications-page {
+            padding: 0.5rem;
+          }
+
+          .header {
+            padding: 1.5rem;
+          }
+
+          .header h1 {
+            font-size: 1.5rem;
+            flex-direction: column;
+            gap: 0.5rem;
+          }
+
+          .content {
+            padding: 1.5rem;
+          }
+
+          .action-buttons {
+            justify-content: center;
+          }
+
+          .action-btn {
+            padding: 0.6rem 1.2rem;
+            font-size: 0.85rem;
+          }
+
+          .notification-item {
+            padding: 1rem;
+            flex-direction: column;
+            gap: 1rem;
+          }
+
+          .notification-actions {
+            align-self: flex-end;
+          }
+
+          .notification-time {
+            margin-left: 0;
+          }
+
+          .toast {
+            left: 1rem;
+            right: 1rem;
+            width: auto;
+          }
+        }
+      `}</style>
     </div>
   );
 }

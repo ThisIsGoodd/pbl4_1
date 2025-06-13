@@ -170,19 +170,18 @@ function PostDetailPage() {
 
   const handlePostDelete = async () => {
     if (!confirm('정말 삭제하시겠습니까?')) return;
-    
+
     try {
       const res = await fetch(`http://localhost:3001/api/posts/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
-      
+
       if (res.ok) {
         alert('삭제 완료');
         navigate(`/posts?classroom_id=${classroomId}`);
       } else {
-        const errorData = await res.json();
-        alert(`삭제 실패: ${errorData.error || '알 수 없는 오류'}`);
+        throw new Error('삭제 실패');
       }
     } catch (err) {
       console.error('🔥 게시글 삭제 오류:', err);
@@ -192,33 +191,27 @@ function PostDetailPage() {
 
   const handleLikeToggle = async () => {
     try {
-      const method = hasLiked ? 'DELETE' : 'POST';
       const res = await fetch(`http://localhost:3001/api/posts/${id}/like`, {
-        method,
+        method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       });
       
       if (res.ok) {
-        setHasLiked(!hasLiked);
-        fetchPost(); // 좋아요 수 업데이트
-      } else {
-        const errorData = await res.json();
-        alert(`오류: ${errorData.error || '알 수 없는 오류'}`);
+        const data = await res.json();
+        setHasLiked(data.hasLiked);
+        // 게시글 정보도 다시 불러와서 좋아요 수 업데이트
+        fetchPost();
       }
     } catch (err) {
-      console.error('🔥 좋아요 토글 오류:', err);
+      console.error('좋아요 처리 실패:', err);
     }
   };
 
-  const handleCommentSubmit = async () => {
-    if (!newComment.trim()) {
-      alert('댓글 내용을 입력하세요.');
-      return;
-    }
-    
+  const handleCommentSubmit = async (e) => {
+    e.preventDefault();
+    if (!newComment.trim()) return;
+
     try {
-      console.log('💬 댓글 작성 요청:', `http://localhost:3001/api/posts/${id}/comments`);
-      
       const res = await fetch(`http://localhost:3001/api/posts/${id}/comments`, {
         method: 'POST',
         headers: {
@@ -227,234 +220,314 @@ function PostDetailPage() {
         },
         body: JSON.stringify({ content: newComment })
       });
-      
+
       if (res.ok) {
         setNewComment('');
-        fetchComments();
+        fetchComments(); // 댓글 목록 새로고침
       } else {
-        const errorData = await res.json();
-        if (res.status === 404) {
-          alert('댓글 작성 기능이 아직 구현되지 않았습니다.');
-        } else {
-          alert(`댓글 작성 실패: ${errorData.error || '알 수 없는 오류'}`);
-        }
+        throw new Error('댓글 작성 실패');
       }
     } catch (err) {
-      console.error('🔥 댓글 작성 오류:', err);
-      alert('댓글 작성 중 오류 발생');
+      console.error('댓글 작성 실패:', err);
+      alert('댓글 작성에 실패했습니다.');
     }
   };
 
+  // 수정/삭제 권한 확인
+  const showEditButtons = currentUser && post && (
+    currentUser.user_id === post.author_id ||
+    currentUser.role === 'teacher' ||
+    currentUser.is_admin
+  );
+
   if (loading) {
     return (
-      <div style={{ padding: '2rem', textAlign: 'center' }}>
-        <p>로딩 중...</p>
+      <div style={{ 
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        padding: '1rem'
+      }}>
+        <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.9)',
+            backdropFilter: 'blur(10px)',
+            borderRadius: '16px',
+            padding: '3rem 2rem',
+            textAlign: 'center',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+            color: '#1e293b'
+          }}>
+            <div style={{
+              width: '40px',
+              height: '40px',
+              border: '3px solid #f1f5f9',
+              borderTop: '3px solid #4f46e5',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite',
+              margin: '0 auto 1rem'
+            }}></div>
+            <p>게시글을 불러오는 중...</p>
+          </div>
+        </div>
       </div>
     );
   }
 
   if (!post) {
     return (
-      <div style={{ padding: '2rem', textAlign: 'center' }}>
-        <p>게시글을 찾을 수 없습니다.</p>
-        <button 
-          onClick={() => navigate(`/posts?classroom_id=${classroomId}`)}
-          style={{
-            backgroundColor: '#6b7280',
-            color: 'white',
-            padding: '10px 20px',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            marginTop: '1rem'
-          }}
-        >
-          ← 목록으로 돌아가기
-        </button>
+      <div style={{ 
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        padding: '1rem'
+      }}>
+        <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.9)',
+            backdropFilter: 'blur(10px)',
+            borderRadius: '16px',
+            padding: '3rem 2rem',
+            textAlign: 'center',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+            color: '#1e293b'
+          }}>
+            <h2>게시글을 찾을 수 없습니다</h2>
+            <button 
+              onClick={() => navigate(-1)}
+              style={{
+                padding: '0.75rem 1.5rem',
+                background: '#6b7280',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontWeight: '600',
+                marginTop: '1rem'
+              }}
+            >
+              돌아가기
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
 
-  // 🔥 권한 확인 로직 - currentUser가 로드되기 전에는 false 반환
-  const canEdit = () => {
-    if (!currentUser || !currentUser.user_id || !post.author_id) {
-      console.log('❌ 사용자 정보가 아직 로드되지 않음');
-      return false;
-    }
-
-    console.log('🔍 권한 확인:', {
-      currentUserId: currentUser.user_id,
-      currentUserRole: currentUser.role,
-      postAuthorId: post.author_id,
-      postTeacherId: post.teacher_id,
-      isAuthor: currentUser.user_id === post.author_id,
-      isAdmin: currentUser.role === 'admin',
-      isTeacher: currentUser.role === 'teacher'
-    });
-
-    // 관리자는 모든 게시글 수정 가능
-    if (currentUser.role === 'admin') {
-      console.log('✅ 관리자 권한으로 수정 가능');
-      return true;
-    }
-    
-    // 게시글 작성자는 수정 가능
-    if (currentUser.user_id === post.author_id) {
-      console.log('✅ 게시글 작성자로 수정 가능');
-      return true;
-    }
-    
-    // 교사는 해당 학급 게시글 수정 가능
-    if (currentUser.role === 'teacher' && post.teacher_id && currentUser.user_id === post.teacher_id) {
-      console.log('✅ 담당 교사로 수정 가능');
-      return true;
-    }
-
-    console.log('❌ 수정 권한 없음');
-    return false;
-  };
-
-  const showEditButtons = canEdit();
-  console.log('🔄 수정/삭제 버튼 표시 여부:', showEditButtons);
-
   return (
-    <div style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
-      {isEditingPost ? (
-        <>
-          <h2 style={{ marginBottom: '1rem' }}>게시글 수정</h2>
-          <input 
-            value={editTitle} 
-            onChange={(e) => setEditTitle(e.target.value)}
-            placeholder="제목을 입력하세요"
-            style={{ 
-              width: '100%', 
-              padding: '0.75rem', 
-              marginBottom: '1rem',
-              border: '1px solid #d1d5db',
-              borderRadius: '6px',
-              fontSize: '16px'
-            }}
-          />
-          <textarea 
-            value={editPostContent} 
-            onChange={(e) => setEditPostContent(e.target.value)}
-            placeholder="내용을 입력하세요"
-            style={{ 
-              width: '100%', 
-              minHeight: '200px', 
-              padding: '0.75rem', 
-              marginBottom: '1rem',
-              border: '1px solid #d1d5db',
-              borderRadius: '6px',
-              fontSize: '14px',
-              fontFamily: 'inherit',
-              resize: 'vertical'
-            }}
-          />
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={{ marginRight: '1rem' }}>
-              <input
-                type="radio"
-                name="editScope"
-                checked={!editSchoolWide}
-                onChange={() => setEditSchoolWide(false)}
-                style={{ marginRight: '0.5rem' }}
-              /> 학급 게시글
-            </label>
-            <label>
-              <input
-                type="radio"
-                name="editScope"
-                checked={editSchoolWide}
-                onChange={() => setEditSchoolWide(true)}
-                style={{ marginRight: '0.5rem' }}
-              /> 학교 전체 게시글
-            </label>
-          </div>
-          <div>
-            <button 
-              onClick={handlePostEditSave}
-              style={{
-                backgroundColor: '#3b82f6',
-                color: 'white',
-                padding: '10px 20px',
-                border: 'none',
-                borderRadius: '6px',
-                marginRight: '0.5rem',
-                cursor: 'pointer'
-              }}
-            >
-              저장
-            </button>
-            <button 
-              onClick={() => setIsEditingPost(false)}
-              style={{
-                backgroundColor: '#6b7280',
-                color: 'white',
-                padding: '10px 20px',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer'
-              }}
-            >
-              취소
-            </button>
-          </div>
-        </>
-      ) : (
-        <>
-          <div style={{ marginBottom: '2rem', paddingBottom: '1rem', borderBottom: '2px solid #e5e7eb' }}>
-            <h1 style={{ 
-              fontFamily: 'Arial, sans-serif',
-              fontSize: '1.8rem',
-              fontWeight: 'bold',
-              marginBottom: '1rem',
-              color: '#1f2937'
+    <div style={{ 
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      padding: '1rem'
+    }}>
+      <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+        {isEditingPost ? (
+          /* 수정 모드 */
+          <>
+            {/* 헤더 */}
+            <div style={{
+              background: 'rgba(255, 255, 255, 0.9)',
+              backdropFilter: 'blur(10px)',
+              borderRadius: '16px',
+              padding: '2rem',
+              textAlign: 'center',
+              marginBottom: '2rem',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
             }}>
-              {post.title}
-              {post.school_wide === true && (
-                <span style={{ 
-                  marginLeft: '10px', 
-                  color: '#3366cc', 
-                  fontSize: '1rem',
-                  backgroundColor: '#e3f2fd',
-                  padding: '4px 8px',
-                  borderRadius: '4px',
-                  fontWeight: 'normal'
-                }}>
-                  [학교 전체]
-                </span>
-              )}
-            </h1>
+              <h1 style={{
+                margin: '0 0 0.5rem 0',
+                color: '#1e293b',
+                fontSize: '2rem'
+              }}>게시글 수정</h1>
+              <p style={{
+                margin: 0,
+                color: '#64748b',
+                fontSize: '1.1rem'
+              }}>게시글 내용을 수정하세요</p>
+            </div>
             
-            <div style={{ 
-              display: 'flex', 
-              justifyContent: 'space-between', 
-              alignItems: 'center',
-              fontSize: '0.9rem',
-              color: '#6b7280',
-              marginBottom: '1rem'
+            {/* 수정 폼 */}
+            <div style={{
+              background: 'rgba(255, 255, 255, 0.9)',
+              backdropFilter: 'blur(10px)',
+              borderRadius: '16px',
+              padding: '2rem',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
             }}>
-              <div>
-                <strong>작성자:</strong> {post.author_name || '알 수 없음'} | 
-                <strong style={{ marginLeft: '1rem' }}>작성일:</strong> {post.created_at ? new Date(post.created_at).toLocaleString() : '알 수 없음'} | 
-                <strong style={{ marginLeft: '1rem' }}>조회수:</strong> {post.views || 0}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ 
+                  display: 'block', 
+                  marginBottom: '0.5rem', 
+                  fontWeight: '600', 
+                  color: '#1e293b' 
+                }}>제목</label>
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '8px',
+                    fontSize: '0.9rem',
+                    boxSizing: 'border-box'
+                  }}
+                  placeholder="제목을 입력하세요"
+                />
               </div>
-              
-              {/* 🔥 수정/삭제 버튼 - AuthContext 기반 권한 확인 */}
+
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ 
+                  display: 'block', 
+                  marginBottom: '0.5rem', 
+                  fontWeight: '600', 
+                  color: '#1e293b' 
+                }}>내용</label>
+                <textarea
+                  value={editPostContent}
+                  onChange={(e) => setEditPostContent(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '8px',
+                    fontSize: '0.9rem',
+                    minHeight: '200px',
+                    resize: 'vertical',
+                    boxSizing: 'border-box'
+                  }}
+                  placeholder="내용을 입력하세요"
+                />
+              </div>
+
+              {(currentUser?.role === 'teacher' || currentUser?.is_admin) && (
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <label style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '0.5rem', 
+                    cursor: 'pointer' 
+                  }}>
+                    <input
+                      type="checkbox"
+                      checked={editSchoolWide}
+                      onChange={(e) => setEditSchoolWide(e.target.checked)}
+                    />
+                    학교 전체 공지
+                  </label>
+                </div>
+              )}
+
+              <div style={{ 
+                display: 'flex', 
+                gap: '1rem', 
+                justifyContent: 'flex-end', 
+                marginTop: '2rem' 
+              }}>
+                <button 
+                  onClick={() => setIsEditingPost(false)}
+                  style={{
+                    padding: '0.75rem 1.5rem',
+                    background: '#6b7280',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontWeight: '600'
+                  }}
+                >
+                  취소
+                </button>
+                <button 
+                  onClick={handlePostEditSave}
+                  style={{
+                    padding: '0.75rem 1.5rem',
+                    background: '#3b82f6',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontWeight: '600'
+                  }}
+                >
+                  수정 완료
+                </button>
+              </div>
+            </div>
+          </>
+        ) : (
+          /* 보기 모드 */
+          <>
+            {/* 헤더 */}
+            <div style={{
+              background: 'rgba(255, 255, 255, 0.9)',
+              backdropFilter: 'blur(10px)',
+              borderRadius: '16px',
+              padding: '2rem',
+              marginBottom: '2rem',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
+            }}>
+              <h1 style={{
+                margin: '0 0 1rem 0',
+                color: '#1e293b',
+                fontSize: '1.75rem',
+                lineHeight: '1.3',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.75rem',
+                flexWrap: 'wrap'
+              }}>
+                {post.title}
+                {post.school_wide === 1 && (
+                  <span style={{
+                    background: '#e0f2fe',
+                    color: '#0369a1',
+                    padding: '0.25rem 0.75rem',
+                    borderRadius: '12px',
+                    fontSize: '0.875rem',
+                    fontWeight: '600'
+                  }}>[학교 전체]</span>
+                )}
+              </h1>
+              <div style={{
+                display: 'flex',
+                gap: '1rem',
+                color: '#64748b',
+                fontSize: '0.9rem',
+                flexWrap: 'wrap'
+              }}>
+                <span>작성자: {post.author_name || '알 수 없음'}</span>
+                <span>작성일: {post.created_at ? new Date(post.created_at).toLocaleString() : '알 수 없음'}</span>
+                <span>조회수: {post.views || 0}</span>
+              </div>
+            </div>
+
+            {/* 메인 콘텐츠 */}
+            <div style={{
+              background: 'rgba(255, 255, 255, 0.9)',
+              backdropFilter: 'blur(10px)',
+              borderRadius: '16px',
+              padding: '2rem',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
+            }}>
+              {/* 액션 버튼들 */}
               {showEditButtons && (
-                <div>
+                <div style={{
+                  display: 'flex',
+                  gap: '0.75rem',
+                  marginBottom: '2rem',
+                  justifyContent: 'flex-end'
+                }}>
                   <button 
                     onClick={() => setIsEditingPost(true)}
                     style={{
-                      backgroundColor: '#f59e0b',
+                      padding: '0.5rem 1rem',
+                      background: '#f59e0b',
                       color: 'white',
-                      padding: '6px 12px',
                       border: 'none',
-                      borderRadius: '4px',
-                      fontSize: '0.8rem',
-                      marginRight: '0.5rem',
-                      cursor: 'pointer'
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontSize: '0.875rem',
+                      fontWeight: '600'
                     }}
                   >
                     수정
@@ -462,214 +535,362 @@ function PostDetailPage() {
                   <button 
                     onClick={handlePostDelete}
                     style={{
-                      backgroundColor: '#ef4444',
+                      padding: '0.5rem 1rem',
+                      background: '#ef4444',
                       color: 'white',
-                      padding: '6px 12px',
                       border: 'none',
-                      borderRadius: '4px',
-                      fontSize: '0.8rem',
-                      cursor: 'pointer'
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontSize: '0.875rem',
+                      fontWeight: '600'
                     }}
                   >
                     삭제
                   </button>
                 </div>
               )}
-            </div>
-          </div>
 
-          {/* 게시글 내용 - 개선된 스타일링 */}
+              {/* 게시글 내용 */}
+              <div style={{ marginBottom: '2rem' }}>
+                <div 
+                  className="post-content"
+                  style={{
+                    background: 'white',
+                    padding: '2rem',
+                    borderRadius: '12px',
+                    border: '1px solid #e2e8f0',
+                    lineHeight: '1.7',
+                    color: '#1e293b',
+                    minHeight: '200px'
+                  }}
+                  dangerouslySetInnerHTML={{ __html: processPostContent(post.content || '<p>내용이 없습니다.</p>') }}
+                />
+              </div>
+
+              {/* 첨부파일 섹션 */}
+              {post.attachments && post.attachments.length > 0 && (
+                <div style={{
+                  marginBottom: '2rem',
+                  padding: '1.5rem',
+                  background: '#f8fafc',
+                  borderRadius: '12px',
+                  border: '1px solid #e2e8f0'
+                }}>
+                  <h4 style={{
+                    margin: '0 0 1rem 0',
+                    color: '#1e293b',
+                    fontSize: '1.1rem'
+                  }}>📎 첨부파일</h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {post.attachments.map(att => (
+                      <a 
+                        key={att.attachment_id}
+                        href={`http://localhost:3001${att.file_path}`}
+                        download={att.original_name}
+                        style={{
+                          display: 'inline-block',
+                          padding: '0.75rem 1rem',
+                          background: 'white',
+                          border: '1px solid #d1d5db',
+                          borderRadius: '8px',
+                          color: '#3b82f6',
+                          textDecoration: 'none',
+                          fontSize: '0.9rem'
+                        }}
+                      >
+                        📥 {att.original_name}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 좋아요 섹션 */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '1rem',
+                padding: '1.5rem',
+                background: '#f8fafc',
+                borderRadius: '12px',
+                marginBottom: '2rem'
+              }}>
+                <span style={{ fontSize: '1rem', color: '#64748b' }}>
+                  ❤️ 공감 수: {post.likes || 0}
+                </span>
+                <button 
+                  onClick={handleLikeToggle}
+                  style={{
+                    padding: '0.75rem 1.5rem',
+                    background: hasLiked ? '#ef4444' : '#3b82f6',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontWeight: '600'
+                  }}
+                >
+                  {hasLiked ? '💖 공감 취소' : '💗 공감하기'}
+                </button>
+              </div>
+
+              {/* 댓글 섹션 */}
+              <div style={{ marginBottom: '2rem' }}>
+                <h3 style={{
+                  margin: '0 0 1.5rem 0',
+                  color: '#1e293b',
+                  fontSize: '1.25rem',
+                  paddingBottom: '0.75rem',
+                  borderBottom: '2px solid #e2e8f0'
+                }}>💬 댓글 ({comments.length})</h3>
+                
+                {/* 댓글 작성 */}
+                <form onSubmit={handleCommentSubmit} style={{
+                  marginBottom: '2rem',
+                  padding: '1.5rem',
+                  background: '#f8fafc',
+                  borderRadius: '12px',
+                  border: '1px solid #e2e8f0'
+                }}>
+                  <textarea
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    placeholder="댓글을 입력하세요..."
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '8px',
+                      resize: 'vertical',
+                      fontSize: '0.9rem',
+                      marginBottom: '1rem',
+                      boxSizing: 'border-box'
+                    }}
+                    rows="3"
+                  />
+                  <button 
+                    type="submit" 
+                    disabled={!newComment.trim()}
+                    style={{
+                      padding: '0.75rem 1.5rem',
+                      backgroundColor: newComment.trim() ? '#3b82f6' : '#9ca3af',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: newComment.trim() ? 'pointer' : 'not-allowed',
+                      fontWeight: '600'
+                    }}
+                  >
+                    댓글 작성
+                  </button>
+                </form>
+
+                {/* 댓글 목록 */}
+                {comments.length === 0 ? (
+                  <div style={{
+                    textAlign: 'center',
+                    padding: '2rem',
+                    color: '#64748b',
+                    fontStyle: 'italic'
+                  }}>
+                    <p>아직 댓글이 없습니다. 첫 번째 댓글을 작성해보세요!</p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    {comments.map(comment => (
+                      <div 
+                        key={comment.comment_id}
+                        style={{
+                          padding: '1.25rem',
+                          background: '#f9fafb',
+                          borderRadius: '8px',
+                          border: '1px solid #e5e7eb'
+                        }}
+                      >
+                        <div style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          marginBottom: '0.75rem',
+                          fontSize: '0.9rem'
+                        }}>
+                          <strong style={{ color: '#1e293b' }}>
+                            {comment.author_name || '익명'}
+                          </strong>
+                          <span style={{ color: '#64748b' }}>
+                            {comment.created_at ? new Date(comment.created_at).toLocaleString() : '알 수 없음'}
+                          </span>
+                        </div>
+                        <div style={{ color: '#374151', lineHeight: '1.6' }}>
+                          {comment.content || '내용이 없습니다.'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 하단 버튼 */}
+              <div style={{ textAlign: 'center', paddingTop: '1rem' }}>
+                <button 
+                  onClick={() => navigate(`/posts?classroom_id=${classroomId}`)}
+                  style={{
+                    padding: '0.75rem 1.5rem',
+                    background: '#6b7280',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontWeight: '600'
+                  }}
+                >
+                  ← 목록으로 돌아가기
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* 이미지 모달 */}
+        {selectedImage && (
           <div 
-            className="post-content"
             style={{
-              backgroundColor: '#ffffff',
-              padding: '2rem',
-              borderRadius: '8px',
-              border: '1px solid #e5e7eb',
-              marginBottom: '2rem',
-              minHeight: '200px',
-              lineHeight: '1.6'
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0, 0, 0, 0.8)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000,
+              padding: '2rem'
             }}
-            dangerouslySetInnerHTML={{ __html: processPostContent(post.content || '<p>내용이 없습니다.</p>') }}
-          />
-
-          {/* 첨부파일 섹션 */}
-          {post.attachments && post.attachments.length > 0 && (
-            <div style={{ 
-              backgroundColor: '#f9fafb',
-              padding: '1.5rem',
-              borderRadius: '8px',
-              border: '1px solid #e5e7eb',
-              marginBottom: '2rem'
-            }}>
-              <h4 style={{ marginBottom: '1rem', color: '#374151' }}>📎 첨부파일</h4>
-              <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                {post.attachments.map(att => (
-                  <li key={att.attachment_id} style={{ marginBottom: '0.5rem' }}>
-                    <a 
-                      href={`http://localhost:3001${att.file_path}`}
-                      download={att.original_name}
-                      style={{
-                        color: '#3b82f6',
-                        textDecoration: 'none',
-                        padding: '8px 12px',
-                        backgroundColor: 'white',
-                        border: '1px solid #d1d5db',
-                        borderRadius: '6px',
-                        display: 'inline-block',
-                        fontSize: '0.9rem'
-                      }}
-                    >
-                      📥 {att.original_name}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* 좋아요 섹션 */}
-          <div style={{ 
-            marginBottom: '2rem',
-            textAlign: 'center',
-            padding: '1rem',
-            backgroundColor: '#f9fafb',
-            borderRadius: '8px'
-          }}>
-            <span style={{ marginRight: '1rem' }}>❤️ 공감 수: {post.likes || 0}</span>
-            <button 
-              onClick={handleLikeToggle}
-              style={{
-                backgroundColor: hasLiked ? '#ef4444' : '#3b82f6',
-                color: 'white',
-                padding: '8px 16px',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer'
-              }}
-            >
-              {hasLiked ? '💔 공감 취소' : '❤️ 공감하기'}
-            </button>
-          </div>
-        </>
-      )}
-
-      {/* 이미지 모달 */}
-      {selectedImage && (
-        <div 
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 1000,
-            cursor: 'pointer'
-          }}
-          onClick={() => setSelectedImage(null)}
-        >
-          <img 
-            src={selectedImage}
-            alt="확대된 이미지"
-            style={{
-              maxWidth: '90%',
-              maxHeight: '90%',
-              objectFit: 'contain',
-              borderRadius: '8px'
-            }}
-          />
-        </div>
-      )}
-
-      {/* 댓글 섹션 */}
-      <div style={{ marginTop: '3rem' }}>
-        <h3 style={{ marginBottom: '1rem', color: '#374151' }}>💬 댓글 ({comments.length})</h3>
-        
-        {/* 댓글 작성 */}
-        <div style={{ marginBottom: '2rem' }}>
-          <textarea
-            value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
-            placeholder="댓글을 입력하세요..."
-            style={{
-              width: '100%',
-              minHeight: '80px',
-              padding: '0.75rem',
-              border: '1px solid #d1d5db',
-              borderRadius: '6px',
-              fontSize: '14px',
-              resize: 'vertical',
-              marginBottom: '0.5rem'
-            }}
-          />
-          <button 
-            onClick={handleCommentSubmit}
-            disabled={!newComment.trim()}
-            style={{
-              backgroundColor: newComment.trim() ? '#3b82f6' : '#9ca3af',
-              color: 'white',
-              padding: '8px 16px',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: newComment.trim() ? 'pointer' : 'not-allowed'
-            }}
+            onClick={() => setSelectedImage(null)}
           >
-            댓글 작성
-          </button>
-        </div>
-
-        {/* 댓글 목록 */}
-        {comments.length === 0 ? (
-          <p style={{ color: '#6b7280', fontStyle: 'italic', textAlign: 'center', padding: '2rem' }}>
-            아직 댓글이 없습니다. 첫 번째 댓글을 작성해보세요!
-          </p>
-        ) : (
-          <div>
-            {comments.map(comment => (
-              <div 
-                key={comment.comment_id} 
+            <div style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh' }}>
+              <img 
+                src={selectedImage} 
+                alt="확대 이미지"
                 style={{
-                  backgroundColor: '#f9fafb',
-                  padding: '1rem',
-                  borderRadius: '6px',
-                  marginBottom: '1rem',
-                  border: '1px solid #e5e7eb'
+                  maxWidth: '100%',
+                  maxHeight: '90vh',
+                  borderRadius: '8px'
+                }}
+              />
+              <button
+                onClick={() => setSelectedImage(null)}
+                style={{
+                  position: 'absolute',
+                  top: '-15px',
+                  right: '-15px',
+                  background: '#ef4444',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '40px',
+                  height: '40px',
+                  cursor: 'pointer',
+                  fontSize: '1.5rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
                 }}
               >
-                <div style={{ 
-                  fontSize: '0.9rem', 
-                  color: '#6b7280', 
-                  marginBottom: '0.5rem' 
-                }}>
-                  <strong>{comment.author_name || '익명'}</strong> • {comment.created_at ? new Date(comment.created_at).toLocaleString() : '알 수 없음'}
-                </div>
-                <div style={{ color: '#374151' }}>{comment.content || '내용이 없습니다.'}</div>
-              </div>
-            ))}
+                ×
+              </button>
+            </div>
           </div>
         )}
       </div>
 
-      {/* 뒤로가기 버튼 */}
-      <div style={{ marginTop: '2rem', textAlign: 'center' }}>
-        <button 
-          onClick={() => navigate(`/posts?classroom_id=${classroomId}`)}
-          style={{
-            backgroundColor: '#6b7280',
-            color: 'white',
-            padding: '10px 20px',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer'
-          }}
-        >
-          ← 목록으로 돌아가기
-        </button>
-      </div>
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+
+        .post-content img {
+          max-width: 100%;
+          height: auto;
+          border-radius: 8px;
+          margin: 1rem 0;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+          cursor: pointer;
+          transition: transform 0.2s ease;
+        }
+
+        .post-content img:hover {
+          transform: scale(1.02);
+        }
+
+        .post-content p {
+          margin-bottom: 1rem;
+          word-wrap: break-word;
+        }
+
+        .post-content h1, 
+        .post-content h2, 
+        .post-content h3,
+        .post-content h4, 
+        .post-content h5, 
+        .post-content h6 {
+          color: #1e293b;
+          margin: 1.5rem 0 1rem 0;
+          line-height: 1.3;
+        }
+
+        .post-content ul, 
+        .post-content ol {
+          margin: 1rem 0;
+          padding-left: 2rem;
+        }
+
+        .post-content blockquote {
+          border-left: 4px solid #3b82f6;
+          padding-left: 1rem;
+          margin: 1rem 0;
+          font-style: italic;
+          color: #64748b;
+          background-color: #f8fafc;
+          padding: 1rem;
+          border-radius: 0 8px 8px 0;
+        }
+
+        .post-content code {
+          background-color: #f1f5f9;
+          padding: 0.25rem 0.5rem;
+          border-radius: 4px;
+          font-family: 'Courier New', monospace;
+          color: #1e293b;
+        }
+
+        .post-content pre {
+          background-color: #f1f5f9;
+          padding: 1rem;
+          border-radius: 8px;
+          overflow-x: auto;
+          margin: 1rem 0;
+          border: 1px solid #e2e8f0;
+        }
+
+        @media (max-width: 768px) {
+          .post-content {
+            padding: 1.5rem !important;
+          }
+          
+          .post-content img {
+            margin: 0.5rem 0;
+            border-radius: 6px;
+          }
+          
+          .post-content {
+            font-size: 0.95rem;
+          }
+        }
+      `}</style>
     </div>
   );
 }

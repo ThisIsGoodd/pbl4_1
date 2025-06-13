@@ -14,7 +14,12 @@
     "@fullcalendar/daygrid": "^6.1.17",
     "@fullcalendar/interaction": "^6.1.17",
     "@fullcalendar/react": "^6.1.17",
+    "@tiptap/extension-color": "^2.14.0",
+    "@tiptap/extension-font-family": "^2.14.0",
+    "@tiptap/extension-highlight": "^2.14.0",
     "@tiptap/extension-image": "^2.12.0",
+    "@tiptap/extension-text-align": "^2.14.0",
+    "@tiptap/extension-underline": "^2.14.0",
     "@tiptap/react": "^2.12.0",
     "@tiptap/starter-kit": "^2.12.0",
     "axios": "^1.9.0",
@@ -22,7 +27,8 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.5.3",
-    "socket.io-client": "^4.8.1"
+    "socket.io-client": "^4.8.1",
+    "tiptap": "^1.32.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.22.0",

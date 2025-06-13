@@ -145,215 +145,309 @@ function PostPage() {
   };
 
   return (
-    <div style={{ padding: '2rem', width: '100%' }}>
-      <h2 style={{ fontSize: '2rem', fontWeight: 'bold', textAlign: 'center', margin: '2rem 0' }}>
-        {classroomName}
-      </h2>
-
-      {/* 🔥 학교 전체 관리자가 아닌 경우만 탭 표시 */}
-      {!isSchoolAdmin && (
-        <div style={{ marginBottom: '1rem' }}>
-          {['classroom', 'school'].map(type => (
-            <button
-              key={type}
-              onClick={() => setScope(type)}
-              style={{
-                padding: '0.5rem 1.2rem',
-                border: '1px solid #aaa',
-                borderRadius: '5px',
-                backgroundColor: scope === type ? '#f6f2e8' : '#fff',
-                fontWeight: scope === type ? 'bold' : 'normal',
-                marginRight: '1rem',
-                cursor: 'pointer'
-              }}
-            >
-              {type === 'classroom' ? '학급 공지사항' : '학교 공지사항'}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* 🆕 학교 전체 관리자인 경우 안내 메시지 */}
-      {isSchoolAdmin && (
+    <div style={{ 
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      padding: '1rem'
+    }}>
+      <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+        {/* 헤더 */}
         <div style={{
-          marginBottom: '1.5rem',
-          padding: '1rem',
-          backgroundColor: '#e3f2fd',
-          borderRadius: '8px',
-          border: '1px solid #90caf9',
-          textAlign: 'center'
+          background: 'rgba(255, 255, 255, 0.9)',
+          backdropFilter: 'blur(10px)',
+          borderRadius: '16px',
+          padding: '2rem',
+          textAlign: 'center',
+          marginBottom: '2rem',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
         }}>
-          🏫 <strong>학교 전체 공지사항</strong>만 표시됩니다.
-          <div style={{ fontSize: '0.9rem', marginTop: '0.5rem', color: '#1565c0' }}>
-            모든 학급에서 볼 수 있는 중요한 공지사항들입니다.
+          <h1 style={{
+            margin: '0 0 0.5rem 0',
+            color: '#1e293b',
+            fontSize: '2rem'
+          }}>{classroomName}</h1>
+          <p style={{
+            margin: 0,
+            color: '#64748b',
+            fontSize: '1.1rem'
+          }}>공지사항을 확인하고 소통하세요</p>
+        </div>
+
+        {/* 메인 콘텐츠 */}
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.9)',
+          backdropFilter: 'blur(10px)',
+          borderRadius: '16px',
+          padding: '2rem',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
+        }}>
+          {/* 🔥 학교 전체 관리자가 아닌 경우만 탭 표시 */}
+          {!isSchoolAdmin && (
+            <div style={{ marginBottom: '2rem' }}>
+              <div style={{ 
+                display: 'flex', 
+                gap: '0.5rem',
+                borderBottom: '2px solid #e2e8f0',
+                paddingBottom: '1rem'
+              }}>
+                {['classroom', 'school'].map(type => (
+                  <button
+                    key={type}
+                    onClick={() => setScope(type)}
+                    style={{
+                      padding: '0.75rem 1.5rem',
+                      border: 'none',
+                      borderRadius: '8px',
+                      background: scope === type ? '#4f46e5' : '#e2e8f0',
+                      color: scope === type ? 'white' : '#64748b',
+                      fontWeight: scope === type ? '600' : 'normal',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    {type === 'classroom' ? '학급 공지사항' : '학교 공지사항'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 🆕 학교 전체 관리자인 경우 안내 메시지 */}
+          {isSchoolAdmin && (
+            <div style={{
+              marginBottom: '2rem',
+              padding: '1.5rem',
+              background: '#e0f2fe',
+              borderRadius: '12px',
+              border: '1px solid #0ea5e9',
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: '1.1rem', fontWeight: '600', color: '#0369a1', marginBottom: '0.5rem' }}>
+                🏫 학교 전체 공지사항
+              </div>
+              <div style={{ fontSize: '0.9rem', color: '#0284c7' }}>
+                모든 학급에서 볼 수 있는 중요한 공지사항들입니다.
+              </div>
+            </div>
+          )}
+
+          {/* 검색 및 필터 영역 */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '2rem',
+            gap: '1rem',
+            flexWrap: 'wrap'
+          }}>
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+              <div>
+                <label style={{ marginRight: '0.5rem', color: '#1e293b', fontWeight: '500' }}>정렬:</label>
+                <select 
+                  value={sortOption} 
+                  onChange={(e) => setSortOption(e.target.value)}
+                  style={{
+                    padding: '0.5rem',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    background: 'white'
+                  }}
+                >
+                  <option value="latest">최신순</option>
+                  <option value="views">조회수순</option>
+                </select>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+              <input
+                type="text"
+                placeholder="제목 또는 내용 검색"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  padding: '0.75rem',
+                  width: '250px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '8px',
+                  fontSize: '0.9rem'
+                }}
+              />
+
+              {/* 🔥 게시글 작성 버튼 - 권한별 분기 */}
+              {(currentUser?.role === 'teacher' || currentUser?.role === 'admin') && (
+                <button
+                  onClick={handleWriteClick}
+                  style={{
+                    padding: '0.75rem 1.5rem',
+                    background: '#22c55e',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontWeight: '600',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  ✏️ 글쓰기
+                </button>
+              )}
+            </div>
           </div>
-        </div>
-      )}
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1.5rem' }}>
-        <input
-          type="text"
-          placeholder="제목 또는 내용 검색"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          style={{
-            padding: '0.5rem',
-            width: '200px',
-            border: '1px solid #ccc',
-            borderRadius: '4px'
-          }}
-        />
-      </div>
-
-      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
-        <div>
-          <label>정렬: </label>
-          <select value={sortOption} onChange={(e) => setSortOption(e.target.value)}>
-            <option value="latest">최신순</option>
-            <option value="views">조회수순</option>
-          </select>
-        </div>
-      </div>
-
-      {/* 🔥 게시글 작성 버튼 - 권한별 분기 */}
-      {(currentUser?.role === 'teacher' || currentUser?.role === 'admin') && (
-        <div style={{ marginBottom: '1rem', display: 'flex', gap: '1rem' }}>
-          {isSchoolAdmin ? (
-            // 학교 전체 관리자는 학교 전체 공지만 작성 가능
-            <button 
-              onClick={() => navigate(`/posts/write?school_id=${schoolId}`)}
-              style={{
-                padding: '0.75rem 1.5rem',
-                backgroundColor: '#28a745',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '1rem',
-                fontWeight: 'bold'
-              }}
-            >
-              🏫 학교 전체 공지 작성
-            </button>
+          {/* 게시글 목록 */}
+          {posts.length === 0 ? (
+            <div style={{
+              textAlign: 'center',
+              padding: '3rem 2rem',
+              color: '#64748b'
+            }}>
+              <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📝</div>
+              <h3 style={{ margin: '0 0 0.5rem 0', color: '#1e293b' }}>게시글이 없습니다</h3>
+              <p style={{ margin: 0 }}>첫 번째 게시글을 작성해보세요!</p>
+            </div>
           ) : (
-            // 일반 교사(학급 관리자)는 학급 공지와 학교 공지 둘 다 작성 가능
             <>
-              <button 
-                onClick={() => navigate(`/posts/write?classroom_id=${classroomId}&type=classroom`)}
-                style={{
-                  padding: '0.75rem 1.5rem',
-                  backgroundColor: '#007bff',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '1rem',
-                  fontWeight: 'bold'
-                }}
-              >
-                📚 학급 공지 작성
-              </button>
-              
-              <button 
-                onClick={() => navigate(`/posts/write?classroom_id=${classroomId}&type=school`)}
-                style={{
-                  padding: '0.75rem 1.5rem',
-                  backgroundColor: '#28a745',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '1rem',
-                  fontWeight: 'bold'
-                }}
-              >
-                🏫 학교 공지 작성
-              </button>
+              {/* 테이블 헤더 */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '60px 1fr 120px 120px 80px 80px',
+                gap: '1rem',
+                padding: '1rem',
+                background: '#f8fafc',
+                borderRadius: '8px',
+                marginBottom: '0.5rem',
+                fontWeight: '600',
+                color: '#1e293b',
+                fontSize: '0.9rem'
+              }}>
+                <div style={{ textAlign: 'center' }}>번호</div>
+                <div>제목</div>
+                <div style={{ textAlign: 'center' }}>작성자</div>
+                <div style={{ textAlign: 'center' }}>작성일</div>
+                <div style={{ textAlign: 'center' }}>조회수</div>
+                <div style={{ textAlign: 'center' }}>공감</div>
+              </div>
+
+              {/* 게시글 목록 */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {currentPosts.map((post, index) => (
+                  <div
+                    key={post.post_id}
+                    onClick={() => {
+                      const query = isSchoolAdmin ? 
+                        `school_id=${schoolId}` 
+                        : `classroom_id=${classroomId}`;
+                      navigate(`/posts/${post.post_id}?${query}`);
+                    }}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '60px 1fr 120px 120px 80px 80px',
+                      gap: '1rem',
+                      padding: '1rem',
+                      background: 'white',
+                      borderRadius: '8px',
+                      border: '1px solid #e2e8f0',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      alignItems: 'center'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
+                  >
+                    <div style={{ textAlign: 'center', color: '#64748b', fontSize: '0.9rem' }}>
+                      {indexOfFirst + index + 1}
+                    </div>
+                    <div style={{ color: '#3b82f6', fontWeight: '500' }}>
+                      {/* 🔥 학교 전체 관리자인 경우 [학교 전체] 표시 불필요 */}
+                      {!isSchoolAdmin && post.school_wide === 1 && (
+                        <span style={{
+                          background: '#e0f2fe',
+                          color: '#0369a1',
+                          padding: '0.25rem 0.5rem',
+                          borderRadius: '4px',
+                          fontSize: '0.75rem',
+                          fontWeight: '600',
+                          marginRight: '0.5rem'
+                        }}>
+                          [학교 전체]
+                        </span>
+                      )}
+                      {post.title}
+                    </div>
+                    <div style={{ textAlign: 'center', color: '#64748b', fontSize: '0.9rem' }}>
+                      {post.author_name || '작성자 없음'}
+                    </div>
+                    <div style={{ textAlign: 'center', color: '#64748b', fontSize: '0.9rem' }}>
+                      {post.created_at?.slice(0, 10)}
+                    </div>
+                    <div style={{ textAlign: 'center', color: '#64748b', fontSize: '0.9rem' }}>
+                      {post.views ?? 0}
+                    </div>
+                    <div style={{ textAlign: 'center', color: '#64748b', fontSize: '0.9rem' }}>
+                      {post.likes ?? 0}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </>
           )}
+
+          {/* 페이지네이션 */}
+          {totalPages > 1 && (
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'center', 
+              marginTop: '2rem', 
+              gap: '0.5rem' 
+            }}>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                <button
+                  key={page}
+                  onClick={() => setCurrentPage(page)}
+                  style={{
+                    padding: '0.75rem 1rem',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    background: currentPage === page ? '#4f46e5' : 'white',
+                    color: currentPage === page ? 'white' : '#64748b',
+                    fontWeight: currentPage === page ? '600' : 'normal',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  {page}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
-      )}
-
-      {currentPosts.length === 0 ? (
-        <p style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>
-          {isSchoolAdmin ? '학교 전체 공지사항이 없습니다.' : '게시글이 없습니다.'}
-        </p>
-      ) : (
-        <table style={{
-          width: '100%',
-          borderCollapse: 'collapse',
-          marginTop: '1rem'
-        }}>
-          <thead>
-            <tr>
-              <th style={thStyle}>번호</th>
-              <th style={thStyle}>제목</th>
-              <th style={thStyle}>작성자</th>
-              <th style={thStyle}>등록일</th>
-              <th style={thStyle}>조회수</th>
-              <th style={thStyle}>공감수</th>
-            </tr>
-          </thead>
-          <tbody>
-            {currentPosts.map((post, index) => (
-              <tr
-                key={post.post_id}
-                onClick={() => {
-                  const query = isSchoolAdmin 
-                    ? `school_id=${schoolId}` 
-                    : `classroom_id=${classroomId}`;
-                  navigate(`/posts/${post.post_id}?${query}`);
-                }}
-                style={{ cursor: 'pointer', borderBottom: '1px solid #ccc' }}
-              >
-                <td style={tdStyle}>{indexOfFirst + index + 1}</td>
-                <td style={{ ...tdStyle, textAlign: 'left', color: '#3366cc' }}>
-                  {/* 🔥 학교 전체 관리자인 경우 [학교 전체] 표시 불필요 */}
-                  {!isSchoolAdmin && post.school_wide ? '[학교 전체] ' : ''}
-                  {post.title}
-                </td>
-                <td style={tdStyle}>{post.author_name || '작성자 없음'}</td>
-                <td style={tdStyle}>{post.created_at?.slice(0, 10)}</td>
-                <td style={tdStyle}>{post.views ?? 0}</td>
-                <td style={tdStyle}>{post.likes ?? 0}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-
-      {/* 페이지네이션 */}
-      <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1.5rem', gap: '0.5rem' }}>
-        {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-          <button
-            key={page}
-            onClick={() => setCurrentPage(page)}
-            style={{
-              padding: '6px 12px',
-              border: '1px solid #ccc',
-              borderRadius: '4px',
-              backgroundColor: currentPage === page ? '#e6e6ff' : '#fff',
-              fontWeight: currentPage === page ? 'bold' : 'normal',
-              cursor: 'pointer'
-            }}
-          >
-            {page}
-          </button>
-        ))}
       </div>
+
+      <style>{`
+        @media (max-width: 768px) {
+          .grid-container {
+            display: block !important;
+          }
+          
+          .grid-container > div {
+            padding: 0.75rem !important;
+            border-bottom: 1px solid #e2e8f0;
+          }
+          
+          .grid-container > div:last-child {
+            border-bottom: none;
+          }
+        }
+      `}</style>
     </div>
   );
 }
-
-const thStyle = {
-  borderBottom: '2px solid #ccc',
-  padding: '12px',
-  backgroundColor: '#f9f9f9'
-};
-
-const tdStyle = {
-  padding: '12px',
-  textAlign: 'center'
-};
 
 export default PostPage;

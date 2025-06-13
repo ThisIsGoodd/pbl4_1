@@ -1,32 +1,3 @@
-이제 프로젝트 지식에 있는 모든 프론트엔드 디자인을 일관성 있고 예쁘게 수정하자. 웹, 모바일, 웹의 창 크기, 다크 모드, 등에 모두 반응할 수 있는 코드로 짜주면 좋을 것 같아. 알파벳 순서대로 한개씩 진행하면서 확인받고 다음 파일 한개 작성하고 이런 방식 으로 진행하자
-client/src/pages에 있는 파일들 전부 차례대로 진행하자
+기능은 수정이 되었는데 인터페이스가 가운데에 맞춰줬어 모바일 용인것 처럼 말이야, 나는 모바일, 웹 모든 곳에서 크기에 맞게 적용되는 적응형 디자인을 하고 싶은 거야
 
-AdminDashboard.jsx(done)
-AdminMainPage.jsx(done)
-ChatPage.jsx(done)
-ClassroomCreatePage.jsx(done)
-ClassroomDashboardPage.jsx(done)
-ClassroomListPage.jsx(done)
-InquiryFormPage.jsx(done)
-JoinClassroomPage.jsx
-JoinCompletePage.jsx
-JoinInfoPage.jsx(done)
-JoinInvitePage.jsx(done)
-LoginPage.jsx(done)
-MainPage.jsx(done)
-NotificationSettingsPage.jsx(사용 X)
-NotificationsPage.jsx(done)
-PostDetailPage.jsx(done)
-PostPage.jsx(done)
-PostWritePage.jsx(done)
-ProfilePage.jsx(done)
-RequestSchoolPage.jsx(done)
-RoleSelectPage.jsx(done)
-SchedulePage.jsx(done)
-SchoolPendingPage.jsx
-SuperAdminInquiriesPage.jsx
-SuperAdminSchoolPage.jsx
-SuperAdminSchoolRequestPage.jsx
-TeacherAuthPage.jsx
-
-학급 삭제를 하면 학급 정보가 없습니다 라고 문구가 뜨는 데 이렇게 말고 삭제되고 학급 생성 페이지로 이동하도록 해야 할 것 같아.
+그리고 학급이 가입된 학부모가 학급을 여러개 가입하고 싶은 경우를 생각을 안했네, 마이페이지에서 가입한 학급 목록으로 이동하는 버튼을 만들고, 거기서 다른 학급을 선택해서 다른 학급으로 이동하거나, 다른 학급에 추가적으로 가입할 수 있는 방법을 만들고 싶어

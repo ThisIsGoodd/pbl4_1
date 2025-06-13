@@ -27,7 +27,6 @@ import AdminDashboard from './pages/AdminDashboard';
 import AdminMainPage from './pages/AdminMainPage';
 import InquiryFormPage from './pages/InquiryFormPage';
 import SuperAdminInquiriesPage from './pages/SuperAdminInquiriesPage';
-import ClassroomListPage from './pages/ClassroomListPage';
 
 import { useContext, useEffect } from 'react';
 
@@ -118,9 +117,6 @@ function AppRoutes() {
         } />
         <Route path="/inquiry/form" element={
           <RequireAuth><InquiryFormPage /></RequireAuth>
-        } />
-        <Route path="/classrooms" element={
-          <RequireAuth><ClassroomListPage /></RequireAuth>
         } />
       </Routes>
     </>

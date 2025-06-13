@@ -1,3 +1,4 @@
+// Navigation.jsx
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useContext, useEffect, useState } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
@@ -172,22 +173,22 @@ function Navigation() {
 
   return (
     <>
-      <nav style={styles.nav}>
-        <div style={styles.leftSection}>
-          <div onClick={handleLogoClick} style={styles.logo}>
-            <img src="/assets/logo.png" alt="로고" style={{ height: '50px' }} />
-            <span style={styles.logoText}>CLASSFEED</span>
+      <nav style={styles.nav} className="navigation-bar">
+        <div style={styles.leftSection} className="nav-left">
+          <div onClick={handleLogoClick} style={styles.logo} className="logo-container">
+            <img src="/assets/logo.png" alt="로고" style={{ height: '50px' }} className="logo-image" />
+            <span style={styles.logoText} className="logo-text">CLASSFEED</span>
           </div>
 
           {/* 데스크톱 메뉴 */}
           {!isMobile && (
-            <div style={styles.desktopMenu}>
+            <div style={styles.desktopMenu} className="desktop-menu">
               <MenuItems />
             </div>
           )}
         </div>
 
-        <div style={styles.rightSection}>
+        <div style={styles.rightSection} className="nav-right">
           {/* 알림 및 검색 (데스크톱) */}
           {!isMobile && !isSuperAdmin && !isAdminCreator && (
             (isTeacher && teacherClassroomId) || (!isTeacher && isJoinedClass)
@@ -196,9 +197,10 @@ function Navigation() {
               <Link 
                 to={`/notifications?classroom_id=${teacherClassroomId || classroomId}`} 
                 style={{ ...styles.link, position: 'relative' }}
+                className="notification-link"
               >
                 🔔
-                {unreadCount > 0 && <span style={styles.badge}>{unreadCount}</span>}
+                {unreadCount > 0 && <span style={styles.badge} className="notification-badge">{unreadCount}</span>}
               </Link>
               <input
                 type="text"
@@ -213,6 +215,7 @@ function Navigation() {
                   }
                 }}
                 style={styles.searchInput}
+                className="search-input"
               />
             </>
           )}
@@ -222,38 +225,40 @@ function Navigation() {
             <button
               style={styles.hamburger}
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="hamburger-menu"
             >
-              <div style={{...styles.hamburgerLine, transform: isMobileMenuOpen ? 'rotate(45deg) translate(5px, 5px)' : 'none'}}></div>
-              <div style={{...styles.hamburgerLine, opacity: isMobileMenuOpen ? '0' : '1'}}></div>
-              <div style={{...styles.hamburgerLine, transform: isMobileMenuOpen ? 'rotate(-45deg) translate(7px, -6px)' : 'none'}}></div>
+              <div style={{...styles.hamburgerLine, transform: isMobileMenuOpen ? 'rotate(45deg) translate(5px, 5px)' : 'none'}} className="hamburger-line"></div>
+              <div style={{...styles.hamburgerLine, opacity: isMobileMenuOpen ? '0' : '1'}} className="hamburger-line"></div>
+              <div style={{...styles.hamburgerLine, transform: isMobileMenuOpen ? 'rotate(-45deg) translate(7px, -6px)' : 'none'}} className="hamburger-line"></div>
             </button>
           )}
 
           {/* 로그아웃 버튼 (데스크톱) */}
           {!isMobile && (
-            <button onClick={logout} style={styles.logoutBtn}>로그아웃</button>
+            <button onClick={logout} style={styles.logoutBtn} className="logout-button">로그아웃</button>
           )}
         </div>
       </nav>
 
       {/* 모바일 메뉴 오버레이 */}
       {isMobile && isMobileMenuOpen && (
-        <div style={styles.mobileMenuOverlay}>
-          <div style={styles.mobileMenu}>
+        <div style={styles.mobileMenuOverlay} className="mobile-menu-overlay">
+          <div style={styles.mobileMenu} className="mobile-menu">
             <MenuItems isMobile={true} />
             
             {/* 모바일 알림 및 검색 */}
             {!isSuperAdmin && !isAdminCreator && (
               (isTeacher && teacherClassroomId) || (!isTeacher && isJoinedClass)
             ) && !isJoinPage && (
-              <div style={styles.mobileUtilsSection}>
+              <div style={styles.mobileUtilsSection} className="mobile-utils">
                 <Link 
                   to={`/notifications?classroom_id=${teacherClassroomId || classroomId}`} 
                   style={{ ...styles.mobileLink, position: 'relative' }}
                   onClick={() => setIsMobileMenuOpen(false)}
+                  className="mobile-notification-link"
                 >
                   🔔 알림
-                  {unreadCount > 0 && <span style={styles.badge}>{unreadCount}</span>}
+                  {unreadCount > 0 && <span style={styles.badge} className="notification-badge">{unreadCount}</span>}
                 </Link>
                 <input
                   type="text"
@@ -269,6 +274,7 @@ function Navigation() {
                     }
                   }}
                   style={styles.mobileSearchInput}
+                  className="mobile-search-input"
                 />
               </div>
             )}
@@ -280,6 +286,7 @@ function Navigation() {
                 setIsMobileMenuOpen(false);
               }} 
               style={styles.mobileLogoutBtn}
+              className="mobile-logout-button"
             >
               로그아웃
             </button>

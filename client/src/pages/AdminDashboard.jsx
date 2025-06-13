@@ -1,516 +1,680 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom'; // 🔥 추가: useNavigate
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { getCurrentUser } from '../utils/jwt';
 
+// 교사 목록 컴포넌트
+function TeacherList({ teachers, setTeachers }) {
+  const handleDeleteTeacher = async (teacherId, teacherName) => {
+    if (!confirm(`정말로 ${teacherName} 교사를 삭제하시겠습니까?`)) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:3001/api/admin/teachers/${teacherId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (!response.ok) throw new Error('교사 삭제 실패');
+
+      // 목록에서 해당 교사 제거
+      setTeachers(prev => prev.filter(teacher => teacher.user_id !== teacherId));
+      alert('교사가 삭제되었습니다.');
+    } catch (error) {
+      console.error('교사 삭제 오류:', error);
+      alert('교사 삭제에 실패했습니다.');
+    }
+  };
+
+  return (
+    <div className="teacher-list">
+      <h3>👨‍🏫 등록된 교사 목록 ({teachers.length}명)</h3>
+      
+      {teachers.length === 0 ? (
+        <div className="empty-state">
+          <p>등록된 교사가 없습니다</p>
+        </div>
+      ) : (
+        <div className="teachers-grid">
+          {teachers.map((teacher) => (
+            <div key={teacher.user_id} className="teacher-card">
+              <div className="teacher-info">
+                <h4>{teacher.name}</h4>
+                <p>{teacher.email}</p>
+                <small>가입일: {new Date(teacher.created_at).toLocaleDateString()}</small>
+              </div>
+              <div className="teacher-actions">
+                <button
+                  onClick={() => handleDeleteTeacher(teacher.user_id, teacher.name)}
+                  className="delete-btn"
+                >
+                  🗑️ 삭제
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <style jsx>{`
+        .teacher-list {
+          padding: 1rem;
+          background: white;
+          border-radius: 12px;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        h3 {
+          margin: 0 0 1rem 0;
+          color: #1e293b;
+        }
+
+        .empty-state {
+          text-align: center;
+          padding: 2rem;
+          color: #64748b;
+        }
+
+        .teachers-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+          gap: 1rem;
+        }
+
+        .teacher-card {
+          background: #f8fafc;
+          padding: 1rem;
+          border-radius: 8px;
+          border: 1px solid #e2e8f0;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+
+        .teacher-card:hover {
+          border-color: #4f46e5;
+        }
+
+        .teacher-info h4 {
+          margin: 0 0 0.5rem 0;
+          color: #1e293b;
+        }
+
+        .teacher-info p {
+          margin: 0 0 0.5rem 0;
+          color: #64748b;
+        }
+
+        .teacher-info small {
+          color: #94a3b8;
+        }
+
+        .teacher-actions {
+          display: flex;
+          gap: 0.5rem;
+        }
+
+        .delete-btn {
+          padding: 0.5rem 1rem;
+          background: #ef4444;
+          color: white;
+          border: none;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 0.85rem;
+          font-weight: 500;
+        }
+
+        .delete-btn:hover {
+          background: #dc2626;
+        }
+
+        @media (max-width: 768px) {
+          .teachers-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .teacher-card {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 1rem;
+          }
+
+          .teacher-actions {
+            width: 100%;
+            justify-content: flex-end;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+// 학급 목록 컴포넌트
+function ClassroomList({ classrooms }) {
+  return (
+    <div className="classroom-list">
+      <h3>🏫 학급 목록 ({classrooms.length}개)</h3>
+      
+      {classrooms.length === 0 ? (
+        <div className="empty-state">
+          <p>등록된 학급이 없습니다</p>
+        </div>
+      ) : (
+        <div className="classrooms-grid">
+          {classrooms.map((classroom) => (
+            <div key={classroom.classroom_id} className="classroom-card">
+              <div className="classroom-badge">
+                {classroom.grade}학년 {classroom.class_number}반
+              </div>
+              <div className="classroom-info">
+                <p>담임: {classroom.teacher_name || '미배정'}</p>
+                <p>학부모: {classroom.student_count || 0}명</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <style jsx>{`
+        .classroom-list {
+          padding: 1rem;
+          background: white;
+          border-radius: 12px;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        h3 {
+          margin: 0 0 1rem 0;
+          color: #1e293b;
+        }
+
+        .empty-state {
+          text-align: center;
+          padding: 2rem;
+          color: #64748b;
+        }
+
+        .classrooms-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+          gap: 1rem;
+        }
+
+        .classroom-card {
+          background: #f8fafc;
+          padding: 1rem;
+          border-radius: 8px;
+          border: 1px solid #e2e8f0;
+        }
+
+        .classroom-card:hover {
+          border-color: #4f46e5;
+        }
+
+        .classroom-badge {
+          background: linear-gradient(135deg, #4f46e5, #7c3aed);
+          color: white;
+          padding: 0.5rem 1rem;
+          border-radius: 6px;
+          font-weight: 600;
+          margin-bottom: 1rem;
+          text-align: center;
+        }
+
+        .classroom-info p {
+          margin: 0 0 0.5rem 0;
+          color: #64748b;
+        }
+
+        .classroom-info small {
+          color: #94a3b8;
+        }
+
+        @media (max-width: 768px) {
+          .classrooms-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+// 인증 코드 컴포넌트 (관리자용)
+function AuthCodeList({ inviteCode, setInviteCode }) {
+  const [newTeacherCode, setNewTeacherCode] = useState('');
+  const [generating, setGenerating] = useState(false);
+  const [generatingAdmin, setGeneratingAdmin] = useState(false);
+
+  const generateTeacherCode = async () => {
+    setGenerating(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:3001/api/admin/generate-teacher-code', {
+        method: 'POST',
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) throw new Error('코드 생성 실패');
+      
+      const data = await response.json();
+      setNewTeacherCode(data.code);
+    } catch (error) {
+      console.error('교사 코드 생성 오류:', error);
+      alert('코드 생성에 실패했습니다.');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const generateAdminCode = async () => {
+    setGeneratingAdmin(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:3001/api/admin/invite-code', {
+        method: 'PATCH',
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) throw new Error('코드 생성 실패');
+      
+      const data = await response.json();
+      setInviteCode(data.new_code);
+      alert('새로운 관리자 인증 코드가 생성되었습니다!');
+    } catch (error) {
+      console.error('관리자 코드 생성 오류:', error);
+      alert('코드 생성에 실패했습니다.');
+    } finally {
+      setGeneratingAdmin(false);
+    }
+  };
+
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text).then(() => {
+      alert('클립보드에 복사되었습니다!');
+    }).catch(() => {
+      alert('복사에 실패했습니다.');
+    });
+  };
+
+  return (
+    <div className="auth-code-list">
+      {/* 교사 인증 코드 생성 */}
+      <div className="code-section">
+        <h3>🔑 교사 인증 코드 생성</h3>
+        <button
+          onClick={generateTeacherCode}
+          disabled={generating}
+          className="generate-btn"
+        >
+          {generating ? '생성 중...' : '새 교사 코드 생성'}
+        </button>
+
+        {newTeacherCode && (
+          <div className="code-display">
+            <div className="code-value">
+              <span className="code-text">{newTeacherCode}</span>
+              <button
+                onClick={() => copyToClipboard(newTeacherCode)}
+                className="copy-btn"
+              >
+                📋 복사
+              </button>
+            </div>
+            <p>💡 이 코드를 새로운 교사에게 공유하세요</p>
+          </div>
+        )}
+      </div>
+
+      {/* 관리자 인증 코드 */}
+      <div className="code-section">
+        <h3>🏛️ 학교 관리자 인증 코드</h3>
+        
+        {inviteCode ? (
+          <div className="code-display">
+            <div className="code-value">
+              <span className="code-text">{inviteCode}</span>
+              <button
+                onClick={() => copyToClipboard(inviteCode)}
+                className="copy-btn"
+              >
+                📋 복사
+              </button>
+            </div>
+            <button
+              onClick={generateAdminCode}
+              disabled={generatingAdmin}
+              className="regenerate-btn"
+            >
+              {generatingAdmin ? '생성 중...' : '🔄 코드 재생성'}
+            </button>
+            <p>💡 이 코드를 새로운 관리자에게 공유하세요</p>
+          </div>
+        ) : (
+          <div className="no-code">
+            <p>관리자 인증 코드가 없습니다</p>
+            <button
+              onClick={generateAdminCode}
+              disabled={generatingAdmin}
+              className="generate-btn"
+            >
+              {generatingAdmin ? '생성 중...' : '관리자 코드 생성'}
+            </button>
+          </div>
+        )}
+      </div>
+
+      <style jsx>{`
+        .auth-code-list {
+          padding: 1rem;
+        }
+
+        .code-section {
+          background: white;
+          padding: 1.5rem;
+          border-radius: 12px;
+          margin-bottom: 1.5rem;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .code-display, .no-code {
+          margin-top: 1rem;
+          padding: 1rem;
+          background: #f8fafc;
+          border-radius: 8px;
+        }
+
+        h3 {
+          margin: 0 0 1rem 0;
+          color: #1e293b;
+        }
+
+        .code-value {
+          display: flex;
+          gap: 1rem;
+          align-items: center;
+          margin-bottom: 1rem;
+        }
+
+        .code-text {
+          font-family: monospace;
+          font-size: 1.5rem;
+          font-weight: bold;
+          color: #4f46e5;
+          background: white;
+          padding: 0.5rem 1rem;
+          border-radius: 6px;
+          border: 2px solid #4f46e5;
+          flex: 1;
+          text-align: center;
+        }
+
+        .copy-btn, .regenerate-btn, .generate-btn {
+          padding: 0.75rem 1.5rem;
+          background: #4f46e5;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          cursor: pointer;
+          font-weight: 600;
+        }
+
+        .copy-btn:hover, .regenerate-btn:hover, .generate-btn:hover {
+          background: #3730a3;
+        }
+
+        .regenerate-btn {
+          background: #f59e0b;
+          margin-bottom: 1rem;
+        }
+
+        .regenerate-btn:hover {
+          background: #d97706;
+        }
+
+        .generate-btn {
+          background: #10b981;
+        }
+
+        .generate-btn:hover {
+          background: #059669;
+        }
+
+        .no-code {
+          text-align: center;
+          color: #64748b;
+        }
+
+        @media (max-width: 768px) {
+          .code-value {
+            flex-direction: column;
+            align-items: stretch;
+          }
+
+          .code-text {
+            font-size: 1.2rem;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+// 메인 AdminDashboard 컴포넌트
 function AdminDashboard() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate(); // 🔥 추가
-  const defaultTab = searchParams.get('tab') || 'teachers';
-
-  const [selected, setSelected] = useState(defaultTab);
+  const [selected, setSelected] = useState('teachers');
   const [teachers, setTeachers] = useState([]);
   const [classrooms, setClassrooms] = useState([]);
   const [inviteCode, setInviteCode] = useState('');
-  const [isCreator, setIsCreator] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const token = localStorage.getItem('token');
-
-  // ✅ JWT 대신 API로 최신 사용자 정보 가져오기
-  const [userInfo, setUserInfo] = useState(null);
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchUserInfo = async () => {
-      try {
-        const res = await fetch('http://localhost:3001/api/users/profile', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const data = await res.json();
-        if (res.ok && data.user) {
-          setUserInfo(data.user);
-          console.log('🔍 [AdminDashboard] 최신 사용자 정보:', data.user);
-        }
-      } catch (err) {
-        console.error('🔥 [AdminDashboard] 사용자 정보 조회 실패:', err);
-      }
-    };
-
-    if (token) {
-      fetchUserInfo();
+    const tab = searchParams.get('tab');
+    if (tab && ['teachers', 'classrooms', 'codes'].includes(tab)) {
+      setSelected(tab);
     }
-  }, [token]);
+  }, [searchParams]);
 
-  const isAdmin = userInfo?.is_admin === true || userInfo?.is_admin === 1;
-  const schoolId = userInfo?.school_id;
-  const userId = userInfo?.user_id;
-
-  console.log('🔍 [AdminDashboard] 디버깅 정보:', {
-    isAdmin,
-    schoolId,
-    userId,
-    userInfo
-  });
-
-  // ✅ 학교 생성자인지 확인
   useEffect(() => {
-    const checkCreator = async () => {
-      if (!isAdmin || !schoolId || !userId || !userInfo) {
-        console.log('❌ [AdminDashboard] 기본 조건 미충족:', { isAdmin, schoolId, userId, userInfo: !!userInfo });
-        setLoading(false);
-        return;
-      }
+    fetchData();
+  }, []);
 
-      try {
-        console.log('🔍 [AdminDashboard] 학교 정보 조회 중...', schoolId);
-        
-        const res = await fetch(`http://localhost:3001/api/schools/${schoolId}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        
-        if (!res.ok) {
-          console.error('❌ [AdminDashboard] 학교 정보 조회 실패:', res.status);
-          setLoading(false);
-          return;
-        }
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const schoolId = searchParams.get('school_id');
 
-        const data = await res.json();
-        console.log('📦 [AdminDashboard] 학교 데이터:', data);
-        console.log('🔍 [AdminDashboard] created_by 비교:', {
-          created_by: data.created_by,
-          userId: userId,
-          isEqual: data.created_by === userId
-        });
-
-        if (data.created_by === userId) {
-          setIsCreator(true);
-          console.log('✅ [AdminDashboard] 학교 생성자 확인됨');
-        } else {
-          console.log('❌ [AdminDashboard] 학교 생성자 아님');
-        }
-      } catch (err) {
-        console.error('🔥 [AdminDashboard] 학교 정보 조회 오류:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    checkCreator();
-  }, [schoolId, isAdmin, userId, token, userInfo]);
-
-  // ✅ 데이터 조회
-  useEffect(() => {
-    if (!isAdmin || !isCreator || !schoolId || loading) return;
-
-    console.log('📡 [AdminDashboard] 데이터 조회 시작:', selected);
-
-    if (selected === 'teachers' || selected === 'classrooms') {
-      const endpoint =
-        selected === 'teachers'
-          ? `http://localhost:3001/api/admin/teachers?school_id=${schoolId}`
-          : `http://localhost:3001/api/admin/classrooms?school_id=${schoolId}`;
-
-      fetch(endpoint, {
+      // 교사 목록 조회
+      const teachersResponse = await fetch(`http://localhost:3001/api/admin/teachers?school_id=${schoolId}`, {
         headers: { Authorization: `Bearer ${token}` }
-      })
-        .then(res => res.json())
-        .then(data => {
-          if (selected === 'teachers') {
-            setTeachers(data.teachers || []);
-          } else {
-            setClassrooms(data.classrooms || []);
-          }
-        })
-        .catch(err => {
-          console.error('🔥 [AdminDashboard] 데이터 조회 오류:', err);
-        });
-    }
+      });
+      if (teachersResponse.ok) {
+        const teachersData = await teachersResponse.json();
+        setTeachers(teachersData.teachers || []);
+      }
 
-    if (selected === 'codes') {
-      fetch(`http://localhost:3001/api/admin/invite-code`, {
+      // 학급 목록 조회
+      const classroomsResponse = await fetch(`http://localhost:3001/api/admin/classrooms?school_id=${schoolId}`, {
         headers: { Authorization: `Bearer ${token}` }
-      })
-        .then(res => res.json())
-        .then(data => {
-          setInviteCode(data.invite_code || '');
-        })
-        .catch(err => {
-          console.error('🔥 [AdminDashboard] 인증코드 조회 오류:', err);
-        });
+      });
+      if (classroomsResponse.ok) {
+        const classroomsData = await classroomsResponse.json();
+        setClassrooms(classroomsData.classrooms || []);
+      }
+
+      // 인증 코드 조회
+      const codeResponse = await fetch('http://localhost:3001/api/admin/invite-code', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (codeResponse.ok) {
+        const codeData = await codeResponse.json();
+        setInviteCode(codeData.invite_code || '');
+      }
+    } catch (error) {
+      console.error('데이터 로딩 오류:', error);
+    } finally {
+      setLoading(false);
     }
-  }, [selected, token, isAdmin, isCreator, schoolId, loading]);
+  };
+
+  const handleTabClick = (tab) => {
+    setSelected(tab);
+    const schoolId = searchParams.get('school_id');
+    navigate(`/admindashboard?tab=${tab}&school_id=${schoolId}`);
+  };
 
   if (loading) {
     return (
-      <div style={{ padding: '2rem', textAlign: 'center' }}>
-        <p>⏳ 권한 확인 중...</p>
+      <div className="loading">
+        <div>데이터를 불러오는 중...</div>
       </div>
     );
   }
 
-  if (!isAdmin || !isCreator) {
-    return (
-      <div style={{ padding: '2rem', color: 'red' }}>
-        <h2>⛔ 접근 권한 없음</h2>
-        <p>전체 관리자(학교 생성자)만 접근할 수 있습니다.</p>
-        <div style={{ marginTop: '1rem', fontSize: '0.9rem', color: '#666' }}>
-          <p>디버깅 정보:</p>
-          <ul>
-            <li>관리자 여부: {isAdmin ? '✅' : '❌'}</li>
-            <li>학교 생성자 여부: {isCreator ? '✅' : '❌'}</li>
-            <li>사용자 ID: {userId}</li>
-            <li>학교 ID: {schoolId}</li>
-          </ul>
+  return (
+    <div className="admin-dashboard">
+      <div className="container">
+        {/* 헤더 */}
+        <div className="header">
+          <h1>🎯 관리자 대시보드</h1>
+          <p>학교의 교사와 학급을 효율적으로 관리하세요</p>
+        </div>
+
+        {/* 탭 네비게이션 */}
+        <div className="tabs">
+          <button
+            onClick={() => handleTabClick('teachers')}
+            className={`tab ${selected === 'teachers' ? 'active' : ''}`}
+          >
+            👨‍🏫 교사 관리 ({teachers.length})
+          </button>
+          <button
+            onClick={() => handleTabClick('classrooms')}
+            className={`tab ${selected === 'classrooms' ? 'active' : ''}`}
+          >
+            🏫 학급 관리 ({classrooms.length})
+          </button>
+          <button
+            onClick={() => handleTabClick('codes')}
+            className={`tab ${selected === 'codes' ? 'active' : ''}`}
+          >
+            🔑 인증 코드
+          </button>
+        </div>
+
+        {/* 콘텐츠 */}
+        <div className="content">
+          {selected === 'teachers' && <TeacherList teachers={teachers} setTeachers={setTeachers} />}
+          {selected === 'classrooms' && <ClassroomList classrooms={classrooms} />}
+          {selected === 'codes' && <AuthCodeList inviteCode={inviteCode} setInviteCode={setInviteCode} />}
         </div>
       </div>
-    );
-  }
 
-  // 🔥 수정: school_id 파라미터를 포함한 탭 클릭 핸들러
-  const handleTabClick = (tab) => {
-    setSelected(tab);
-    // 🔥 수정: school_id 파라미터 추가
-    setSearchParams({ tab, school_id: schoolId });
-  };
+      <style jsx>{`
+        .admin-dashboard {
+          min-height: 100vh;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          padding: 1rem;
+        }
 
-  return (
-    <div style={{ padding: '2rem' }}>
-      <h2>관리자 대시보드</h2>
-      
-      {/* 🔥 수정: 현재 학교 정보 표시 */}
-      <div style={{ 
-        marginBottom: '1rem', 
-        padding: '0.5rem 1rem', 
-        backgroundColor: '#e3f2fd', 
-        borderRadius: '6px',
-        fontSize: '0.9rem'
-      }}>
-        🏫 현재 관리 중인 학교 ID: <strong>{schoolId}</strong>
-      </div>
+        .container {
+          max-width: 1200px;
+          margin: 0 auto;
+        }
 
-      <div style={{ marginBottom: '1rem' }}>
-        <button
-          onClick={() => handleTabClick('teachers')}
-          style={{ 
-            marginRight: '1rem', 
-            fontWeight: selected === 'teachers' ? 'bold' : 'normal',
-            backgroundColor: selected === 'teachers' ? '#007bff' : '#f8f9fa',
-            color: selected === 'teachers' ? 'white' : '#333',
-            border: '1px solid #007bff',
-            padding: '0.5rem 1rem',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
-        >
-          교사 목록
-        </button>
-        <button
-          onClick={() => handleTabClick('classrooms')}
-          style={{ 
-            marginRight: '1rem', 
-            fontWeight: selected === 'classrooms' ? 'bold' : 'normal',
-            backgroundColor: selected === 'classrooms' ? '#007bff' : '#f8f9fa',
-            color: selected === 'classrooms' ? 'white' : '#333',
-            border: '1px solid #007bff',
-            padding: '0.5rem 1rem',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
-        >
-          학급 목록
-        </button>
-        <button
-          onClick={() => handleTabClick('codes')}
-          style={{ 
-            fontWeight: selected === 'codes' ? 'bold' : 'normal',
-            backgroundColor: selected === 'codes' ? '#007bff' : '#f8f9fa',
-            color: selected === 'codes' ? 'white' : '#333',
-            border: '1px solid #007bff',
-            padding: '0.5rem 1rem',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
-        >
-          인증 코드
-        </button>
-      </div>
+        .header {
+          background: rgba(255, 255, 255, 0.9);
+          backdrop-filter: blur(10px);
+          padding: 2rem;
+          border-radius: 16px;
+          text-align: center;
+          margin-bottom: 2rem;
+          box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+        }
 
-      <div>
-        {selected === 'teachers' && <TeacherList teachers={teachers} setTeachers={setTeachers} />}
-        {selected === 'classrooms' && <ClassroomList classrooms={classrooms} />}
-        {selected === 'codes' && <AuthCodeList inviteCode={inviteCode} setInviteCode={setInviteCode} />}
-      </div>
-    </div>
-  );
-}
+        .header h1 {
+          margin: 0 0 0.5rem 0;
+          color: #1e293b;
+          font-size: 2rem;
+        }
 
-// 🔥 수정: TeacherList 컴포넌트 - 프로필 사진 표시 개선
-function TeacherList({ teachers: initialTeachers, setTeachers }) {
-  const [search, setSearch] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [teachers, setLocalTeachers] = useState(initialTeachers);
-  const itemsPerPage = 10;
-  const token = localStorage.getItem('token');
+        .header p {
+          margin: 0;
+          color: #64748b;
+          font-size: 1.1rem;
+        }
 
-  // 부모에서 받은 teachers 데이터 동기화
-  useEffect(() => {
-    setLocalTeachers(initialTeachers);
-  }, [initialTeachers]);
+        .tabs {
+          display: flex;
+          gap: 0.5rem;
+          margin-bottom: 2rem;
+          background: rgba(255, 255, 255, 0.1);
+          padding: 0.5rem;
+          border-radius: 12px;
+          backdrop-filter: blur(10px);
+        }
 
-  const filtered = teachers.filter(t =>
-    t.name.toLowerCase().includes(search.toLowerCase()) ||
-    t.email.toLowerCase().includes(search.toLowerCase())
-  );
+        .tab {
+          flex: 1;
+          padding: 1rem;
+          border: none;
+          background: rgba(255, 255, 255, 0.1);
+          color: white;
+          border-radius: 8px;
+          cursor: pointer;
+          font-weight: 600;
+          transition: all 0.2s;
+        }
 
-  const totalPages = Math.ceil(filtered.length / itemsPerPage);
-  const paginated = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+        .tab:hover {
+          background: rgba(255, 255, 255, 0.2);
+        }
 
-  const handleDelete = async (userId) => {
-    if (!window.confirm('정말로 삭제하시겠습니까?')) return;
+        .tab.active {
+          background: rgba(255, 255, 255, 0.9);
+          color: #1e293b;
+        }
 
-    const res = await fetch(`http://localhost:3001/api/admin/teachers/${userId}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` }
-    });
+        .content {
+          min-height: 400px;
+        }
 
-    if (res.ok) {
-      const updatedTeachers = teachers.filter(t => t.user_id !== userId);
-      setLocalTeachers(updatedTeachers);
-      setTeachers(updatedTeachers); // 부모 상태도 업데이트
-      alert('삭제 완료');
-    } else {
-      alert('삭제 실패');
-    }
-  };
+        .loading {
+          min-height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          font-size: 1.2rem;
+        }
 
-  return (
-    <div>
-      <h3>교사 목록</h3>
-      <input
-        type="text"
-        placeholder="이름 또는 이메일 검색"
-        value={search}
-        onChange={(e) => {
-          setSearch(e.target.value);
-          setCurrentPage(1);
-        }}
-        style={{ marginBottom: '1rem', padding: '0.5rem', width: '300px' }}
-      />
+        @media (max-width: 768px) {
+          .tabs {
+            flex-direction: column;
+          }
 
-      <table border="1" cellPadding="8" style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr>
-            <th>프로필</th>
-            <th>이름</th>
-            <th>이메일</th>
-            <th>담당 학급</th>
-            <th>삭제</th>
-          </tr>
-        </thead>
-        <tbody>
-          {paginated.map(t => (
-            <tr key={t.user_id}>
-              <td style={{ textAlign: 'center', width: '80px' }}>
-                {/* 🔥 수정: 프로필 사진 표시 로직 개선 */}
-                <div style={{ 
-                  width: '50px', 
-                  height: '50px', 
-                  margin: '0 auto',
-                  position: 'relative',
-                  borderRadius: '50%',
-                  overflow: 'hidden',
-                  border: '2px solid #e0e0e0'
-                }}>
-                  {t.profile_picture ? (
-                    <img
-                      src={t.profile_picture.startsWith('http') 
-                        ? t.profile_picture 
-                        : `http://localhost:3001${t.profile_picture}`}
-                      alt="프로필"
-                      style={{
-                        width: '100%',
-                        height: '100%',
-                        objectFit: 'cover'
-                      }}
-                      onError={(e) => {
-                        console.log('🔥 이미지 로드 실패:', t.profile_picture);
-                        e.target.style.display = 'none';
-                        e.target.parentNode.querySelector('.profile-fallback').style.display = 'flex';
-                      }}
-                      onLoad={() => {
-                        console.log('✅ 이미지 로드 성공:', t.profile_picture);
-                      }}
-                    />
-                  ) : null}
-                  <div 
-                    className="profile-fallback"
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      backgroundColor: '#f0f0f0',
-                      display: t.profile_picture ? 'none' : 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '1.5rem',
-                      color: '#999',
-                      position: t.profile_picture ? 'absolute' : 'static',
-                      top: 0,
-                      left: 0
-                    }}
-                  >
-                    👤
-                  </div>
-                </div>
-              </td>
-              <td>{t.name}</td>
-              <td>{t.email}</td>
-              <td>
-                {t.grade && t.class_number 
-                  ? `${t.grade}학년 ${t.class_number}반` 
-                  : '미배정'}
-              </td>
-              <td>
-                <button 
-                  onClick={() => handleDelete(t.user_id)}
-                  style={{
-                    backgroundColor: '#dc3545',
-                    color: 'white',
-                    border: 'none',
-                    padding: '0.25rem 0.5rem',
-                    borderRadius: '4px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  삭제
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+          .header h1 {
+            font-size: 1.5rem;
+          }
 
-      <div style={{ marginTop: '1rem' }}>
-        {Array.from({ length: totalPages }, (_, i) => (
-          <button
-            key={i}
-            onClick={() => setCurrentPage(i + 1)}
-            style={{ 
-              margin: '0 4px', 
-              fontWeight: currentPage === i + 1 ? 'bold' : 'normal',
-              backgroundColor: currentPage === i + 1 ? '#007bff' : '#f8f9fa',
-              color: currentPage === i + 1 ? 'white' : '#333',
-              border: '1px solid #007bff',
-              padding: '0.25rem 0.5rem',
-              borderRadius: '4px',
-              cursor: 'pointer'
-            }}
-          >
-            {i + 1}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ClassroomList와 AuthCodeList는 기존과 동일하므로 생략 (변경사항 없음)
-
-function ClassroomList({ classrooms: initialClassrooms }) {
-  const [search, setSearch] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [classrooms, setClassrooms] = useState(initialClassrooms);
-  const itemsPerPage = 10;
-
-  const filtered = classrooms.filter(c =>
-    `${c.grade}학년 ${c.class_number}반`.includes(search) ||
-    c.teacher_name.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const totalPages = Math.ceil(filtered.length / itemsPerPage);
-  const paginated = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-
-  return (
-    <div>
-      <h3>학급 목록</h3>
-      <input
-        type="text"
-        placeholder="학년, 반, 교사 이름 검색"
-        value={search}
-        onChange={(e) => {
-          setSearch(e.target.value);
-          setCurrentPage(1);
-        }}
-        style={{ marginBottom: '1rem', padding: '0.5rem', width: '300px' }}
-      />
-
-      <table border="1" cellPadding="8" style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr>
-            <th>학년</th>
-            <th>반</th>
-            <th>학교</th>
-            <th>담당 교사</th>
-            <th>학부모 수</th>
-          </tr>
-        </thead>
-        <tbody>
-          {paginated.map(c => (
-            <tr key={c.classroom_id}>
-              <td>{c.grade}</td>
-              <td>{c.class_number}</td>
-              <td>{c.school}</td>
-              <td>{c.teacher_name}</td>
-              <td>{c.parent_count}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <div style={{ marginTop: '1rem' }}>
-        {Array.from({ length: totalPages }, (_, i) => (
-          <button
-            key={i}
-            onClick={() => setCurrentPage(i + 1)}
-            style={{ margin: '0 4px', fontWeight: currentPage === i + 1 ? 'bold' : 'normal' }}
-          >
-            {i + 1}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ✅ 인증코드 단일 표시 + 재발급 버튼
-function AuthCodeList({ inviteCode, setInviteCode }) {
-  const token = localStorage.getItem('token');
-
-  const regenerateCode = async () => {
-    try {
-      const res = await fetch('http://localhost:3001/api/admin/invite-code', {
-        method: 'PATCH',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setInviteCode(data.new_code);
-      } else {
-        alert('재발급 실패: ' + data.error);
-      }
-    } catch (err) {
-      alert('서버 오류: ' + err.message);
-    }
-  };
-
-  return (
-    <div>
-      <h3>학교 인증 코드</h3>
-      {inviteCode ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <code style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{inviteCode}</code>
-          <button onClick={regenerateCode}>🔄 재발급</button>
-        </div>
-      ) : (
-        <p>인증코드가 없습니다.</p>
-      )}
+          .header p {
+            font-size: 1rem;
+          }
+        }
+      `}</style>
     </div>
   );
 }

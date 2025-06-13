@@ -159,14 +159,17 @@ router.get('/classrooms', authenticateToken, async (req, res) => {
   }
 });
 
-// ✅ 교사 삭제 - 경로 패턴 수정
+// ✅ 교사 삭제 - 개선된 버전 (연관 데이터 모두 정리)
 router.delete('/teachers/:teacherId', authenticateToken, async (req, res) => {
-  const { teacherId } = req.params;  // teacherId로 변경
+  const { teacherId } = req.params;
   const user_id = req.user.user_id;
 
+  const conn = await db.getConnection();
   try {
-    // 1. 사용자의 school_id 가져오기
-    const [[userRow]] = await db.query(
+    await conn.beginTransaction();
+
+    // 1. 권한 확인
+    const [[userRow]] = await conn.query(
       'SELECT school_id FROM users WHERE user_id = ?',
       [user_id]
     );
@@ -177,8 +180,7 @@ router.delete('/teachers/:teacherId', authenticateToken, async (req, res) => {
 
     const school_id = userRow.school_id;
 
-    // 2. 요청자가 해당 학교의 생성자인지 확인
-    const [[schoolRow]] = await db.query(
+    const [[schoolRow]] = await conn.query(
       'SELECT created_by FROM schools WHERE school_id = ?',
       [school_id]
     );
@@ -187,31 +189,101 @@ router.delete('/teachers/:teacherId', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: '해당 학교의 생성자만 교사를 삭제할 수 있습니다.' });
     }
 
-    // 3. 삭제할 교사가 해당 학교에 속하는지 확인
-    const [target] = await db.query(
-      'SELECT * FROM user_schools WHERE user_id = ? AND school_id = ? AND role = ?',
-      [teacherId, school_id, 'teacher']
-    );
-
-    if (target.length === 0) {
-      return res.status(404).json({ error: '해당 교사를 찾을 수 없습니다.' });
-    }
-
-    // 4. 교사 삭제 (권한 박탈)
-    await db.query(
-      'DELETE FROM user_schools WHERE user_id = ? AND school_id = ?',
-      [teacherId, school_id]
-    );
-
-    await db.query(
-      'UPDATE users SET classroom_id = NULL WHERE user_id = ?',
+    // 2. 삭제할 교사 정보 확인
+    const [[teacherInfo]] = await conn.query(
+      'SELECT name FROM users WHERE user_id = ?',
       [teacherId]
     );
 
-    res.json({ message: '교사 삭제(권한 박탈) 완료' });
+    if (!teacherInfo) {
+      return res.status(404).json({ error: '해당 교사를 찾을 수 없습니다.' });
+    }
+
+    // 3. 교사가 생성한 학급들 조회
+    const [classrooms] = await conn.query(
+      'SELECT classroom_id FROM classrooms WHERE teacher_id = ?',
+      [teacherId]
+    );
+
+    // 4. 각 학급의 연관 데이터 삭제
+    for (const classroom of classrooms) {
+      const classroomId = classroom.classroom_id;
+      
+      // 채팅 관련 데이터 삭제
+      const [chatRooms] = await conn.query(
+        'SELECT room_id FROM chat_rooms WHERE classroom_id = ?',
+        [classroomId]
+      );
+
+      for (const room of chatRooms) {
+        await conn.query('DELETE FROM chat_messages WHERE room_id = ?', [room.room_id]);
+        await conn.query('DELETE FROM chat_participants WHERE room_id = ?', [room.room_id]);
+        await conn.query('DELETE FROM chat_unread WHERE room_id = ?', [room.room_id]);
+      }
+      
+      await conn.query('DELETE FROM chat_rooms WHERE classroom_id = ?', [classroomId]);
+
+      // 게시글 관련 데이터 삭제 (MySQL 서브쿼리 제한 때문에 단계적으로 실행)
+      const [posts] = await conn.query('SELECT post_id FROM posts WHERE classroom_id = ?', [classroomId]);
+      const postIds = posts.map(p => p.post_id);
+      
+      if (postIds.length > 0) {
+        await conn.query(`DELETE FROM comments WHERE post_id IN (${postIds.join(',')})`);
+        await conn.query(`DELETE FROM post_likes WHERE post_id IN (${postIds.join(',')})`);
+        await conn.query(`DELETE FROM post_views WHERE post_id IN (${postIds.join(',')})`);
+        await conn.query(`DELETE FROM attachments WHERE post_id IN (${postIds.join(',')})`);
+      }
+      
+      await conn.query('DELETE FROM posts WHERE classroom_id = ?', [classroomId]);
+      
+      // 기타 학급 관련 데이터 삭제
+      await conn.query('DELETE FROM schedules WHERE classroom_id = ?', [classroomId]);
+      await conn.query('DELETE FROM notifications WHERE classroom_id = ?', [classroomId]);
+      await conn.query('DELETE FROM user_classrooms WHERE classroom_id = ?', [classroomId]);
+    }
+
+    // 5. 학급들 삭제
+    await conn.query('DELETE FROM classrooms WHERE teacher_id = ?', [teacherId]);
+
+    // 6. 교사가 작성한 모든 게시글 삭제 (학급 외 게시글)
+    const [teacherPosts] = await conn.query('SELECT post_id FROM posts WHERE author_id = ?', [teacherId]);
+    const teacherPostIds = teacherPosts.map(p => p.post_id);
+    
+    if (teacherPostIds.length > 0) {
+      await conn.query(`DELETE FROM comments WHERE post_id IN (${teacherPostIds.join(',')})`);
+      await conn.query(`DELETE FROM post_likes WHERE post_id IN (${teacherPostIds.join(',')})`);
+      await conn.query(`DELETE FROM post_views WHERE post_id IN (${teacherPostIds.join(',')})`);
+      await conn.query(`DELETE FROM attachments WHERE post_id IN (${teacherPostIds.join(',')})`);
+    }
+    
+    await conn.query('DELETE FROM posts WHERE author_id = ?', [teacherId]);
+
+    // 7. 교사 권한 및 관련 데이터 삭제
+    await conn.query('DELETE FROM user_schools WHERE user_id = ? AND school_id = ?', [teacherId, school_id]);
+    await conn.query('DELETE FROM schedules WHERE created_by = ?', [teacherId]);
+    await conn.query('DELETE FROM notifications WHERE user_id = ?', [teacherId]);
+
+    // 8. 교사 정보 정리 (관리자 권한 해제, 학급 연결 해제)
+    await conn.query(
+      'UPDATE users SET classroom_id = NULL, is_admin = 0 WHERE user_id = ?',
+      [teacherId]
+    );
+
+    await conn.commit();
+    
+    console.log(`✅ 교사 삭제 완료: ${teacherInfo.name} (${teacherId})`);
+    res.json({ 
+      message: `${teacherInfo.name} 교사 및 관련 데이터가 모두 삭제되었습니다.`,
+      deleted_classrooms: classrooms.length,
+      deleted_teacher_name: teacherInfo.name
+    });
+    
   } catch (err) {
+    await conn.rollback();
     console.error('🔥 교사 삭제 오류:', err);
     res.status(500).json({ error: '서버 오류', details: err.message });
+  } finally {
+    conn.release();
   }
 });
 

@@ -89,8 +89,9 @@ const ClassroomListPage = () => {
 
     try {
       const token = localStorage.getItem('token');
+      // 수정: API 경로 변경 (classrooms -> users)
       await axios.delete(
-        `http://localhost:3001/api/classrooms/${classroomId}/leave`,
+        `http://localhost:3001/api/users/leave-classroom/${classroomId}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 

@@ -152,6 +152,35 @@ function ProfilePage() {
     }
   };
 
+  // 회원 탈퇴 함수 추가
+  const handleDeleteAccount = async () => {
+    if (!window.confirm('정말로 회원 탈퇴하시겠습니까? 모든 데이터가 삭제되며 복구할 수 없습니다.')) {
+      return;
+    }
+
+    const confirmText = '회원탈퇴';
+    const userInput = prompt(`회원 탈퇴를 진행하려면 "${confirmText}"를 정확히 입력하세요:`);
+    
+    if (userInput !== confirmText) {
+      alert('입력이 일치하지 않습니다.');
+      return;
+    }
+
+    try {
+      const res = await axios.delete('http://localhost:3001/api/users/delete-account', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.status === 200) {
+        alert('회원 탈퇴가 완료되었습니다.');
+        logout();
+      }
+    } catch (err) {
+      console.error('❌ 회원 탈퇴 실패:', err);
+      alert('회원 탈퇴에 실패했습니다.');
+    }
+  };
+
   const getRoleDisplayName = (role) => {
     const roleNames = {
       parent: '학부모',
@@ -185,13 +214,15 @@ function ProfilePage() {
 
         {/* 빠른 이동 버튼들 */}
         <div className="quick-actions">
-          {/* ClassroomList로 가는 버튼 추가 */}
-          <button 
-            onClick={() => navigate('/classroom/list')}
-            className="action-btn"
-          >
-            📚 학급 목록
-          </button>
+          {/* 교사가 아닌 경우에만 학급 목록 버튼 표시 */}
+          {user.role !== 'teacher' && (
+            <button 
+              onClick={() => navigate('/classroom/list')}
+              className="action-btn"
+            >
+              📚 학급 목록
+            </button>
+          )}
           
           {user.is_admin === true && (
             <button 
@@ -337,7 +368,7 @@ function ProfilePage() {
             </div>
           </div>
 
-          {/* 저장 및 로그아웃 */}
+          {/* 저장, 로그아웃, 회원 탈퇴 */}
           <div className="actions">
             <button 
               onClick={handleSave} 
@@ -352,6 +383,14 @@ function ProfilePage() {
               className="logout-btn"
             >
               🚪 로그아웃
+            </button>
+
+            {/* 회원 탈퇴 버튼 추가 */}
+            <button 
+              onClick={handleDeleteAccount}
+              className="delete-account-btn"
+            >
+              🗑️ 회원 탈퇴
             </button>
           </div>
         </div>
@@ -627,7 +666,7 @@ function ProfilePage() {
           flex-wrap: wrap;
         }
 
-        .save-btn, .logout-btn {
+        .save-btn, .logout-btn, .delete-account-btn {
           flex: 1;
           min-width: 120px;
           padding: 1rem;
@@ -661,6 +700,16 @@ function ProfilePage() {
 
         .logout-btn:hover {
           background: #dc2626;
+          transform: translateY(-2px);
+        }
+
+        .delete-account-btn {
+          background: #991b1b;
+          color: white;
+        }
+
+        .delete-account-btn:hover {
+          background: #7f1d1d;
           transform: translateY(-2px);
         }
 

@@ -307,33 +307,6 @@ function AuthCodeList({ inviteCode, setInviteCode }) {
 
   return (
     <div className="auth-code-list">
-      {/* 교사 인증 코드 생성 */}
-      <div className="code-section">
-        <h3>🔑 교사 인증 코드 생성</h3>
-        <button
-          onClick={generateTeacherCode}
-          disabled={generating}
-          className="generate-btn"
-        >
-          {generating ? '생성 중...' : '새 교사 코드 생성'}
-        </button>
-
-        {newTeacherCode && (
-          <div className="code-display">
-            <div className="code-value">
-              <span className="code-text">{newTeacherCode}</span>
-              <button
-                onClick={() => copyToClipboard(newTeacherCode)}
-                className="copy-btn"
-              >
-                📋 복사
-              </button>
-            </div>
-            <p>💡 이 코드를 새로운 교사에게 공유하세요</p>
-          </div>
-        )}
-      </div>
-
       {/* 관리자 인증 코드 */}
       <div className="code-section">
         <h3>🏛️ 학교 관리자 인증 코드</h3>

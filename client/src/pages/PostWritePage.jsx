@@ -177,7 +177,7 @@ function PostWritePage() {
         
         // 🆕 작성 완료 후 이동 경로 결정
         if (isSchoolAdmin) {
-          navigate('/admin/main'); // 학교 전체 관리자는 관리자 메인으로
+          navigate(`/posts?school_id=${schoolId}`); // 학교 전체 관리자는 관리자 메인으로 posts?school_id=17
         } else {
           navigate(`/posts?classroom_id=${classroomId}`); // 일반 교사는 해당 학급 게시판으로
         }

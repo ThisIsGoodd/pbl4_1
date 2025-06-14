@@ -42,7 +42,30 @@ function LoginPage() {
         if (profileRes.ok && profileData.user) {
           setUser(profileData.user);
           alert('로그인 성공!');
-          navigate('/select-role');
+          
+          // 🔥 이 부분만 수정: role에 따른 리다이렉트
+          const userRole = profileData.user.role;
+          
+          if (!userRole) {
+            navigate('/select-role');
+          } else if (userRole === 'superadmin') {
+            navigate('/superadmin/school-requests');
+          } else if (userRole === 'teacher') {
+            if (profileData.user.is_admin) {
+              navigate('/admin/main');
+            } else {
+              navigate('/classroom/create');
+            }
+          } else if (userRole === 'parent') {
+            if (profileData.user.joined_classrooms?.length > 0) {
+              const firstClassroom = profileData.user.joined_classrooms[0];
+              navigate(`/main?classroom_id=${firstClassroom.classroom_id}`);
+            } else {
+              navigate('/join/invite');
+            }
+          } else {
+            navigate('/select-role');
+          }
         }
       } else {
         alert(`로그인 실패: ${data.message}`);

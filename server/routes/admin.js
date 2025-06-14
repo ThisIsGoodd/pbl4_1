@@ -160,6 +160,7 @@ router.get('/classrooms', authenticateToken, async (req, res) => {
 });
 
 // ✅ 교사 삭제 - 개선된 버전 (연관 데이터 모두 정리)
+// ✅ 교사 삭제 - 수정된 버전 (classroom_id 컬럼 제거)
 router.delete('/teachers/:teacherId', authenticateToken, async (req, res) => {
   const { teacherId } = req.params;
   const user_id = req.user.user_id;
@@ -263,9 +264,9 @@ router.delete('/teachers/:teacherId', authenticateToken, async (req, res) => {
     await conn.query('DELETE FROM schedules WHERE created_by = ?', [teacherId]);
     await conn.query('DELETE FROM notifications WHERE user_id = ?', [teacherId]);
 
-    // 8. 교사 정보 정리 (관리자 권한 해제, 학급 연결 해제)
+    // 8. 교사 정보 업데이트 (관리자 권한만 해제, classroom_id 제거)
     await conn.query(
-      'UPDATE users SET classroom_id = NULL, is_admin = 0 WHERE user_id = ?',
+      'UPDATE users SET is_admin = 0 WHERE user_id = ?',
       [teacherId]
     );
 

@@ -239,14 +239,18 @@ router.patch('/update-role', authenticateToken, async (req, res) => {
   }
 });
 
-// ✅ 학급 탈퇴 (학부모용)
+
+// ✅ 학급 탈퇴 (학부모용) - 개선된 버전
 router.delete('/leave-classroom/:classroomId', authenticateToken, async (req, res) => {
   const { classroomId } = req.params;
   const { user_id } = req.user;
 
+  const conn = await db.getConnection();
   try {
+    await conn.beginTransaction();
+
     // 1. 해당 학급에 속해 있는지 확인
-    const [memberCheck] = await db.query(
+    const [memberCheck] = await conn.query(
       'SELECT * FROM user_classrooms WHERE user_id = ? AND classroom_id = ?',
       [user_id, classroomId]
     );
@@ -255,35 +259,106 @@ router.delete('/leave-classroom/:classroomId', authenticateToken, async (req, re
       return res.status(404).json({ error: '해당 학급에 속해 있지 않습니다.' });
     }
 
-    // 2. 채팅방 참가자에서 제거
-    const [chatRooms] = await db.query(
+    // 2. 해당 학급의 교사 정보 조회
+    const [classroomInfo] = await conn.query(
+      'SELECT teacher_id FROM classrooms WHERE classroom_id = ?',
+      [classroomId]
+    );
+
+    if (classroomInfo.length === 0) {
+      return res.status(404).json({ error: '학급 정보를 찾을 수 없습니다.' });
+    }
+
+    const teacher_id = classroomInfo[0].teacher_id;
+
+    // 3. 그룹 채팅방에서 제거
+    const [groupChatRooms] = await conn.query(
       'SELECT room_id FROM chat_rooms WHERE classroom_id = ?',
       [classroomId]
     );
 
-    for (const room of chatRooms) {
-      await db.query(
+    for (const room of groupChatRooms) {
+      await conn.query(
         'DELETE FROM chat_participants WHERE room_id = ? AND user_id = ?',
+        [room.room_id, user_id]
+      );
+      
+      // chat_unread 삭제 추가
+      await conn.query(
+        'DELETE FROM chat_unread WHERE room_id = ? AND user_id = ?',
         [room.room_id, user_id]
       );
     }
 
-    // 3. 학급에서 제거
-    await db.query(
+    // 4. 1:1 채팅방 삭제 (교사와의 개인 채팅방)
+    const [privateRooms] = await conn.query(
+      `SELECT cr.room_id 
+       FROM chat_rooms cr
+       JOIN chat_participants cp1 ON cr.room_id = cp1.room_id
+       JOIN chat_participants cp2 ON cr.room_id = cp2.room_id
+       WHERE cr.room_type = 'private' 
+         AND cp1.user_id = ? 
+         AND cp2.user_id = ?
+         AND (SELECT COUNT(*) FROM chat_participants WHERE room_id = cr.room_id) = 2`,
+      [teacher_id, user_id]
+    );
+
+    for (const room of privateRooms) {
+      // 채팅 메시지 삭제
+      await conn.query('DELETE FROM chat_messages WHERE room_id = ?', [room.room_id]);
+      
+      // 채팅 참가자 삭제
+      await conn.query('DELETE FROM chat_participants WHERE room_id = ?', [room.room_id]);
+      
+      // 읽지 않은 메시지 카운트 삭제
+      await conn.query('DELETE FROM chat_unread WHERE room_id = ?', [room.room_id]);
+      
+      // 채팅방 자체 삭제
+      await conn.query('DELETE FROM chat_rooms WHERE room_id = ?', [room.room_id]);
+    }
+
+    // 5. 학급에서 제거
+    await conn.query(
       'DELETE FROM user_classrooms WHERE user_id = ? AND classroom_id = ?',
       [user_id, classroomId]
     );
 
-    // 4. 관련 알림 삭제
-    await db.query(
+    // 6. 관련 알림 삭제
+    await conn.query(
       'DELETE FROM notifications WHERE user_id = ? AND classroom_id = ?',
       [user_id, classroomId]
     );
 
+    // 7. 해당 학급 게시글의 좋아요, 조회수, 댓글 삭제
+    await conn.query(
+      `DELETE pl FROM post_likes pl
+       JOIN posts p ON pl.post_id = p.post_id
+       WHERE pl.user_id = ? AND p.classroom_id = ?`,
+      [user_id, classroomId]
+    );
+
+    await conn.query(
+      `DELETE pv FROM post_views pv
+       JOIN posts p ON pv.post_id = p.post_id
+       WHERE pv.user_id = ? AND p.classroom_id = ?`,
+      [user_id, classroomId]
+    );
+
+    await conn.query(
+      `DELETE c FROM comments c
+       JOIN posts p ON c.post_id = p.post_id
+       WHERE c.author_id = ? AND p.classroom_id = ?`,
+      [user_id, classroomId]
+    );
+
+    await conn.commit();
     res.json({ message: '학급 탈퇴가 완료되었습니다.' });
   } catch (err) {
+    await conn.rollback();
     console.error('🔥 학급 탈퇴 오류:', err);
     res.status(500).json({ error: '서버 오류', details: err.message });
+  } finally {
+    conn.release();
   }
 });
 

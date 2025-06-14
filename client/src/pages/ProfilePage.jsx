@@ -109,38 +109,76 @@ function ProfilePage() {
     }));
   };
 
+  // ProfilePage.jsx - handleSave 함수 수정
+
   const handleSave = async () => {
     try {
       setLoading(true);
+      console.log('📝 프로필 업데이트 시작');
 
-      // 기본 정보 업데이트
+      // 🔥 FormData 생성 및 필드명 수정
       const formData = new FormData();
       formData.append('name', name);
+      
       if (user.role === 'parent') {
         formData.append('child_name', childName);
       }
+      
+      // 🔥 필드명 수정: image → profile_picture
       if (image) {
-        formData.append('image', image);
+        formData.append('profile_picture', image);
+        console.log('📷 프로필 사진 포함:', image.name);
       }
+      
       formData.append('chat_dnd_start', chatDndStart);
       formData.append('chat_dnd_end', chatDndEnd);
 
-      await axios.put('http://localhost:3001/api/users/profile', formData, {
+      // FormData 내용 로깅
+      console.log('📦 FormData 내용:');
+      for (let [key, value] of formData.entries()) {
+        console.log(`  ${key}:`, value);
+      }
+
+      // 🔥 HTTP 메서드 수정: PUT → PATCH
+      const profileRes = await axios.patch('http://localhost:3001/api/users/profile', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
           Authorization: `Bearer ${token}`,
         },
       });
 
-      // 알림 설정 업데이트
-      await axios.put('http://localhost:3001/api/notification-settings', notificationSettings, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      console.log('✅ 프로필 업데이트 성공:', profileRes.data);
+
+      // 알림 설정 업데이트 (선택사항)
+      try {
+        await axios.put('http://localhost:3001/api/notification-settings', notificationSettings, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        console.log('✅ 알림 설정 업데이트 성공');
+      } catch (notifErr) {
+        console.warn('⚠️ 알림 설정 업데이트 실패 (무시):', notifErr);
+      }
 
       alert('프로필이 성공적으로 업데이트되었습니다!');
+      
+      // 🔥 페이지 새로고침하여 최신 정보 반영
+      window.location.reload();
+
     } catch (err) {
       console.error('❌ 프로필 업데이트 실패:', err);
-      alert('프로필 업데이트에 실패했습니다.');
+      
+      // 상세 에러 정보 로깅
+      if (err.response) {
+        console.error('응답 상태:', err.response.status);
+        console.error('응답 데이터:', err.response.data);
+        alert(`프로필 업데이트에 실패했습니다: ${err.response.data.error || '알 수 없는 오류'}`);
+      } else if (err.request) {
+        console.error('요청 실패:', err.request);
+        alert('서버에 연결할 수 없습니다.');
+      } else {
+        console.error('오류:', err.message);
+        alert('프로필 업데이트 중 오류가 발생했습니다.');
+      }
     } finally {
       setLoading(false);
     }

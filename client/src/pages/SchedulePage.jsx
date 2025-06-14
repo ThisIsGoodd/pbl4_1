@@ -344,7 +344,7 @@ function SchedulePage() {
         margin: '0 auto',
         width: '100%'
       }}>
-        {/* 디버깅 정보 (개발 모드에서만) */}
+        {/* 디버깅 정보 (개발 모드에서만)
         {process.env.NODE_ENV === 'development' && (
           <div style={{
             position: 'fixed',
@@ -359,7 +359,7 @@ function SchedulePage() {
           }}>
             Role: {myRole} | Admin: {isAdmin ? 'Y' : 'N'} | School: {schoolId} | Classroom: {classroomId}
           </div>
-        )}
+        )} */}
 
         {/* 헤더 */}
         <div style={{

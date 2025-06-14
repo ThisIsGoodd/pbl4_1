@@ -423,7 +423,7 @@ function ChatPage() {
                             )}
                             <div className="message-content">{message.content}</div>
                             <div className="message-time">
-                              {new Date(message.sent_at).toLocaleTimeString([], {
+                              {new Date(message.created_at).toLocaleTimeString([], {
                                 hour: '2-digit',
                                 minute: '2-digit'
                               })}

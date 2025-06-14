@@ -1,519 +1,361 @@
 // client/src/pages/JoinInfoPage.jsx
-import React, { useEffect, useState } from 'react';
+import React, { useState, useContext } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { AuthContext } from '../contexts/AuthContext';
 
 function JoinInfoPage() {
-  const { state } = useLocation();
+  const location = useLocation();
   const navigate = useNavigate();
-  const [schoolName, setSchoolName] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const { refreshToken } = useContext(AuthContext);
+  
+  // 🔥 수정: state에서 schoolName 직접 받기
+  const { 
+    role, 
+    inviteCode, 
+    classroom_id, 
+    school, 
+    schoolName, // 🔥 추가: 학교명 직접 받기
+    grade, 
+    classNumber 
+  } = location.state || {};
 
-  useEffect(() => {
-    const fetchSchoolInfo = async () => {
-      if (!state?.school_id) {
-        setSchoolName('알 수 없음');
-        return;
-      }
-
-      try {
-        const res = await fetch(`http://localhost:3001/api/schools/${state.school_id}`);
-        const data = await res.json();
-        setSchoolName(data.name || '알 수 없음');
-      } catch (err) {
-        console.error('학교 정보 조회 실패:', err);
-        setSchoolName('알 수 없음');
-      }
-    };
-
-    fetchSchoolInfo();
-  }, [state]);
+  const [childName, setChildName] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async () => {
-    if (!state?.classroom_id) {
-      alert('학급 정보가 없습니다.');
+    if (!childName.trim()) {
+      alert('자녀 이름을 입력해주세요.');
       return;
     }
 
-    setIsLoading(true);
+    setIsSubmitting(true);
 
     try {
-      const res = await fetch('http://localhost:3001/api/users/join-classroom-final', {
+      const token = localStorage.getItem('token');
+      
+      // 🔥 수정: join-classroom 엔드포인트로 변경 (서버에서 안정적으로 처리)
+      const joinRes = await fetch('http://localhost:3001/api/classrooms/join-classroom', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ classroom_id: state.classroom_id })
+        body: JSON.stringify({ 
+          invite_code: inviteCode 
+        }),
       });
 
-      if (res.ok) {
-        // 사용자 정보 갱신
-        try {
-          const userRes = await fetch('http://localhost:3001/api/users/profile', {
-            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-          });
-          const userData = await userRes.json();
-          console.log('사용자 정보 갱신 성공:', userData);
-        } catch (userErr) {
-          console.error('사용자 정보 갱신 실패:', userErr);
-        }
+      const joinData = await joinRes.json();
 
-        // 메인 페이지로 이동
-        navigate(`/main?classroom_id=${state.classroom_id}`, {
-          state: {
-            schoolName,
-            grade: state.grade,
-            classNumber: state.classNumber
-          }
-        });
-      } else {
-        const data = await res.json();
-        alert(`학급 연결 실패: ${data.message}`);
+      if (!joinRes.ok) {
+        throw new Error(joinData.error || '학급 가입에 실패했습니다.');
       }
-    } catch (err) {
-      console.error('학급 연결 오류:', err);
-      alert('서버 오류');
+
+      // 🔥 수정: 사용자 프로필 업데이트 (자녀 이름)
+      const profileRes = await fetch('http://localhost:3001/api/users/profile', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ 
+          child_name: childName.trim() 
+        }),
+      });
+
+      if (!profileRes.ok) {
+        console.warn('⚠️ 프로필 업데이트 실패 (무시하고 진행)');
+      }
+
+      // 사용자 정보 새로고침
+      await refreshToken();
+      
+      alert(`${grade}학년 ${classNumber}반 가입이 완료되었습니다!`);
+      navigate(`/main?classroom_id=${classroom_id}`);
+
+    } catch (error) {
+      console.error('🔥 학급 가입 오류:', error);
+      alert(error.message || '학급 가입 중 오류가 발생했습니다.');
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
-  return (
-    <div className="join-info-page">
-      <div className="container">
-        <div className="header">
-          <div className="header-content">
-            <h1 className="main-title">🎉 가입 완료</h1>
-            <p className="welcome-text">학급 정보를 확인하고 가입을 완료하세요</p>
-          </div>
-        </div>
-
-        <div className="main-content">
-          <div className="info-section">
-            <div className="success-icon">✅</div>
-            <h2 className="success-title">학급 정보 확인</h2>
-            <p className="success-description">
-              아래 정보를 확인한 후 가입을 완료해주세요.
-            </p>
-
-            <div className="info-card">
-              <div className="info-header">
-                <span className="info-icon">📋</span>
-                <h3 className="info-title">학급 상세 정보</h3>
-              </div>
-              
-              <div className="info-details">
-                <div className="detail-row">
-                  <div className="detail-label">
-                    <span className="detail-icon">🏫</span>
-                    학교명
-                  </div>
-                  <div className="detail-value">{schoolName || '로딩 중...'}</div>
-                </div>
-                
-                <div className="detail-row">
-                  <div className="detail-label">
-                    <span className="detail-icon">📚</span>
-                    학년
-                  </div>
-                  <div className="detail-value">{state?.grade}학년</div>
-                </div>
-                
-                <div className="detail-row">
-                  <div className="detail-label">
-                    <span className="detail-icon">👥</span>
-                    반
-                  </div>
-                  <div className="detail-value">{state?.classNumber}반</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="notice-box">
-              <div className="notice-header">
-                <span className="notice-icon">💡</span>
-                <h4 className="notice-title">안내사항</h4>
-              </div>
-              <ul className="notice-list">
-                <li>가입 완료 후 학급의 모든 기능을 이용하실 수 있습니다.</li>
-                <li>선생님과 다른 학부모님들과 소통이 가능합니다.</li>
-                <li>학급 공지사항과 일정을 확인하실 수 있습니다.</li>
-                <li>개인정보는 학급 내에서만 공유됩니다.</li>
-              </ul>
-            </div>
-
-            <div className="button-group">
-              <button
-                onClick={() => navigate(-1)}
-                disabled={isLoading}
-                className="back-btn"
-              >
-                이전으로
-              </button>
-              <button
-                onClick={handleSubmit}
-                disabled={isLoading || !state?.classroom_id}
-                className="complete-btn"
-              >
-                {isLoading ? (
-                  <>
-                    <div className="loading-spinner"></div>
-                    가입 중...
-                  </>
-                ) : (
-                  <>
-                    <span className="button-icon">🚀</span>
-                    가입 완료하기
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
+  // 🔥 필수 데이터가 없으면 이전 페이지로 리다이렉트
+  if (!inviteCode || !classroom_id || !schoolName) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '1rem'
+      }}>
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.9)',
+          borderRadius: '16px',
+          padding: '2rem',
+          textAlign: 'center',
+          maxWidth: '400px'
+        }}>
+          <h2 style={{ color: '#ef4444', marginBottom: '1rem' }}>잘못된 접근입니다</h2>
+          <p style={{ color: '#64748b', marginBottom: '1.5rem' }}>
+            올바른 초대코드 검증 과정을 거쳐주세요.
+          </p>
+          <button 
+            onClick={() => navigate('/join/invite')}
+            style={{
+              background: '#4f46e5',
+              color: 'white',
+              border: 'none',
+              padding: '0.75rem 1.5rem',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontSize: '1rem'
+            }}
+          >
+            초대코드 입력으로 돌아가기
+          </button>
         </div>
       </div>
+    );
+  }
 
-      <style jsx>{`
-        .join-info-page {
-          min-height: 100vh;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 1rem;
-        }
+  return (
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      padding: '1rem'
+    }}>
+      <div style={{
+        maxWidth: '500px',
+        margin: '0 auto',
+        paddingTop: '5vh'
+      }}>
+        {/* 헤더 */}
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.9)',
+          backdropFilter: 'blur(10px)',
+          borderRadius: '16px',
+          padding: '2rem',
+          textAlign: 'center',
+          marginBottom: '1rem',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
+        }}>
+          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🎉</div>
+          <h1 style={{
+            margin: '0 0 0.5rem 0',
+            color: '#1e293b',
+            fontSize: '1.8rem'
+          }}>가입 완료</h1>
+          <p style={{
+            margin: 0,
+            color: '#64748b',
+            fontSize: '1rem'
+          }}>아래 정보를 확인한 후 가입을 완료하세요</p>
+        </div>
 
-        .container {
-          width: 100%;
-          max-width: 600px;
-        }
+        {/* 학급 정보 카드 */}
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.9)',
+          backdropFilter: 'blur(10px)',
+          borderRadius: '16px',
+          padding: '2rem',
+          marginBottom: '1rem',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
+        }}>
+          <h2 style={{
+            margin: '0 0 1.5rem 0',
+            color: '#1e293b',
+            fontSize: '1.3rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem'
+          }}>
+            📘 학급 상세 정보
+          </h2>
 
-        .header {
-          background: rgba(255, 255, 255, 0.1);
-          backdrop-filter: blur(20px);
-          border-radius: 20px 20px 0 0;
-          padding: 2rem;
-          text-align: center;
-          border: 1px solid rgba(255, 255, 255, 0.2);
-          border-bottom: none;
-        }
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '1rem',
+              background: '#f8fafc',
+              borderRadius: '8px'
+            }}>
+              <span style={{ color: '#64748b', fontWeight: '500' }}>🏫 학교명</span>
+              <span style={{ color: '#1e293b', fontWeight: '600' }}>
+                {schoolName || '알 수 없음'}
+              </span>
+            </div>
 
-        .header-content {
-          display: flex;
-          flex-direction: column;
-          gap: 0.5rem;
-        }
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '1rem',
+              background: '#f8fafc',
+              borderRadius: '8px'
+            }}>
+              <span style={{ color: '#64748b', fontWeight: '500' }}>📚 학년</span>
+              <span style={{ color: '#1e293b', fontWeight: '600' }}>{grade}학년</span>
+            </div>
 
-        .main-title {
-          font-size: 2rem;
-          font-weight: 800;
-          color: white;
-          margin: 0;
-          letter-spacing: 0.05em;
-        }
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '1rem',
+              background: '#f8fafc',
+              borderRadius: '8px'
+            }}>
+              <span style={{ color: '#64748b', fontWeight: '500' }}>🏛 반</span>
+              <span style={{ color: '#1e293b', fontWeight: '600' }}>{classNumber}반</span>
+            </div>
+          </div>
+        </div>
 
-        .welcome-text {
-          font-size: 1.1rem;
-          color: rgba(255, 255, 255, 0.8);
-          margin: 0;
-          line-height: 1.5;
-        }
+        {/* 안내사항 */}
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.9)',
+          backdropFilter: 'blur(10px)',
+          borderRadius: '16px',
+          padding: '2rem',
+          marginBottom: '1rem',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
+        }}>
+          <h3 style={{
+            margin: '0 0 1rem 0',
+            color: '#1e293b',
+            fontSize: '1.1rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem'
+          }}>
+            💡 안내사항
+          </h3>
 
-        .main-content {
-          background: rgba(255, 255, 255, 0.1);
-          backdrop-filter: blur(20px);
-          border-radius: 0 0 20px 20px;
-          padding: 2rem;
-          border: 1px solid rgba(255, 255, 255, 0.2);
-          border-top: none;
-        }
+          <div style={{ color: '#64748b', lineHeight: '1.6' }}>
+            <p style={{ margin: '0 0 0.5rem 0' }}>
+              • 가입 완료 후 학급의 모든 기능을 이용하실 수 있습니다
+            </p>
+            <p style={{ margin: '0 0 0.5rem 0' }}>
+              • 선생님과 다른 학부모들과 소통이 가능합니다
+            </p>
+            <p style={{ margin: '0 0 0.5rem 0' }}>
+              • 학급 공지사항과 일정을 확인하실 수 있습니다
+            </p>
+            <p style={{ margin: '0' }}>
+              • 개인정보는 학급 내에서만 공유됩니다
+            </p>
+          </div>
+        </div>
 
-        .info-section {
-          text-align: center;
-        }
+        {/* 자녀 이름 입력 */}
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.9)',
+          backdropFilter: 'blur(10px)',
+          borderRadius: '16px',
+          padding: '2rem',
+          marginBottom: '1rem',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
+        }}>
+          <label style={{
+            display: 'block',
+            marginBottom: '0.75rem',
+            color: '#1e293b',
+            fontWeight: '600',
+            fontSize: '1.1rem'
+          }}>
+            👶 자녀 이름
+          </label>
+          <input
+            type="text"
+            value={childName}
+            onChange={(e) => setChildName(e.target.value)}
+            placeholder="자녀의 이름을 입력하세요"
+            style={{
+              width: '100%',
+              padding: '1rem',
+              border: '2px solid #e2e8f0',
+              borderRadius: '8px',
+              fontSize: '1rem',
+              outline: 'none',
+              transition: 'border-color 0.2s ease',
+              boxSizing: 'border-box'
+            }}
+            onFocus={(e) => e.target.style.borderColor = '#4f46e5'}
+            onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+          />
+        </div>
 
-        .success-icon {
-          font-size: 4rem;
-          margin-bottom: 1rem;
-          display: block;
-        }
+        {/* 버튼들 */}
+        <div style={{
+          display: 'flex',
+          gap: '1rem',
+          justifyContent: 'center'
+        }}>
+          <button
+            onClick={() => navigate('/join/invite')}
+            disabled={isSubmitting}
+            style={{
+              padding: '1rem 2rem',
+              background: '#6b7280',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              fontSize: '1rem',
+              fontWeight: '600',
+              cursor: isSubmitting ? 'not-allowed' : 'pointer',
+              opacity: isSubmitting ? 0.5 : 1,
+              transition: 'all 0.2s ease'
+            }}
+          >
+            이전으로
+          </button>
 
-        .success-title {
-          font-size: 1.5rem;
-          font-weight: 700;
-          color: white;
-          margin: 0 0 0.5rem 0;
-        }
+          <button
+            onClick={handleSubmit}
+            disabled={isSubmitting || !childName.trim()}
+            style={{
+              padding: '1rem 2rem',
+              background: isSubmitting || !childName.trim() ? '#9ca3af' : '#10b981',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              fontSize: '1rem',
+              fontWeight: '600',
+              cursor: isSubmitting || !childName.trim() ? 'not-allowed' : 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            {isSubmitting ? (
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div style={{
+                  width: '16px',
+                  height: '16px',
+                  border: '2px solid transparent',
+                  borderTop: '2px solid white',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite'
+                }} />
+                가입 중...
+              </span>
+            ) : (
+              '가입 완료하기'
+            )}
+          </button>
+        </div>
 
-        .success-description {
-          font-size: 1rem;
-          color: rgba(255, 255, 255, 0.8);
-          margin: 0 0 2rem 0;
-          line-height: 1.5;
-        }
-
-        .info-card {
-          background: rgba(255, 255, 255, 0.1);
-          border-radius: 16px;
-          padding: 1.5rem;
-          margin-bottom: 1.5rem;
-          border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-
-        .info-header {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          margin-bottom: 1rem;
-          justify-content: center;
-        }
-
-        .info-icon {
-          font-size: 1.5rem;
-        }
-
-        .info-title {
-          font-size: 1.2rem;
-          font-weight: 600;
-          color: white;
-          margin: 0;
-        }
-
-        .info-details {
-          display: flex;
-          flex-direction: column;
-          gap: 1rem;
-        }
-
-        .detail-row {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 0.75rem 1rem;
-          background: rgba(255, 255, 255, 0.1);
-          border-radius: 12px;
-          border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .detail-label {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          font-weight: 500;
-          color: rgba(255, 255, 255, 0.9);
-        }
-
-        .detail-icon {
-          font-size: 1.2rem;
-        }
-
-        .detail-value {
-          font-weight: 700;
-          color: white;
-          font-size: 1.1rem;
-        }
-
-        .notice-box {
-          background: rgba(255, 255, 255, 0.05);
-          border-radius: 12px;
-          padding: 1.5rem;
-          margin-bottom: 2rem;
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          text-align: left;
-        }
-
-        .notice-header {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          margin-bottom: 1rem;
-        }
-
-        .notice-icon {
-          font-size: 1.3rem;
-        }
-
-        .notice-title {
-          font-size: 1.1rem;
-          font-weight: 600;
-          color: white;
-          margin: 0;
-        }
-
-        .notice-list {
-          margin: 0;
-          padding-left: 1.5rem;
-          color: rgba(255, 255, 255, 0.8);
-        }
-
-        .notice-list li {
-          margin-bottom: 0.5rem;
-          line-height: 1.4;
-        }
-
-        .button-group {
-          display: flex;
-          gap: 1rem;
-          margin-top: 1rem;
-        }
-
-        .back-btn,
-        .complete-btn {
-          flex: 1;
-          padding: 1rem 1.5rem;
-          border: none;
-          border-radius: 12px;
-          font-size: 1rem;
-          font-weight: 700;
-          cursor: pointer;
-          transition: all 0.3s ease;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 0.5rem;
-        }
-
-        .back-btn {
-          background: rgba(255, 255, 255, 0.1);
-          color: rgba(255, 255, 255, 0.8);
-          border: 1px solid rgba(255, 255, 255, 0.3);
-        }
-
-        .back-btn:hover:not(:disabled) {
-          background: rgba(255, 255, 255, 0.2);
-          transform: translateY(-2px);
-        }
-
-        .complete-btn {
-          background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-          color: white;
-        }
-
-        .complete-btn:hover:not(:disabled) {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 25px rgba(79, 70, 229, 0.4);
-        }
-
-        .complete-btn:disabled,
-        .back-btn:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-          transform: none;
-        }
-
-        .button-icon {
-          font-size: 1.1rem;
-        }
-
-        .loading-spinner {
-          width: 18px;
-          height: 18px;
-          border: 2px solid rgba(255, 255, 255, 0.3);
-          border-top: 2px solid white;
-          border-radius: 50%;
-          animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-
-        /* 반응형 디자인 */
-        @media (max-width: 768px) {
-          .join-info-page {
-            padding: 1rem 0.5rem;
+        <style>{`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
           }
-
-          .header {
-            padding: 1.5rem;
-          }
-
-          .main-title {
-            font-size: 1.5rem;
-          }
-
-          .welcome-text {
-            font-size: 1rem;
-          }
-
-          .main-content {
-            padding: 1.5rem;
-          }
-
-          .info-card {
-            padding: 1.25rem;
-          }
-
-          .detail-row {
-            flex-direction: column;
-            text-align: center;
-            gap: 0.5rem;
-          }
-
-          .button-group {
-            flex-direction: column;
-          }
-        }
-
-        @media (max-width: 480px) {
-          .header {
-            padding: 1.25rem;
-          }
-
-          .main-content {
-            padding: 1.25rem;
-          }
-
-          .main-title {
-            font-size: 1.25rem;
-          }
-
-          .success-icon {
-            font-size: 3rem;
-          }
-
-          .info-card {
-            padding: 1rem;
-          }
-
-          .notice-box {
-            padding: 1.25rem;
-          }
-        }
-
-        /* 다크모드 대응 */
-        @media (prefers-color-scheme: dark) {
-          .header,
-          .main-content {
-            background: rgba(30, 30, 30, 0.9);
-          }
-
-          .info-card,
-          .notice-box {
-            background: rgba(55, 65, 81, 0.3);
-          }
-
-          .detail-row {
-            background: rgba(55, 65, 81, 0.3);
-          }
-        }
-
-        /* 접근성 개선 */
-        .back-btn:focus,
-        .complete-btn:focus {
-          outline: 2px solid #fbbf24;
-          outline-offset: 2px;
-        }
-
-        /* 애니메이션 감소 설정 */
-        @media (prefers-reduced-motion: reduce) {
-          * {
-            animation-duration: 0.01ms !important;
-            animation-iteration-count: 1 !important;
-            transition-duration: 0.01ms !important;
-          }
-        }
-      `}</style>
+        `}</style>
+      </div>
     </div>
   );
 }

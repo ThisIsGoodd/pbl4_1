@@ -106,8 +106,8 @@ const ClassroomListPage = () => {
 
       // 학급이 모두 없어지면 학급 생성 페이지로 이동
       if (updatedClassrooms.length === 0) {
-        alert('모든 학급에서 탈퇴했습니다. 새 학급을 생성하거나 가입해주세요.');
-        navigate('/classroom/create');
+        alert('모든 학급에서 탈퇴했습니다. 새 학급에 가입해주세요.');
+        navigate('/join/invite');
         return;
       }
       

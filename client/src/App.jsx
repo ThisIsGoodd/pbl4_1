@@ -98,7 +98,7 @@ function AppRoutes() {
         <Route path="/classroom/list" element={
           <RequireAuth><ClassroomListPage /></RequireAuth>
         } />
-        <Route path="/school-pending" element={
+        <Route path="/school/pending" element={
           <RequireAuth><SchoolPendingPage /></RequireAuth>
         } />
         <Route path="/request-school" element={

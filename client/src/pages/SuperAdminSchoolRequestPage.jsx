@@ -106,18 +106,6 @@ function SuperAdminSchoolRequestPage() {
               <div className="stat-number">{requests.length}</div>
               <div className="stat-label">대기 중인 요청</div>
             </div>
-            <div className="stat-card">
-              <div className="stat-number">{requests.filter(r => r.school_type === 'elementary').length}</div>
-              <div className="stat-label">초등학교</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-number">{requests.filter(r => r.school_type === 'middle').length}</div>
-              <div className="stat-label">중학교</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-number">{requests.filter(r => r.school_type === 'high').length}</div>
-              <div className="stat-label">고등학교</div>
-            </div>
           </div>
 
           {/* 요청 목록 */}

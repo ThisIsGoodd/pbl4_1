@@ -309,7 +309,10 @@ router.post('/:id/view', authenticateToken, async (req, res) => {
   const post_id = req.params.id;
   const user_id = req.user.user_id;
 
+  console.log('👁️ [POST /posts/:id/view] 조회수 증가 요청:', { post_id, user_id });
+
   try {
+    // 🔥 최근 조회 기록 확인
     const [rows] = await db.query(
       'SELECT last_viewed FROM post_views WHERE post_id = ? AND user_id = ?',
       [post_id, user_id]
@@ -319,26 +322,49 @@ router.post('/:id/view', authenticateToken, async (req, res) => {
 
     if (rows.length > 0) {
       const lastViewed = new Date(rows[0].last_viewed);
-      if (now - lastViewed < 10 * 60 * 1000) {
+      const timeDiff = now - lastViewed;
+      
+      console.log('👁️ 이전 조회 시간:', lastViewed, '현재:', now, '차이:', timeDiff, 'ms');
+      
+      // 10분(600,000ms) 이내 재조회는 카운트하지 않음
+      if (timeDiff < 10 * 60 * 1000) {
+        console.log('👁️ 10분 내 재조회 - 조회수 증가 안 함');
         return res.json({ message: '10분 내 재조회: 조회수 증가 안 함' });
       }
 
+      // 조회 시간 업데이트
       await db.query(
         'UPDATE post_views SET last_viewed = ? WHERE post_id = ? AND user_id = ?',
         [now, post_id, user_id]
       );
+      console.log('👁️ 조회 시간 업데이트 완료');
     } else {
+      // 첫 조회 기록 생성
       await db.query(
         'INSERT INTO post_views (post_id, user_id, last_viewed) VALUES (?, ?, ?)',
         [post_id, user_id, now]
       );
+      console.log('👁️ 첫 조회 기록 생성 완료');
     }
 
-    await db.query('UPDATE posts SET views = views + 1 WHERE post_id = ?', [post_id]);
-    res.json({ message: '조회수 증가' });
+    // 🔥 posts 테이블의 views 컬럼 증가
+    const [updateResult] = await db.query(
+      'UPDATE posts SET views = views + 1 WHERE post_id = ?', 
+      [post_id]
+    );
+    
+    console.log('👁️ 조회수 증가 결과:', updateResult);
+    
+    if (updateResult.affectedRows === 0) {
+      console.warn('⚠️ 조회수 업데이트 실패 - 게시글이 존재하지 않음');
+      return res.status(404).json({ error: '게시글을 찾을 수 없습니다.' });
+    }
+
+    console.log('✅ 조회수 증가 완료');
+    res.json({ message: '조회수 증가 완료' });
   } catch (err) {
-    console.error('🔥 조회수 제어 오류:', err);
-    res.status(500).json({ error: '서버 오류' });
+    console.error('🔥 조회수 증가 오류:', err);
+    res.status(500).json({ error: '서버 오류', details: err.message });
   }
 });
 
@@ -347,19 +373,20 @@ router.post('/:id/view', authenticateToken, async (req, res) => {
  */
 router.put('/:id', authenticateToken, async (req, res) => {
   const postId = req.params.id;
-  const { title, content, category, school_wide } = req.body;
+  const { title, content, school_wide } = req.body; // category 제거
   const userId = req.user.user_id;
 
-  if (!title || !content || !category) {
-    return res.status(400).json({ error: '필수 항목이 누락되었습니다.' });
+  console.log('🔍 [PUT /posts/:id] 수정 요청:', { postId, title, content, school_wide, userId });
+
+  // 🔥 필수 항목 검사에서 category 제거
+  if (!title || !content) {
+    return res.status(400).json({ error: '제목과 내용은 필수입니다.' });
   }
 
   try {
+    // 🔥 게시글 존재 여부 및 작성자 확인
     const [rows] = await db.query(
-      `SELECT posts.*, classrooms.teacher_id
-       FROM posts
-       LEFT JOIN classrooms ON posts.classroom_id = classrooms.classroom_id
-       WHERE posts.post_id = ?`,
+      'SELECT * FROM posts WHERE post_id = ?',
       [postId]
     );
 
@@ -368,15 +395,21 @@ router.put('/:id', authenticateToken, async (req, res) => {
     }
 
     const post = rows[0];
-    if (post.author_id !== userId && post.teacher_id !== userId) {
-      return res.status(403).json({ error: '수정 권한이 없습니다.' });
+    
+    // 🔥 권한 확인: 작성자만 수정 가능
+    if (post.author_id !== userId) {
+      return res.status(403).json({ error: '작성자만 수정할 수 있습니다.' });
     }
 
+    console.log('✅ [PUT /posts/:id] 권한 확인 완료, 수정 진행');
+
+    // 🔥 category 필드 제거하고 업데이트
     await db.query(
-      `UPDATE posts SET title = ?, content = ?, category = ?, school_wide = ? WHERE post_id = ?`,
-      [title, content, category, school_wide === true, postId]
+      'UPDATE posts SET title = ?, content = ?, school_wide = ? WHERE post_id = ?',
+      [title, content, school_wide === true || school_wide === 'true', postId]
     );
 
+    console.log('✅ [PUT /posts/:id] 게시글 수정 완료');
     res.json({ message: '게시글 수정 완료' });
   } catch (err) {
     console.error('🔥 게시글 수정 오류:', err);
@@ -391,12 +424,12 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   const postId = req.params.id;
   const userId = req.user.user_id;
 
+  console.log('🔍 [DELETE /posts/:id] 삭제 요청:', { postId, userId });
+
   try {
+    // 🔥 게시글 존재 여부 및 작성자 확인
     const [rows] = await db.query(
-      `SELECT posts.*, classrooms.teacher_id
-       FROM posts
-       LEFT JOIN classrooms ON posts.classroom_id = classrooms.classroom_id
-       WHERE posts.post_id = ?`,
+      'SELECT * FROM posts WHERE post_id = ?',
       [postId]
     );
 
@@ -405,11 +438,24 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     }
 
     const post = rows[0];
-    if (post.author_id !== userId && post.teacher_id !== userId) {
-      return res.status(403).json({ error: '삭제 권한이 없습니다.' });
+    
+    // 🔥 권한 확인: 작성자만 삭제 가능
+    if (post.author_id !== userId) {
+      return res.status(403).json({ error: '작성자만 삭제할 수 있습니다.' });
     }
 
+    console.log('✅ [DELETE /posts/:id] 권한 확인 완료, 삭제 진행');
+
+    // 🔥 관련 데이터 먼저 삭제 (외래키 제약 조건 대응)
+    await db.query('DELETE FROM comments WHERE post_id = ?', [postId]);
+    await db.query('DELETE FROM post_likes WHERE post_id = ?', [postId]);
+    await db.query('DELETE FROM post_views WHERE post_id = ?', [postId]);
+    await db.query('DELETE FROM attachments WHERE post_id = ?', [postId]);
+    
+    // 게시글 삭제
     await db.query('DELETE FROM posts WHERE post_id = ?', [postId]);
+
+    console.log('✅ [DELETE /posts/:id] 게시글 삭제 완료');
     res.json({ message: '게시글 삭제 완료' });
   } catch (err) {
     console.error('🔥 게시글 삭제 오류:', err);
@@ -417,38 +463,61 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * ✅ 공감하기
- */
+//✅ 좋아요/좋아요 취소 통합 처리
 router.post('/:id/like', authenticateToken, async (req, res) => {
   const post_id = req.params.id;
   const user_id = req.user.user_id;
 
+  console.log('👍 [POST /posts/:id/like] 좋아요 요청:', { post_id, user_id });
+
   try {
-    const [rows] = await db.query(
+    // 🔥 기존 좋아요 확인
+    const [existingLike] = await db.query(
       'SELECT * FROM post_likes WHERE user_id = ? AND post_id = ?',
       [user_id, post_id]
     );
-    if (rows.length > 0) {
-      return res.status(400).json({ error: '이미 공감한 게시글입니다.' });
+
+    if (existingLike.length > 0) {
+      // 좋아요 취소
+      await db.query(
+        'DELETE FROM post_likes WHERE user_id = ? AND post_id = ?', 
+        [user_id, post_id]
+      );
+      await db.query(
+        'UPDATE posts SET likes = GREATEST(likes - 1, 0) WHERE post_id = ?', 
+        [post_id]
+      );
+      
+      console.log('✅ 좋아요 취소 완료');
+      res.json({ message: '좋아요 취소 완료', liked: false });
+    } else {
+      // 좋아요 추가
+      await db.query(
+        'INSERT INTO post_likes (user_id, post_id) VALUES (?, ?)', 
+        [user_id, post_id]
+      );
+      await db.query(
+        'UPDATE posts SET likes = likes + 1 WHERE post_id = ?', 
+        [post_id]
+      );
+      
+      console.log('✅ 좋아요 추가 완료');
+      res.json({ message: '좋아요 완료', liked: true });
     }
-
-    await db.query('INSERT INTO post_likes (user_id, post_id) VALUES (?, ?)', [user_id, post_id]);
-    await db.query('UPDATE posts SET likes = likes + 1 WHERE post_id = ?', [post_id]);
-
-    res.json({ message: '공감 완료' });
   } catch (err) {
-    console.error('🔥 공감 오류:', err);
-    res.status(500).json({ error: '서버 오류' });
+    console.error('🔥 좋아요 처리 오류:', err);
+    res.status(500).json({ error: '서버 오류', details: err.message });
   }
 });
 
 /**
- * ✅ 공감 취소
+ * ✅ 좋아요 취소 (DELETE 방식)
  */
 router.delete('/:id/like', authenticateToken, async (req, res) => {
   const post_id = req.params.id;
   const user_id = req.user.user_id;
+
+  console.log('👍 [DELETE /posts/:id/like] 좋아요 취소 요청:', { post_id, user_id });
 
   try {
     const [rows] = await db.query(
@@ -457,32 +526,49 @@ router.delete('/:id/like', authenticateToken, async (req, res) => {
     );
 
     if (rows.length === 0) {
-      return res.status(400).json({ error: '공감하지 않은 게시글입니다.' });
+      return res.status(400).json({ error: '좋아요하지 않은 게시글입니다.' });
     }
 
-    await db.query('DELETE FROM post_likes WHERE user_id = ? AND post_id = ?', [user_id, post_id]);
-    await db.query('UPDATE posts SET likes = likes - 1 WHERE post_id = ?', [post_id]);
+    await db.query(
+      'DELETE FROM post_likes WHERE user_id = ? AND post_id = ?', 
+      [user_id, post_id]
+    );
+    await db.query(
+      'UPDATE posts SET likes = GREATEST(likes - 1, 0) WHERE post_id = ?', 
+      [post_id]
+    );
 
-    res.json({ message: '공감 취소 완료' });
+    console.log('✅ 좋아요 취소 완료');
+    res.json({ message: '좋아요 취소 완료' });
   } catch (err) {
-    console.error('🔥 공감 취소 오류:', err);
-    res.status(500).json({ error: '서버 오류' });
+    console.error('🔥 좋아요 취소 오류:', err);
+    res.status(500).json({ error: '서버 오류', details: err.message });
   }
 });
 
 /**
- * ✅ 공감 여부 조회
+ * ✅ 좋아요 상태 확인
  */
 router.get('/:id/like-check', authenticateToken, async (req, res) => {
   const post_id = req.params.id;
   const user_id = req.user.user_id;
 
-  const [rows] = await db.query(
-    'SELECT * FROM post_likes WHERE user_id = ? AND post_id = ?',
-    [user_id, post_id]
-  );
+  console.log('👍 [GET /posts/:id/like-check] 좋아요 상태 확인:', { post_id, user_id });
 
-  res.json({ liked: rows.length > 0 });
+  try {
+    const [rows] = await db.query(
+      'SELECT * FROM post_likes WHERE user_id = ? AND post_id = ?',
+      [user_id, post_id]
+    );
+
+    const liked = rows.length > 0;
+    console.log('👍 좋아요 상태:', liked);
+    
+    res.json({ liked });
+  } catch (err) {
+    console.error('🔥 좋아요 상태 확인 오류:', err);
+    res.status(500).json({ error: '서버 오류', details: err.message });
+  }
 });
 
 // ✅ 학교 전체 관리자용 공지사항 조회 추가

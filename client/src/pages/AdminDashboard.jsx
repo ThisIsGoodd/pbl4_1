@@ -155,8 +155,7 @@ function TeacherList({ teachers, setTeachers }) {
 function ClassroomList({ classrooms }) {
   return (
     <div className="classroom-list">
-      <h3>🏫 학급 목록 ({classrooms.length}개)</h3>
-      
+      <h3>🏫 학급 현황</h3>
       {classrooms.length === 0 ? (
         <div className="empty-state">
           <p>등록된 학급이 없습니다</p>
@@ -170,7 +169,7 @@ function ClassroomList({ classrooms }) {
               </div>
               <div className="classroom-info">
                 <p>담임: {classroom.teacher_name || '미배정'}</p>
-                <p>학부모: {classroom.student_count || 0}명</p>
+                <p>학부모: {classroom.parent_count || 0}명</p>
               </div>
             </div>
           ))}

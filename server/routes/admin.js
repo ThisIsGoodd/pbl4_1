@@ -75,10 +75,12 @@ router.get('/teachers', authenticateToken, async (req, res) => {
   }
 });
 
-// ✅ 관리자용: 학급 목록 조회 - 학부모 수 정확히 계산 (GROUP BY 오류 방지)
+// ✅ 관리자용: 학급 목록 조회 - 학부모 수 정확히 계산
 router.get('/classrooms', authenticateToken, async (req, res) => {
   const user_id = req.user.user_id;
   const { school_id } = req.query;
+
+  console.log('🔍 [admin/classrooms] 요청 정보:', { user_id, school_id });
 
   try {
     // 1. 요청자가 해당 학교의 생성자인지 확인
@@ -91,7 +93,7 @@ router.get('/classrooms', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: '해당 학교의 생성자만 학급 목록을 조회할 수 있습니다.' });
     }
 
-    // 🔥 수정: GROUP BY 구문 정리
+    // 🔥 완전 수정: 테이블 별칭을 명확히 구분하여 올바른 쿼리 작성
     const [rows] = await db.query(`
       SELECT 
         c.classroom_id, 
@@ -99,19 +101,21 @@ router.get('/classrooms', authenticateToken, async (req, res) => {
         c.class_number, 
         c.class_photo,
         s.name as school,
-        u.name as teacher_name,
-        COUNT(CASE WHEN users.role = 'parent' THEN uc.user_id END) as parent_count
+        teacher.name as teacher_name,
+        COUNT(CASE WHEN member.role = 'parent' THEN uc.user_id END) as parent_count
       FROM classrooms c
       JOIN schools s ON c.school_id = s.school_id
-      LEFT JOIN users u ON c.teacher_id = u.user_id
+      LEFT JOIN users teacher ON c.teacher_id = teacher.user_id
       LEFT JOIN user_classrooms uc ON c.classroom_id = uc.classroom_id
-      LEFT JOIN users ON uc.user_id = users.user_id
+      LEFT JOIN users member ON uc.user_id = member.user_id
       WHERE c.school_id = ?
-      GROUP BY c.classroom_id, c.grade, c.class_number, c.class_photo, s.name, u.name
+      GROUP BY c.classroom_id, c.grade, c.class_number, c.class_photo, s.name, teacher.name
       ORDER BY c.grade, c.class_number
     `, [school_id]);
 
-    console.log('✅ [classrooms GET] 학급 목록 조회 완료:', rows.length);
+    console.log('✅ [admin/classrooms] 학급 목록 조회 완료:', rows.length);
+    console.log('🔍 [admin/classrooms] 샘플 데이터:', JSON.stringify(rows[0], null, 2));
+    
     res.json({ classrooms: rows });
   } catch (err) {
     console.error('🔥 학급 목록 조회 오류:', err);
@@ -119,47 +123,6 @@ router.get('/classrooms', authenticateToken, async (req, res) => {
   }
 });
 
-// ✅ 관리자용: 학급 목록 조회 - 학부모 수 정확히 계산
-router.get('/classrooms', authenticateToken, async (req, res) => {
-  const user_id = req.user.user_id;
-  const { school_id } = req.query;
-
-  try {
-    // 1. 요청자가 해당 학교의 생성자인지 확인
-    const [[schoolRow]] = await db.query(
-      'SELECT created_by FROM schools WHERE school_id = ?',
-      [school_id]
-    );
-
-    if (!schoolRow || schoolRow.created_by !== user_id) {
-      return res.status(403).json({ error: '해당 학교의 생성자만 학급 목록을 조회할 수 있습니다.' });
-    }
-
-    // 2. 학급 목록 조회 - 🆕 학부모만 카운트하도록 수정
-    const [rows] = await db.query(`
-      SELECT 
-        c.classroom_id, c.grade, c.class_number, c.class_photo,
-        s.name as school,
-        u.name as teacher_name,
-        COUNT(CASE WHEN users.role = 'parent' THEN uc.user_id END) as parent_count
-      FROM classrooms c
-      JOIN schools s ON c.school_id = s.school_id
-      LEFT JOIN users u ON c.teacher_id = u.user_id
-      LEFT JOIN user_classrooms uc ON c.classroom_id = uc.classroom_id
-      LEFT JOIN users ON uc.user_id = users.user_id
-      WHERE c.school_id = ?
-      GROUP BY c.classroom_id
-      ORDER BY c.grade, c.class_number
-    `, [school_id]);
-
-    res.json({ classrooms: rows });
-  } catch (err) {
-    console.error('🔥 학급 목록 조회 오류:', err);
-    res.status(500).json({ error: '서버 오류', details: err.message });
-  }
-});
-
-// ✅ 교사 삭제 - 개선된 버전 (연관 데이터 모두 정리)
 // ✅ 교사 삭제 - 수정된 버전 (classroom_id 컬럼 제거)
 router.delete('/teachers/:teacherId', authenticateToken, async (req, res) => {
   const { teacherId } = req.params;

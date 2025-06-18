@@ -145,10 +145,11 @@ io.on('connection', (socket) => {
       // 3. 실시간 메시지 전송 (DB 저장된 정보 포함)
       const message = {
         message_id: result.insertId,
+        roomId: roomId,  // 🔥 중요: roomId 추가!
         sender_id: userId,
         sender_name: userInfo.name,
         sender_role: userInfo.role,
-        sender_child_name: userInfo.child_name, // 🔥 추가: 자녀 이름
+        sender_child_name: userInfo.child_name,
         content,
         created_at: new Date() // sent_at -> created_at으로 통일
       };

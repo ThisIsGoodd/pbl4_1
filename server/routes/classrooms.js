@@ -634,41 +634,70 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 });
 
 // ✅ 단체사진 업로드
-router.post('/:id/photo', authenticateToken, upload.single('class_photo'), async (req, res) => {
+router.post('/:id/photo', authenticateToken, (req, res) => {
   const classroom_id = req.params.id;
   const teacher_id = req.user.user_id;
 
-  if (!req.file) {
-    return res.status(400).json({ error: '사진 파일이 필요합니다.' });
-  }
+  // multer 미들웨어를 라우트 핸들러 내에서 실행
+  upload.single('class_photo')(req, res, async (err) => {
+    try {
+      // 🔥 multer 에러 처리
+      if (err) {
+        console.error('🔥 multer 오류:', err);
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(400).json({ error: '파일 크기가 5MB를 초과합니다.' });
+        }
+        if (err.message === '이미지 파일만 업로드 가능합니다.') {
+          return res.status(400).json({ error: err.message });
+        }
+        return res.status(400).json({ error: '파일 업로드 오류', details: err.message });
+      }
 
-  try {
-    // 교사 권한 확인
-    const [classroomRows] = await db.query(
-      'SELECT * FROM classrooms WHERE classroom_id = ? AND teacher_id = ?',
-      [classroom_id, teacher_id]
-    );
+      // 🔥 파일 존재 확인
+      if (!req.file) {
+        return res.status(400).json({ error: '사진 파일이 필요합니다.' });
+      }
 
-    if (classroomRows.length === 0) {
-      return res.status(403).json({ error: '해당 학급의 교사만 사진을 업로드할 수 있습니다.' });
+      console.log('📸 사진 업로드 요청:', {
+        classroom_id,
+        teacher_id,
+        filename: req.file.filename,
+        size: req.file.size
+      });
+
+      // 🔥 교사 권한 확인
+      const [classroomRows] = await db.query(
+        'SELECT * FROM classrooms WHERE classroom_id = ? AND teacher_id = ?',
+        [classroom_id, teacher_id]
+      );
+
+      if (classroomRows.length === 0) {
+        return res.status(403).json({ error: '해당 학급의 교사만 사진을 업로드할 수 있습니다.' });
+      }
+
+      const photo_url = `/uploads/${req.file.filename}`;
+
+      // 🔥 학급 테이블에 사진 URL 저장
+      await db.query(
+        'UPDATE classrooms SET class_photo = ? WHERE classroom_id = ?',
+        [photo_url, classroom_id]
+      );
+
+      console.log('✅ 단체사진 업로드 성공:', photo_url);
+
+      res.json({ 
+        message: '단체사진 업로드 완료',
+        photo_url 
+      });
+
+    } catch (dbErr) {
+      console.error('🔥 DB 업로드 오류:', dbErr);
+      res.status(500).json({ 
+        error: '데이터베이스 오류', 
+        details: dbErr.message 
+      });
     }
-
-    const photo_url = `/uploads/${req.file.filename}`;
-
-    // 학급 테이블에 사진 URL 저장
-    await db.query(
-      'UPDATE classrooms SET class_photo = ? WHERE classroom_id = ?',
-      [photo_url, classroom_id]
-    );
-
-    res.json({ 
-      message: '단체사진 업로드 완료',
-      photo_url 
-    });
-  } catch (err) {
-    console.error('🔥 사진 업로드 오류:', err);
-    res.status(500).json({ error: '서버 오류', details: err.message });
-  }
+  });
 });
 
 // ✅ 사용자가 가입한 모든 학급 목록 조회

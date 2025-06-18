@@ -124,20 +124,34 @@ function MainPage() {
     }
 
     const formData = new FormData();
-    formData.append('photo', file);
+    // 🔥 중요: 서버에서 기대하는 파라미터 이름 'class_photo'로 변경
+    formData.append('class_photo', file);
 
     setUploadingPhoto(true);
     try {
       const res = await fetch(`http://localhost:3001/api/classrooms/${classroomId}/photo`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { 
+          Authorization: `Bearer ${token}`
+          // 🔥 Content-Type은 FormData 사용시 자동 설정되므로 제거
+        },
         body: formData
       });
 
+      // 🔥 JSON 파싱 전에 응답 상태 확인
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('서버 응답 오류:', errorText);
+        alert(`업로드 실패: ${res.status} ${res.statusText}`);
+        return;
+      }
+
       const data = await res.json();
-      if (res.ok) {
+      if (data.photo_url) {
         setClassPhoto(`http://localhost:3001${data.photo_url}`);
         alert('사진 업로드 완료!');
+        // 🔥 학급 정보 다시 불러오기
+        fetchClassroomInfo();
       } else {
         alert(data.error || '업로드 실패');
       }
